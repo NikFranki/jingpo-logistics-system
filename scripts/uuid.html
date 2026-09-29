@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UUID 生成器</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f5f9; color: #17243b; font-family: system-ui, sans-serif; }
+    main { max-width: 820px; margin: 64px auto; padding: 32px; background: white; border: 1px solid #e1e6ef; border-radius: 20px; }
+    h1 { margin: 0 0 12px; font-size: 30px; }
+    p { color: #647089; line-height: 1.6; }
+    .controls { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin: 28px 0 12px; }
+    label { display: grid; gap: 8px; font-size: 14px; }
+    input, button { font: inherit; border-radius: 9px; padding: 11px 15px; }
+    input { width: 115px; border: 1px solid #b9c5d7; }
+    button { border: 1px solid #cbd5e5; background: white; color: #263b61; cursor: pointer; }
+    button:hover { background: #edf3ff; }
+    button.primary { background: #285dea; color: white; border-color: #285dea; }
+    button.primary:hover { background: #194bcf; }
+    button:disabled { opacity: .45; cursor: default; }
+    :focus-visible { outline: 3px solid #86a8ff; outline-offset: 3px; }
+    #status { min-height: 24px; margin: 16px 0; font-size: 14px; color: #225da2; }
+    ol { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid #e8edf5; }
+    .number { color: #7b88a0; font-size: 13px; min-width: 24px; }
+    code { flex: 1; font-size: 15px; overflow-wrap: anywhere; user-select: all; }
+    li.copied code { text-decoration: line-through; color: #97a1b2; }
+    li button { flex-shrink: 0; padding: 8px 12px; font-size: 14px; }
+    footer { margin-top: 24px; color: #78859a; font-size: 13px; line-height: 1.7; }
+    @media (max-width: 600px) { main { margin: 16px; padding: 22px 16px; } code { font-size: 13px; } li { gap: 8px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>UUID 生成器</h1>
+    <p>生成标准 UUID v4，直接用于接口的 Idempotency-Key。</p>
+    <form id="generator" class="controls">
+      <label for="count">生成数量（1–100）<input id="count" type="number" min="1" max="100" step="1" value="5" required></label>
+      <button class="primary" type="submit">生成 UUID</button>
+      <button id="copy-all" type="button" disabled>复制全部</button>
+    </form>
+    <div id="status" role="status" aria-live="polite"></div>
+    <ol id="results" aria-label="生成的 UUID"></ol>
+    <footer>格式：8-4-4-4-12 位，包含数字与 a–f 字母。<br>全部在本地生成，不发送网络请求。单条复制不包含空格或换行；复制全部以换行分隔。</footer>
+  </main>
+  <script>
+    const form = document.querySelector('#generator');
+    const countInput = document.querySelector('#count');
+    const results = document.querySelector('#results');
+    const status = document.querySelector('#status');
+    const copyAll = document.querySelector('#copy-all');
+    let values = [];
+
+    function uuid() {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+
+    async function copy(text, message) {
+      try {
+        if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // 本地文件页面的剪贴板权限因浏览器而异，提供兼容复制方式。
+        const previousFocus = document.activeElement;
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+        document.body.append(textarea);
+        textarea.select();
+        let copied = false;
+        try { copied = document.execCommand('copy'); } catch {}
+        textarea.remove();
+        previousFocus?.focus();
+        if (!copied) {
+          status.textContent = '浏览器未允许复制，请选中 UUID 后按 Ctrl+C / ⌘C。';
+          return false;
+        }
+      }
+      status.textContent = message;
+      return true;
+    }
+
+    async function copyRows(rows) {
+      const buttons = [...results.querySelectorAll('button')];
+      const generateButton = form.querySelector('[type="submit"]');
+      generateButton.disabled = true;
+      copyAll.disabled = true;
+      buttons.forEach(button => { button.disabled = true; });
+      try {
+        const text = rows.map(row => row.querySelector('code').textContent).join('\n');
+        if (await copy(text, `已复制 ${rows.length} 条 UUID。`)) {
+          rows.forEach(row => {
+            row.classList.add('copied');
+            const button = row.querySelector('button');
+            button.textContent = '—';
+            button.setAttribute('aria-label', '已复制');
+          });
+        }
+      } finally {
+        generateButton.disabled = false;
+        buttons.forEach(button => {
+          button.disabled = button.closest('li').classList.contains('copied');
+        });
+        const remaining = results.querySelectorAll('li:not(.copied)').length;
+        copyAll.disabled = remaining === 0;
+        copyAll.textContent = remaining === 0 ? '—' : remaining === values.length ? '复制全部' : '复制剩余';
+      }
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const count = Number(countInput.value);
+      if (!Number.isInteger(count) || count < 1 || count > 100) {
+        status.textContent = '请输入 1–100 的整数。';
+        return;
+      }
+      try {
+        const unique = new Set();
+        while (unique.size < count) unique.add(uuid());
+        values = [...unique];
+      } catch {
+        status.textContent = '当前浏览器不支持安全随机数，请使用新版 Chrome、Safari 或 Firefox。';
+        return;
+      }
+      results.replaceChildren();
+      values.forEach((value, index) => {
+        const row = document.createElement('li');
+        const number = document.createElement('span');
+        number.className = 'number';
+        number.textContent = index + 1;
+        const code = document.createElement('code');
+        code.textContent = value;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = '复制';
+        button.setAttribute('aria-label', `复制第 ${index + 1} 条 UUID`);
+        button.addEventListener('click', () => copyRows([row]));
+        row.append(number, code, button);
+        results.append(row);
+      });
+      copyAll.disabled = false;
+      copyAll.textContent = '复制全部';
+      status.textContent = `已生成 ${values.length} 个 UUID。`;
+    });
+    copyAll.addEventListener('click', () => copyRows([...results.querySelectorAll('li:not(.copied)')]));
+    form.requestSubmit();
+  </script>
+</body>
+</html>
