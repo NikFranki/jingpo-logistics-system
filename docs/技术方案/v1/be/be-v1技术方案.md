@@ -62,7 +62,7 @@ backend/                       # 规划结构，当前不创建代码
 | 表 | 核心字段 | 约束与说明 |
 | --- | --- | --- |
 | `orders` | id、order_no、product_name、quantity、sender_name、sender_address、recipient_name、recipient_address、region_code、status、created_at、updated_at | order_no 唯一；quantity > 0；区域固定 Z |
-| `shipments` | id、shipment_no、order_id、sender_address、recipient_address、region_code、stage、last_scanned_station_id、created_at、updated_at | shipment_no、order_id 分别唯一；地址为订单的独立快照 |
+| `shipments` | id、shipment_no、order_id、sender_address、recipient_address、region_code、stage、last_scanned_station_id、created_at、updated_at | shipment_no、order_id 分别唯一；地址创建时复制自订单，待揽收修改时与订单同步 |
 | `stations` | id、code、name | code 唯一；预置 A、B、C |
 | `transport_routes` | id、code、origin_station_id、destination_station_id | code 唯一；预置 AB、BC，不提供管理接口 |
 | `transport_tasks` | id、task_no、route_id、status、expected_arrival_at、departed_at、arrived_at、created_at | task_no 唯一；创建后路线、ETA、运单清单不可编辑 |
@@ -379,7 +379,7 @@ CHECK 约束只验证当前记录，不能代替跨表校验或前后状态比�
 
 | 操作 | 前置条件 | 操作后运单阶段 | 其他变化 |
 | --- | --- | --- | --- |
-| 创建运单 | 订单尚无运单 | `PENDING_PICKUP` | 锁定订单编辑，复制地址，追加创建轨迹 |
+| 创建运单 | 订单尚无运单 | `PENDING_PICKUP` | 锁定订单直接编辑，复制地址，追加创建轨迹；待揽收时通过运单地址接口同步订单地址 |
 | 揽收 | `PENDING_PICKUP` | `PICKED_UP` | 地址进入不可编辑阶段 |
 | A 入站 | `PICKED_UP` | `AT_A` | 最后扫描站点=A |
 | AB 发车 | 任务待发车，全部关联运单为 `AT_A` | `IN_TRANSIT_AB` | 任务运输中，记录发车时间 |
@@ -559,7 +559,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["订单模块创建运单"] --> B["待揽收"]
-    B -->|"修改地址"| C["修改运单地址快照<br/>记录前后值，不回写订单"]
+    B -->|"修改地址"| C["同一事务更新运单及订单地址<br/>记录运单前后值"]
     C --> B
     B -->|"模拟揽收"| D["已揽收<br/>锁定地址编辑"]
     D -->|"模拟 A 入站"| E["A 站内<br/>最后扫描站点＝A"]

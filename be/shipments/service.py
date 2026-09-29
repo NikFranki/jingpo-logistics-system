@@ -315,6 +315,15 @@ def update_shipment_address(
         if shipment.stage != "PENDING_PICKUP":
             raise InvalidShipmentStateError
 
+        order = session.scalar(
+            select(Order)
+            .where(Order.id == shipment.order_id)
+            .with_for_update()
+        )
+
+        if order is None:
+            raise OrderNotFoundError
+
         changes = request.model_dump(exclude_unset=True)
         before_data = {
             field: getattr(shipment, field)
@@ -323,8 +332,11 @@ def update_shipment_address(
 
         for field, value in changes.items():
             setattr(shipment, field, value)
+            setattr(order, field, value)
 
-        shipment.updated_at = datetime.now(timezone.utc)
+        updated_at = datetime.now(timezone.utc)
+        shipment.updated_at = updated_at
+        order.updated_at = updated_at
         session.flush()
         session.refresh(shipment)
 
