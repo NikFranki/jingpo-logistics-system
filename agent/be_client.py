@@ -1,6 +1,10 @@
 import asyncio
 
 import httpx
+from time import monotonic
+from pydantic import ValidationError
+from responses import validate_response
+from tracing import trace
 
 from state import TurnContext
 
@@ -22,7 +26,10 @@ async def _get(
     path: str,
     context: TurnContext,
     params: dict | None = None,
+    *,
+    schema: str,
 ) -> dict:
+    started = monotonic()
     context.reserve_http_call()
     timeout = context.remaining_timeout(10)
 
@@ -37,11 +44,15 @@ async def _get(
                     path, params=params
                 )
     except (TimeoutError, httpx.TimeoutException) as exc:
+        trace(context, "http", started, operation=schema, status="TIMEOUT", http_calls=context.http_calls)
         raise BEClientError("TIMEOUT", "后端请求超时") from exc
     except httpx.RequestError as exc:
+        trace(context, "http", started, operation=schema, status="NETWORK_ERROR", http_calls=context.http_calls)
         raise BEClientError("NETWORK_ERROR", "无法连接后端") from exc
 
     request_id = response.headers.get("X-Request-ID")
+
+    trace(context, "http", started, operation=schema, status=response.status_code, request_id=request_id, http_calls=context.http_calls)
 
     if response.status_code != 200:
         message = (
@@ -55,15 +66,21 @@ async def _get(
             request_id,
         )
 
+    try:
+        data = validate_response(response.json(), schema)
+    except (ValueError, ValidationError, TypeError):
+        trace(context, "http_validation", started, operation=schema, status="INVALID_RESPONSE", request_id=request_id)
+        raise BEClientError("INVALID_RESPONSE", "后端响应格式异常，暂时无法确认查询结果", request_id) from None
+
     return {
-        "data": response.json(),
+        "data": data,
         "request_id": request_id,
     }
 
 async def get_shipment(base_url: str, shipment_id: int, context: TurnContext) -> dict:
     if shipment_id <= 0:
         raise ValueError("运单 ID 必须大于 0")
-    return await _get(base_url, f"/api/v1/shipments/{shipment_id}", context)
+    return await _get(base_url, f"/api/v1/shipments/{shipment_id}", context, schema="shipment")
 
 
 async def list_shipments(
@@ -79,11 +96,11 @@ async def list_shipments(
         params["shipment_no"] = shipment_no
     if stage is not None:
         params["stage"] = stage
-    return await _get(base_url, "/api/v1/shipments", context, params)
+    return await _get(base_url, "/api/v1/shipments", context, params, schema="shipments")
 
 
 async def get_stations(base_url: str, context: TurnContext) -> dict:
-    return await _get(base_url, "/api/v1/stations", context)
+    return await _get(base_url, "/api/v1/stations", context, schema="stations")
 
 
 async def list_orders(
@@ -101,13 +118,13 @@ async def list_orders(
     ):
         if value is not None:
             params[key] = value
-    return await _get(base_url, "/api/v1/orders", context, params)
+    return await _get(base_url, "/api/v1/orders", context, params, schema="orders")
 
 
 async def get_order(base_url: str, order_id: int, context: TurnContext) -> dict:
     if order_id <= 0:
         raise ValueError("订单 ID 必须大于 0")
-    return await _get(base_url, f"/api/v1/orders/{order_id}", context)
+    return await _get(base_url, f"/api/v1/orders/{order_id}", context, schema="order")
 
 
 async def list_transport_tasks(
@@ -125,10 +142,10 @@ async def list_transport_tasks(
     ):
         if value is not None:
             params[key] = value
-    return await _get(base_url, "/api/v1/transport-tasks", context, params)
+    return await _get(base_url, "/api/v1/transport-tasks", context, params, schema="tasks")
 
 
 async def get_transport_task(base_url: str, task_id: int, context: TurnContext) -> dict:
     if task_id <= 0:
         raise ValueError("任务 ID 必须大于 0")
-    return await _get(base_url, f"/api/v1/transport-tasks/{task_id}", context)
+    return await _get(base_url, f"/api/v1/transport-tasks/{task_id}", context, schema="task")

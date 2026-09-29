@@ -8,7 +8,7 @@ from be_client import BEClientError, get_shipment, get_stations, list_shipments
 from be_client import get_order as read_order
 from be_client import list_orders, list_transport_tasks
 from be_client import get_transport_task as read_transport_task
-from state import TurnContext
+from state import TurnContext, TurnLimitError
 
 
 ShipmentStage = Literal[
@@ -248,6 +248,11 @@ def create_shipment_tracking_tool(base_url: str):
             if exc.request_id:
                 result["meta"]["request_ids"].append(exc.request_id)
 
+        except TurnLimitError as exc:
+            result["status"] = "partial"
+            result["meta"]["stop_reason"] = exc.code
+            result["warnings"].append("本轮预算已耗尽，站点与任务信息未查完。")
+
         def station_summary(station_id):
             if station_id is None:
                 return None
@@ -264,6 +269,9 @@ def create_shipment_tracking_tool(base_url: str):
         for event in result["data"]["tracking_events"]:
             event["station"] = station_summary(event["station_id"])
 
+        if result["meta"].get("stop_reason"):
+            return result
+
         if include_tasks:
             # 同一任务可能同时出现在发车和到达轨迹中，每个 ID 只请求一次。
             task_ids = list(dict.fromkeys(
@@ -278,7 +286,7 @@ def create_shipment_tracking_tool(base_url: str):
                 result["warnings"].append(
                     "轨迹中暂无任务 ID，无法据此判断延误，也不能认定没有关联任务；尚未发车的任务可能未进入轨迹。"
                 )
-            for task_id in task_ids:
+            for index, task_id in enumerate(task_ids):
                 try:
                     response = await read_transport_task(base_url, task_id, context)
                 except BEClientError as exc:
@@ -290,6 +298,15 @@ def create_shipment_tracking_tool(base_url: str):
                     if exc.request_id:
                         result["meta"]["request_ids"].append(exc.request_id)
                     continue
+                except TurnLimitError as exc:
+                    result["status"] = "partial"
+                    result["meta"]["stop_reason"] = exc.code
+                    result["warnings"].append("本轮预算已耗尽，部分任务未查完。")
+                    result["data"]["task_errors"].extend(
+                        {"task_id": str(pending), "code": exc.code, "message": "本轮预算已耗尽，未查询"}
+                        for pending in task_ids[index:]
+                    )
+                    break
                 _record_request(result, response)
                 task = response["data"]
                 summary = _task_summary(task)

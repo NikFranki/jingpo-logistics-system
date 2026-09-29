@@ -12,6 +12,7 @@ class Settings:
     api_key: str = field(repr=False)
     base_url: str
     be_base_url: str
+    debug: bool = False
 
 
 def load_settings() -> Settings:
@@ -42,10 +43,15 @@ def load_settings() -> Settings:
     if not base_url or not be_base_url:
         raise ValueError("模型和后端服务地址不能为空")
 
+    debug = os.getenv("AGENT_DEBUG", "false").strip().lower()
+    if debug not in {"true", "false", "1", "0"}:
+        raise ValueError("AGENT_DEBUG 必须为 true/false 或 1/0")
+
     return Settings(
         provider=provider,
         model=model,
         api_key=api_key,
         base_url=base_url,
         be_base_url=be_base_url,
+        debug=debug in {"true", "1"},
     )

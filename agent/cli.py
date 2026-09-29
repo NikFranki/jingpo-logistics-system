@@ -17,6 +17,9 @@ from tools import (
     create_shipment_tracking_tool,
 )
 from state import TurnContext
+from memory import compact_session, delete_session
+from tracing import trace
+from time import monotonic
 
 async def restore_turn(
     graph,
@@ -60,12 +63,18 @@ async def main() -> None:
     print("输入 /new 开始新会话，/exit 退出。")
 
     while True:
-        question = input("你：").strip()
+        try:
+            question = input("你：").strip()
+        except (EOFError, KeyboardInterrupt):
+            await delete_session(graph, thread_id)
+            break
 
         if question == "/exit":
+            await delete_session(graph, thread_id)
             break
 
         if question == "/new":
+            await delete_session(graph, thread_id)
             thread_id = str(uuid4())
             print("已开始新会话。")
             continue
@@ -85,7 +94,8 @@ async def main() -> None:
         snapshot = await graph.aget_state(run_config)
         previous_state = deepcopy(snapshot.values)
 
-        context = TurnContext()
+        context = TurnContext(debug=settings.debug)
+        started = monotonic()
 
         try:
             async with asyncio.timeout(context.remaining_timeout(120)):
@@ -113,8 +123,12 @@ async def main() -> None:
                 message,
             )
             print(f"助手：{message}")
+            trace(context, "turn", started, status=reason, http_calls=context.http_calls)
+            await compact_session(graph, run_config)
             continue
 
+        trace(context, "turn", started, status=result["stop_reason"] or "ok", model_calls=result["model_calls"], tool_calls=result["tool_calls"], http_calls=context.http_calls)
+        await compact_session(graph, run_config)
         print(f"助手：{result['messages'][-1].content}")
         print(f"模型调用次数：{result['model_calls']}")
         print(f"工具调用次数：{result['tool_calls']}")

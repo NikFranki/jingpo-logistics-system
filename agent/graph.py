@@ -1,5 +1,8 @@
 import asyncio
 import json
+from time import monotonic
+from results import bound_result
+from tracing import trace, safe_args
 from pydantic import ValidationError
 
 from langchain_core.messages import ToolMessage, SystemMessage, AIMessage, HumanMessage, RemoveMessage
@@ -102,6 +105,7 @@ def create_model_node(model_with_tools):
             ],
         }
 
+        started = monotonic()
         try:
             async with asyncio.timeout(timeout):
                 response = await model_with_tools.ainvoke([
@@ -109,18 +113,22 @@ def create_model_node(model_with_tools):
                     *messages,
                 ])
         except TimeoutError:
+            trace(runtime.context, "model", started, status="REQUEST_TIMEOUT", model_calls=calls + 1)
             return {
                 **updates,
                 "model_calls": calls + 1,
                 "stop_reason": "REQUEST_TIMEOUT",
             }
-        except Exception:
-            return {
-                **updates,
-                "model_calls": calls + 1,
-                "stop_reason": "MODEL_ERROR",
-            }
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            reason = "MODEL_AUTH_ERROR" if status_code in (401, 403) else "MODEL_RATE_LIMIT" if status_code == 429 else "MODEL_ERROR"
+            trace(runtime.context, "model", started, status=reason, model_calls=calls + 1)
+            return {**updates, "model_calls": calls + 1, "stop_reason": reason}
 
+        if not isinstance(response, AIMessage) or response.invalid_tool_calls or len({c["id"] for c in response.tool_calls}) != len(response.tool_calls) or any(not c["id"] for c in response.tool_calls):
+            trace(runtime.context, "model", started, status="INVALID_RESPONSE", model_calls=calls + 1)
+            return {**updates, "model_calls": calls + 1, "stop_reason": "INVALID_RESPONSE"}
+        trace(runtime.context, "model", started, status="ok", model_calls=calls + 1)
         updates["messages"].append(response)
         return {
             **updates,
@@ -141,6 +149,7 @@ def create_tools_node(tools_by_name):
         stop_reason = None
 
         for call in response.tool_calls:
+            started = monotonic()
             if stop_reason:
                 result = {
                     "status": "error",
@@ -178,6 +187,11 @@ def create_tools_node(tools_by_name):
                 except Exception:
                     result = {"status": "error", "error": "工具执行失败"}
 
+            result_stop = result.get("meta", {}).get("stop_reason")
+            if result_stop in {"HTTP_CALL_LIMIT", "TURN_TIMEOUT"}:
+                stop_reason = result_stop
+            result = bound_result(result)
+            trace(runtime.context, "tool", started, operation=call["name"] if call["name"] in tools_by_name else "unknown", args=safe_args(call["args"]), status=result.get("status"), tool_calls=calls)
             messages.append(
                 ToolMessage(
                     content=json.dumps(result, ensure_ascii=False),
@@ -233,6 +247,8 @@ def stop_node(state: AgentState) -> dict:
 
     explanations = {
         "MODEL_CALL_LIMIT": "已达到本轮模型调用上限，查询未完成。",
+        "MODEL_AUTH_ERROR": "模型认证失败，请检查密钥及权限。",
+        "MODEL_RATE_LIMIT": "模型请求被限流，请稍后重试。",
         "MODEL_ERROR": "模型请求失败，查询未完成，请稍后重试。",
         "INVALID_RESPONSE": "模型返回格式异常，查询未完成。",
         "TOOL_CALL_LIMIT": "已达到本轮工具调用上限，查询未完成。",

@@ -1,6 +1,7 @@
 from typing import Annotated, TypedDict
 from dataclasses import dataclass, field
 from time import monotonic
+from uuid import uuid4
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -28,6 +29,8 @@ class TurnContext:
         default_factory=lambda: monotonic() + 120
     )
     http_calls: int = 0
+    debug: bool = False
+    trace_id: str = field(default_factory=lambda: str(uuid4()))
 
     def remaining_timeout(self, maximum: float) -> float:
         remaining = self.deadline - monotonic()
