@@ -8,6 +8,8 @@ import { apiError, formatTime, StatusTag, type Mutate } from './shared'
 
 const OrdersPage = lazy(() => import('./pages/OrdersPage'))
 const OrderDetailPage = lazy(() => import('./pages/OrdersPage').then(module => ({ default: module.OrderDetailPage })))
+const ShipmentsPage = lazy(() => import('./pages/ShipmentsPage'))
+const ShipmentDetailPage = lazy(() => import('./pages/ShipmentsPage').then(module => ({ default: module.ShipmentDetailPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage'))
 const TaskDetailPage = lazy(() => import('./pages/TasksPage').then(module => ({ default: module.TaskDetailPage })))
 const SimulationPage = lazy(() => import('./pages/SimulationPage'))
@@ -44,12 +46,13 @@ export default function App() {
   }, [messageApi, reloadCurrent])
 
   const menuData = [
-    { path: '/orders', name: '订单 / 运单', icon: <AppstoreOutlined /> },
+    { path: '/orders', name: '订单', icon: <AppstoreOutlined /> },
+    { path: '/shipments', name: '运单', icon: <TruckOutlined /> },
     { path: '/tasks', name: '运输任务', icon: <SwapOutlined /> },
     { path: '/network', name: '网络配置', icon: <AppstoreOutlined /> },
     { path: '/simulation', name: '演示控制', icon: <ControlOutlined /> },
   ]
-  const activePath = location.pathname.startsWith('/network') ? '/network' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/simulation') ? '/simulation' : '/orders'
+  const activePath = location.pathname.startsWith('/network') ? '/network' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : location.pathname.startsWith('/simulation') ? '/simulation' : '/orders'
   return <>{contextHolder}<ProLayout
     title="JINGPO 鲸破"
     logo={<TruckOutlined />}
@@ -67,8 +70,10 @@ export default function App() {
         <Route path="/" element={<Navigate to="/orders" replace />} />
         <Route path="/orders" element={<OrdersPage revision={revision} mutate={mutate} />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage revision={revision} busy={busy} mutate={mutate} />} />
+        <Route path="/shipments" element={<ShipmentsPage revision={revision} />} />
+        <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage revision={revision} busy={busy} mutate={mutate} clock={clock} />} />
         <Route path="/tasks" element={<TasksPage revision={revision} mutate={mutate} clock={clock} />} />
-        <Route path="/tasks/:taskId" element={<TaskDetailPage revision={revision} goSimulation={() => navigate('/simulation')} />} />
+        <Route path="/tasks/:taskId" element={<TaskDetailPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/network" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/simulation" element={<SimulationPage revision={revision} busy={busy} mutate={mutate} clock={clock} />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />

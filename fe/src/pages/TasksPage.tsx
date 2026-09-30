@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Descriptions, Form, Space, Spin, Typography, message } from 'antd'
+import { Alert, Button, Descriptions, Form, Modal, Space, Spin, Typography, message } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
-import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
+import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Candidate, type RouteCode, type TaskDetail, type TaskItem } from '../api'
 import { apiError, delayText, formatTime, StatusTag, stageText, taskStatusText, TaskShipmentTag, type Shared, useNetwork, StationName } from '../shared'
 
@@ -24,6 +24,8 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
     { title: '任务状态', dataIndex: 'status', valueEnum: Object.fromEntries(Object.entries(taskStatusText).map(([key, text]) => [key, { text }])) },
     { title: '预计到达', dataIndex: 'expected_arrival_at', valueType: 'dateTime', search: false },
     { title: '实际到达', dataIndex: 'arrived_at', valueType: 'dateTime', search: false },
+    { title: '取消时间', dataIndex: 'cancelled_at', valueType: 'dateTime', search: false },
+    { title: '取消原因', dataIndex: 'cancel_reason', search: false, ellipsis: true },
     { title: '延误提示', dataIndex: 'delay_status', search: false, render: (_, row) => row.delay_status === 'OVERDUE' ? <StatusTag tone="error">{delayText(row)}</StatusTag> : row.delay_status === 'LATE_ARRIVAL' ? <StatusTag tone="warning">{delayText(row)}</StatusTag> : delayText(row) },
     { title: '操作', valueType: 'option', render: (_, row) => <a onClick={() => navigate(`/tasks/${row.id}`)}>查看详情</a> },
   ]
@@ -57,13 +59,16 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
   </PageContainer></>
 }
 
-function TaskDetailPage({ revision, goSimulation }: { revision: number; goSimulation: () => void }) {
+function TaskDetailPage({ revision, busy, mutate }: Shared) {
   const { taskId = '' } = useParams()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<TaskDetail>()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string>()
   const [retry, setRetry] = useState(0)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [actionToConfirm, setActionToConfirm] = useState<'depart' | 'arrive'>()
+  const [actionSaving, setActionSaving] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -73,10 +78,32 @@ function TaskDetailPage({ revision, goSimulation }: { revision: number; goSimula
     return () => { active = false }
   }, [taskId, revision, retry])
 
-  return <PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看线路、到达站点、任务时间与关联运单当前位置。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button><Button type="primary" onClick={goSimulation}>打开演示控制</Button></Space>}>
+  const runTaskAction = (action: 'depart' | 'arrive') => {
+    if (!detail) return
+    setActionToConfirm(action)
+  }
+  const confirmTaskAction = async () => {
+    if (!detail || !actionToConfirm) return
+    const action = actionToConfirm
+    setActionSaving(true)
+    const result = await mutate('task-action:' + detail.id + ':' + action, key => api.taskAction(detail.id, action, key), action === 'depart' ? '任务已发车' : '任务已到达，全部关联运单已入站')
+    setActionSaving(false)
+    if (result) setActionToConfirm(undefined)
+  }
+  const cancelTask = async (values: { reason: string }) => {
+    if (!detail) return false
+    const result = await mutate('cancel-task:' + detail.id + ':' + values.reason.trim(), key => api.cancelTask(detail.id, values.reason.trim(), key), '运输任务已取消，运单已解除占用')
+    if (result) setCancelOpen(false)
+    return Boolean(result)
+  }
+
+  return <PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button>{detail && <Button onClick={() => navigate('/simulation')}>打开演示时钟</Button>}</Space>}>
     {loadError && <Alert type="error" showIcon message="运输任务详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
       {detail.status === 'ARRIVED' && <Alert style={{ marginBottom: 16 }} type="success" showIcon message={<>任务已到达：<Text strong><StationName id={detail.destination_station_id} /></Text></>} />}
+      {detail.status === 'CANCELLED' && <Alert style={{ marginBottom: 16 }} type="warning" showIcon message="运输任务已取消，关联运单仍在起点站且已解除占用。" description={<>取消时间：{formatTime(detail.cancelled_at)}。取消原因：{detail.cancel_reason || '—'}</>} />}
+      {detail.status === 'PENDING_DEPARTURE' && <Space wrap style={{ marginBottom: 16 }}><Button type="primary" disabled={busy || !detail.allowed_actions.some(item => item.action === 'DEPART' && item.enabled)} onClick={() => runTaskAction('depart')}>确认发车</Button><Button danger disabled={busy || !detail.allowed_actions.some(item => item.action === 'CANCEL' && item.enabled)} onClick={() => setCancelOpen(true)}>取消任务</Button></Space>}
+      {detail.status === 'IN_TRANSIT' && <Button type="primary" disabled={busy || !detail.allowed_actions.some(item => item.action === 'ARRIVE' && item.enabled)} onClick={() => runTaskAction('arrive')} style={{ marginBottom: 16 }}>确认到达并全部入站</Button>}
       <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
         <Descriptions.Item label="运输线路"><StationName id={detail.origin_station_id} /> → <StationName id={detail.destination_station_id} /></Descriptions.Item>
         <Descriptions.Item label="任务状态">{taskStatusText[detail.status]}</Descriptions.Item>
@@ -84,9 +111,28 @@ function TaskDetailPage({ revision, goSimulation }: { revision: number; goSimula
         <Descriptions.Item label="实际发车">{formatTime(detail.departed_at)}</Descriptions.Item>
         <Descriptions.Item label="实际到达">{formatTime(detail.arrived_at)}</Descriptions.Item>
         <Descriptions.Item label="延误提示">{detail.delay_status === 'OVERDUE' ? <StatusTag tone="error">{delayText(detail)}</StatusTag> : detail.delay_status === 'LATE_ARRIVAL' ? <StatusTag tone="warning">{delayText(detail)}</StatusTag> : delayText(detail)}</Descriptions.Item>
-        <Descriptions.Item label="关联运单" span={2}><Space wrap>{detail.shipments.map(item => <TaskShipmentTag key={item.id} item={item} />)}</Space></Descriptions.Item>
+        {detail.status === 'CANCELLED' && <><Descriptions.Item label="取消时间">{formatTime(detail.cancelled_at)}</Descriptions.Item><Descriptions.Item label="取消原因">{detail.cancel_reason}</Descriptions.Item></>}
+        <Descriptions.Item label="关联运单" span={2}><Space wrap>{detail.shipments.map(item => <Link key={item.id} to={'/shipments/' + item.id}><TaskShipmentTag item={item} /></Link>)}</Space></Descriptions.Item>
       </Descriptions>
       <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>演示时间：{formatTime(detail.simulation_time)}。页面操作将按该时钟记录。</Text>
+      <ModalForm<{ reason: string }> title="取消运输任务" open={cancelOpen} onOpenChange={setCancelOpen} modalProps={{ destroyOnClose: true }} onFinish={cancelTask}>
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={'将解除 ' + detail.shipments.length + ' 张运单的任务占用，货物仍留在起点站。'} />
+        <ProFormTextArea name="reason" label="取消原因" rules={[{ required: true, whitespace: true, message: '请填写取消原因' }, { max: 500, message: '最多 500 个字符' }]} fieldProps={{ maxLength: 500, showCount: true, autoSize: { minRows: 3, maxRows: 6 } }} />
+      </ModalForm>
+      <Modal
+        title={actionToConfirm === 'depart' ? '确认任务发车' : '确认任务到达并入站'}
+        open={Boolean(actionToConfirm)}
+        confirmLoading={actionSaving}
+        okText={actionToConfirm === 'depart' ? '确认发车' : '确认到达'}
+        cancelText="返回检查"
+        onOk={() => void confirmTaskAction()}
+        onCancel={() => setActionToConfirm(undefined)}
+        okButtonProps={{ disabled: busy }}
+      >
+        <p>{detail.task_no} · <StationName id={detail.origin_station_id} /> → <StationName id={detail.destination_station_id} /></p>
+        <p>本次操作影响 {detail.shipments.length} 张关联运单。</p>
+        {actionToConfirm === 'arrive' && <Text type="secondary">确认后，全部关联运单会一次性在目的站入站。</Text>}
+      </Modal>
     </>}
   </PageContainer>
 }

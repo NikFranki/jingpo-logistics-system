@@ -9,7 +9,7 @@ from pydantic import (
     Field,
     model_validator,
 )
-from logistics_types import ShipmentStage, TrackingEventType
+from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 class AllowedActionResponse(BaseModel):
     action: str
@@ -58,7 +58,7 @@ class ActiveTransportTaskResponse(BaseModel):
     route_code: str
     origin_station_id: str
     destination_station_id: str
-    status: str
+    status: TaskStatus
 
 AddressText = Annotated[
     str,

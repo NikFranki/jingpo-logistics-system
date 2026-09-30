@@ -299,18 +299,13 @@ class TransportTask(Base):
     __tablename__ = "transport_tasks"
     __table_args__ = (
         CheckConstraint(
-            "(status = 'PENDING_DEPARTURE' "
-            "AND departed_at IS NULL "
-            "AND arrived_at IS NULL) "
-            "OR "
-            "(status = 'IN_TRANSIT' "
-            "AND departed_at IS NOT NULL "
-            "AND arrived_at IS NULL) "
-            "OR "
-            "(status = 'ARRIVED' "
-            "AND departed_at IS NOT NULL "
-            "AND arrived_at IS NOT NULL "
-            "AND arrived_at >= departed_at)",
+            "((status = 'PENDING_DEPARTURE' AND departed_at IS NULL AND arrived_at IS NULL) "
+            "OR (status = 'IN_TRANSIT' AND departed_at IS NOT NULL AND arrived_at IS NULL) "
+            "OR (status = 'ARRIVED' AND departed_at IS NOT NULL AND arrived_at IS NOT NULL "
+            "AND arrived_at >= departed_at)) AND cancelled_at IS NULL AND cancel_reason IS NULL "
+            "OR (status = 'CANCELLED' AND departed_at IS NULL AND arrived_at IS NULL "
+            "AND cancelled_at IS NOT NULL AND cancel_reason IS NOT NULL "
+            "AND length(btrim(cancel_reason)) BETWEEN 1 AND 500)",
             name="ck_tasks_status_times",
         ),
     )
@@ -344,6 +339,8 @@ class TransportTask(Base):
     arrived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
     )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_reason: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

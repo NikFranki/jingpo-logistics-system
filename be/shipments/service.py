@@ -3,7 +3,7 @@ import json
 from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from logistics_types import ShipmentStage, TrackingEventType
 
 from errors import (
@@ -98,6 +98,15 @@ def build_shipment_response_body(
     station = session.get(Station, shipment.last_scanned_station_id) if shipment.last_scanned_station_id else None
     can_deliver = bool(station and station.enabled and station.allows_delivery
         and station.id == shipment.destination_station_id and active_task is None)
+    outgoing_destination = aliased(Station)
+    can_create_task = bool(
+        shipment.stage == ShipmentStage.AT_STATION and active_task is None
+        and station and station.enabled and station.id != shipment.destination_station_id
+        and session.scalar(select(TransportRoute.id).join(outgoing_destination,
+            TransportRoute.destination_station_id == outgoing_destination.id).where(
+            TransportRoute.origin_station_id == station.id, TransportRoute.enabled.is_(True),
+            outgoing_destination.enabled.is_(True)).limit(1))
+    )
     return {
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
@@ -142,7 +151,7 @@ def build_shipment_response_body(
             }
             for event in events
         ],
-        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver),
+        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task),
     }
 
 def build_create_shipment_request_hash(
@@ -597,8 +606,10 @@ def process_shipment_event(
 
     return response_body
 
-def build_allowed_actions(stage: str, can_deliver: bool) -> list[dict]:
+def build_allowed_actions(stage: str, can_deliver: bool, can_create_task: bool = False) -> list[dict]:
     rules = [
+        ("CREATE_TRANSPORT_TASK", can_create_task,
+         "Transport requires an unoccupied shipment at an enabled origin with an available outgoing route"),
         (
             "UPDATE_ADDRESS",
             stage == "PENDING_PICKUP",
@@ -688,3 +699,21 @@ def build_shipment_list_item(shipment: Shipment) -> dict:
         "created_at": shipment.created_at,
         "updated_at": shipment.updated_at,
     }
+
+
+def list_shipment_transport_tasks(session: Session, shipment_id: int, page: int, page_size: int):
+    if session.get(Shipment, shipment_id) is None:
+        raise ShipmentNotFoundError
+    total = session.scalar(select(func.count(TaskShipment.id)).where(
+        TaskShipment.shipment_id == shipment_id)) or 0
+    rows = session.execute(select(TaskShipment, TransportTask, TransportRoute)
+        .join(TransportTask, TaskShipment.task_id == TransportTask.id)
+        .join(TransportRoute, TransportTask.route_id == TransportRoute.id)
+        .where(TaskShipment.shipment_id == shipment_id).order_by(TaskShipment.id.desc())
+        .offset((page - 1) * page_size).limit(page_size)).all()
+    items = [{"id": str(task.id), "task_no": task.task_no, "route_code": route.code,
+        "status": task.status, "origin_station_id": str(route.origin_station_id),
+        "destination_station_id": str(route.destination_station_id),
+        "cancelled_at": task.cancelled_at, "cancel_reason": task.cancel_reason,
+        "released_at": association.released_at} for association, task, route in rows]
+    return items, total

@@ -1,5 +1,5 @@
 export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED'
-export type TaskStatus = 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED'
+export type TaskStatus = 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED' | 'CANCELLED'
 export type RouteCode = string
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
 export type Action = { action: string; enabled: boolean; reason_code: string | null; reason: string | null }
@@ -9,9 +9,11 @@ export type Shipment = { id: string; shipment_no: string; order_id: string; send
 export type TrackingEvent = { id: string; event_type: string; occurred_at: string; station_id: string | null; task_id: string | null }
 export type ActiveTransportTask = { id: string; route_code: RouteCode; origin_station_id: string; destination_station_id: string; status: TaskStatus }
 export type ShipmentDetail = Shipment & { active_transport_task: ActiveTransportTask | null; tracking_events: TrackingEvent[]; allowed_actions: Action[] }
-export type TaskItem = { delay_monitoring_enabled: boolean; id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
-export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[] }
+export type TaskItem = { delay_monitoring_enabled: boolean; id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; cancelled_at: string | null; cancel_reason: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
+export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[]; cancelled_at: string | null; cancel_reason: string | null }
 export type TaskPage = Page<TaskItem> & { simulation_time: string }
+export type ShipmentTaskHistory = { id: string; task_no: string; route_code: string; status: TaskStatus; origin_station_id: string; destination_station_id: string; cancelled_at: string | null; cancel_reason: string | null; released_at: string | null }
+export type ShipmentTaskHistoryPage = Page<ShipmentTaskHistory>
 export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean }
 export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean }
 export type StationInput = Omit<Station, "id">
@@ -87,6 +89,7 @@ export const api = {
   createShipment: (orderId: string, destination_station_id: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { destination_station_id }, key),
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
+  shipmentTasks: (id: string, page = 1, page_size = 20) => request<ShipmentTaskHistoryPage>(`/api/v1/shipments/${id}/transport-tasks${query({ page, page_size })}`),
   updateAddress: (id: string, body: { sender_address: string; recipient_address: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/address`, 'PATCH', body, key),
   shipmentEvent: (id: string, event_type: string, station_id?: string, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/events`, 'POST', { event_type, ...(station_id ? { station_id } : {}) }, key),
   tasks: (params: { page?: number; page_size?: number; task_no?: string; route_code?: string; status?: string } = {}) => request<TaskPage>(`/api/v1/transport-tasks${query(params)}`),
@@ -94,4 +97,5 @@ export const api = {
   candidates: (route_code: RouteCode, page = 1) => request<Page<Candidate>>(`/api/v1/transport-tasks/candidates${query({ route_code, page, page_size: 100 })}`),
   createTask: (body: { route_code: RouteCode; expected_arrival_at: string; shipment_ids: number[] }, key?: string) => write<TaskDetail>('/api/v1/transport-tasks/create', 'POST', body, key),
   taskAction: (id: string, action: 'depart' | 'arrive', key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/${action}`, 'POST', undefined, key),
+  cancelTask: (id: string, reason: string, key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/cancel`, 'POST', { reason }, key),
 }

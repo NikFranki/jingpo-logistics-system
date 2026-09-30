@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from logistics_types import ShipmentStage
+from transport.schemas import ShipmentTaskHistoryResponse
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -33,6 +34,7 @@ from shipments.service import (
     process_shipment_event,
     build_shipment_list_item,
     list_shipments,
+    list_shipment_transport_tasks,
 )
 
 
@@ -193,3 +195,17 @@ def read_shipment(
             events=events,
         )
     )
+
+
+@router.get("/{shipment_id}/transport-tasks", response_model=ShipmentTaskHistoryResponse)
+def read_shipment_transport_tasks(
+    shipment_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ShipmentTaskHistoryResponse:
+    try:
+        items, total = list_shipment_transport_tasks(session, shipment_id, page, page_size)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    return ShipmentTaskHistoryResponse(items=items, total=total, page=page, page_size=page_size)

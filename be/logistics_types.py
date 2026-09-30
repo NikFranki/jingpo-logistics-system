@@ -24,6 +24,13 @@ class TrackingEventType(StrEnum):
     SIGN = "SIGN"
 
 
+class TaskStatus(StrEnum):
+    PENDING_DEPARTURE = "PENDING_DEPARTURE"
+    IN_TRANSIT = "IN_TRANSIT"
+    ARRIVED = "ARRIVED"
+    CANCELLED = "CANCELLED"
+
+
 def sql_enum_values(enum_type: type[StrEnum]) -> str:
     """Render trusted application enum values for model CHECK constraints."""
     return ", ".join(f"'{item.value}'" for item in enum_type)

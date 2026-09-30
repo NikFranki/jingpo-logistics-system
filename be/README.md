@@ -1,10 +1,49 @@
 # BE
 
+## V4 待发车任务取消（后端已实现）
+
+后端迁移版本为 `d92f4b76e301`。待发车任务可取消并解除全部运单占用；任务及关联历史保留，运单位置、地址、订单和物流轨迹保持原样。取消原因不能被后续重试覆盖。
+
+### 新增契约
+
+- `POST /api/v1/transport-tasks/{id}/cancel`，请求 `{"reason":"线路选择错误"}`，要求 `Idempotency-Key`，返回任务详情。原因去首尾空白后为 1～500 字符，仅 `PENDING_DEPARTURE` 可首次取消。
+- 任务详情/列表/写响应增加 `cancelled_at`、`cancel_reason`；状态筛选支持 `CANCELLED`。取消任务延误为 `NOT_APPLICABLE`。
+- 任务详情 `allowed_actions` 增加 `CANCEL`；运单详情增加 `CREATE_TRANSPORT_TASK`。资格用于页面提示，提交仍由服务端重新校验。
+- `GET /api/v1/shipments/{id}/transport-tasks?page=1&page_size=20` 查询原关联历史，包含未发车的取消任务及各次关联的 `released_at`。
+
+同 key 重试返回首次快照；成功后客户端重新 GET 详情。新 key 同原因重复取消成功且不再次释放，原因不同返回 409。业务入口迁入页面由 FE 负责，本次后端交付不代表页面验收。详见 [V4 spec](../docs/技术方案/v4/be/spec.md) 和 [验收记录](../docs/技术方案/v4/be/plan.md)。
+
+### 从 V3 升级
+
+开发库已于 2026-09-30 备份并升级到 V4，后端已重启且只读检查通过，记录见 V4 plan。以下步骤用于其他 V3 环境：停止后端后，在 be 目录备份，再执行：
+
+```bash
+mkdir -p backups
+pg_dump -Fc jingpo_logistics -f "backups/jingpo_logistics_before_v4_$(date +%Y%m%d_%H%M%S).dump"
+export DATABASE_URL="postgresql+psycopg:///jingpo_logistics"
+./.venv/bin/python -m alembic upgrade head
+./.venv/bin/python -m alembic current
+./.venv/bin/python -m uvicorn main:app --reload
+```
+
+迁移保留历史数据、幂等 key/hash，并补齐旧缓存响应字段。历史运单缓存新增创建资格保守禁用并提示刷新；不会根据当前网络猜测历史资格。V4 拒绝 downgrade，回退使用升级前备份。
+
+### 后端验证
+
+```bash
+DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v4_test" RUN_V2_MIGRATION_TESTS=1 \
+  ./.venv/bin/python -m unittest discover -s tests -v
+DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v4_test" \
+  ./.venv/bin/python -m alembic check
+```
+
+测试库需升级到 head 并初始化演示网络与时钟（见后文）。迁移演练自动创建和清理临时库，需要 CREATE DATABASE 权限；HTTP 测试自动管理测试服务。未启用迁移演练时 6 项迁移测试跳过。禁止用开发库执行测试。
+
 ## V3 可配置网络
 
 V3 后端支持站点和单向线路创建、编辑、启停。站点配置首次入站/派送能力；线路配置延误监测。运单创建必须人工指定目的站，到达自身目的站后才能派送。旧订单地址保持不变。
 
-当前版本为 `a83c9e14d602`，详细接口与规则见 [V3 spec](../docs/技术方案/v3/be/spec.md)，测试和发布记录见 [V3 plan](../docs/技术方案/v3/be/plan.md)。前端与 Agent 是独立交付，本轮后续只负责 BE。
+V3 对应版本为 `a83c9e14d602`，详细接口与规则见 [V3 spec](../docs/技术方案/v3/be/spec.md)，测试和发布记录见 [V3 plan](../docs/技术方案/v3/be/plan.md)。前端与 Agent 是独立交付，本轮后续只负责 BE。
 
 ### 从 V2 升级
 

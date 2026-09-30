@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from network.schemas import NetworkCode
+from logistics_types import TaskStatus
 from errors import (
     IdempotencyKeyReusedError,
     InvalidExpectedArrivalError,
@@ -24,6 +25,7 @@ from errors import (
 from transport.schemas import (
     CandidateShipmentListResponse,
     TransportTaskCreateRequest,
+    TransportTaskCancelRequest,
     TransportTaskResponse,
     TransportTaskDetailResponse,
     TransportTaskListResponse,
@@ -35,6 +37,7 @@ from transport.service import (
     list_candidate_shipments,
     depart_transport_task,
     arrive_transport_task,
+    cancel_transport_task,
     list_transport_tasks,
 )
 
@@ -53,11 +56,7 @@ def read_transport_tasks(
     session: Annotated[Session, Depends(get_db)],
     task_no: str | None = None,
     route_code: NetworkCode | None = None,
-    status: Literal[
-        "PENDING_DEPARTURE",
-        "IN_TRANSIT",
-        "ARRIVED",
-    ] | None = None,
+    status: TaskStatus | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> TransportTaskListResponse:
@@ -293,3 +292,26 @@ def read_transport_task(
     return TransportTaskDetailResponse.model_validate(
         response_body
     )
+
+@router.post("/{task_id}/cancel", response_model=TransportTaskDetailResponse)
+def cancel_task(
+    task_id: int,
+    request: TransportTaskCancelRequest,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    session: Annotated[Session, Depends(get_db)],
+) -> TransportTaskDetailResponse:
+    try:
+        body = cancel_transport_task(session, task_id, request, idempotency_key)
+    except TransportTaskNotFoundError:
+        raise HTTPException(404, "Transport task not found")
+    except InvalidTransportTaskStateError:
+        raise HTTPException(409, "Task cannot be cancelled or cancellation reason conflicts")
+    except InvalidTaskShipmentError:
+        raise HTTPException(409, "Task shipment associations or locations conflict")
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+    except SimulationClockNotInitializedError:
+        raise HTTPException(503, "Simulation clock is not initialized")
+    except NetworkDataNotInitializedError:
+        raise HTTPException(503, "Network data is not initialized")
+    return TransportTaskDetailResponse.model_validate(body)

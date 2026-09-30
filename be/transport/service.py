@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
-from logistics_types import ShipmentStage, TrackingEventType
+from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -26,7 +26,7 @@ from models import (
     TransportTask,
     TrackingEvent,
 )
-from transport.schemas import TransportTaskCreateRequest
+from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
 from network.service import require_enabled_route
 from errors import NetworkError
 
@@ -141,6 +141,8 @@ def build_task_response(
         "origin_station_id": str(origin.id),
         "destination_station_id": str(destination.id),
         "status": task.status,
+        "cancelled_at": task.cancelled_at.isoformat() if task.cancelled_at else None,
+        "cancel_reason": task.cancel_reason,
         "expected_arrival_at": task.expected_arrival_at.isoformat(),
         "departed_at": (
             task.departed_at.isoformat()
@@ -409,7 +411,7 @@ def depart_transport_task(
         if task is None:
             raise TransportTaskNotFoundError
 
-        if task.status == "IN_TRANSIT":
+        if task.status == TaskStatus.IN_TRANSIT:
             response_body = get_transport_task(
                 session=session,
                 task_id=task.id,
@@ -432,7 +434,7 @@ def depart_transport_task(
 
             return response_body
 
-        if task.status != "PENDING_DEPARTURE":
+        if task.status != TaskStatus.PENDING_DEPARTURE:
             raise InvalidTransportTaskStateError
 
         origin = aliased(Station)
@@ -519,7 +521,7 @@ def depart_transport_task(
         session.add(operation_log)
         session.flush()
 
-        task.status = "IN_TRANSIT"
+        task.status = TaskStatus.IN_TRANSIT
         task.departed_at = clock.current_time
         updated_at = datetime.now(timezone.utc)
 
@@ -601,7 +603,7 @@ def arrive_transport_task(
         if task is None:
             raise TransportTaskNotFoundError
 
-        if task.status == "ARRIVED":
+        if task.status == TaskStatus.ARRIVED:
             response_body = get_transport_task(
                 session=session,
                 task_id=task.id,
@@ -624,7 +626,7 @@ def arrive_transport_task(
 
             return response_body
 
-        if task.status != "IN_TRANSIT":
+        if task.status != TaskStatus.IN_TRANSIT:
             raise InvalidTransportTaskStateError
 
         origin = aliased(Station)
@@ -711,7 +713,7 @@ def arrive_transport_task(
         session.add(operation_log)
         session.flush()
 
-        task.status = "ARRIVED"
+        task.status = TaskStatus.ARRIVED
         task.arrived_at = clock.current_time
         updated_at = datetime.now(timezone.utc)
 
@@ -761,11 +763,11 @@ def calculate_task_delay(
     task: TransportTask,
     simulation_time: datetime,
 ) -> tuple[str, int | None]:
-    if not task.delay_monitoring_enabled:
+    if task.status == TaskStatus.CANCELLED or not task.delay_monitoring_enabled:
         return "NOT_APPLICABLE", None
 
     if (
-        task.status == "IN_TRANSIT"
+        task.status == TaskStatus.IN_TRANSIT
         and simulation_time > task.expected_arrival_at
     ):
         minutes = int(
@@ -778,7 +780,7 @@ def calculate_task_delay(
         return "OVERDUE", minutes
 
     if (
-        task.status == "ARRIVED"
+        task.status == TaskStatus.ARRIVED
         and task.arrived_at is not None
         and task.arrived_at > task.expected_arrival_at
     ):
@@ -827,14 +829,16 @@ def build_task_detail_response(
 
 def build_task_allowed_actions(status: str) -> list[dict]:
     rules = [
+        ("CANCEL", status == TaskStatus.PENDING_DEPARTURE,
+         "Cancellation requires PENDING_DEPARTURE status"),
         (
             "DEPART",
-            status == "PENDING_DEPARTURE",
+            status == TaskStatus.PENDING_DEPARTURE,
             "Departure requires PENDING_DEPARTURE status",
         ),
         (
             "ARRIVE",
-            status == "IN_TRANSIT",
+            status == TaskStatus.IN_TRANSIT,
             "Arrival requires IN_TRANSIT status",
         ),
     ]
@@ -910,9 +914,11 @@ def list_transport_tasks(
             {
                 "id": str(task.id),
                 "task_no": task.task_no,
-        "delay_monitoring_enabled": task.delay_monitoring_enabled,
+                "delay_monitoring_enabled": task.delay_monitoring_enabled,
                 "route_code": route.code,
                 "status": task.status,
+                "cancelled_at": task.cancelled_at,
+                "cancel_reason": task.cancel_reason,
                 "expected_arrival_at": task.expected_arrival_at,
                 "departed_at": task.departed_at,
                 "arrived_at": task.arrived_at,
@@ -923,3 +929,70 @@ def list_transport_tasks(
         )
 
     return items, total, simulation_time
+
+
+def cancel_transport_task(
+    session: Session,
+    task_id: int,
+    request: TransportTaskCancelRequest,
+    idempotency_key: UUID,
+) -> dict:
+    content = json.dumps({"action": "CANCEL_TRANSPORT_TASK", "task_id": task_id,
+                          "reason": request.reason}, sort_keys=True, separators=(",", ":"))
+    request_hash = hashlib.sha256(content.encode()).hexdigest()
+    with session.begin():
+        clock = session.scalar(select(SimulationSettings).where(
+            SimulationSettings.id == 1).with_for_update())
+        if clock is None:
+            raise SimulationClockNotInitializedError
+        existing = session.scalar(select(OperationLog).where(
+            OperationLog.idempotency_key == idempotency_key))
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise IdempotencyKeyReusedError
+            return existing.response_body
+        task = session.scalar(select(TransportTask).where(
+            TransportTask.id == task_id).with_for_update())
+        if task is None:
+            raise TransportTaskNotFoundError
+        before = {"status": task.status}
+        released_ids = []
+        if task.status == TaskStatus.CANCELLED:
+            if task.cancel_reason != request.reason:
+                raise InvalidTransportTaskStateError
+        elif task.status == TaskStatus.PENDING_DEPARTURE:
+            # Lock all original associations: a partially released pending task is invalid.
+            associations = list(session.scalars(select(TaskShipment).where(
+                TaskShipment.task_id == task_id).order_by(
+                TaskShipment.shipment_id).with_for_update()))
+            if not associations or any(a.released_at is not None for a in associations):
+                raise InvalidTaskShipmentError
+            shipments = list(session.scalars(select(Shipment).where(
+                Shipment.id.in_([a.shipment_id for a in associations])).order_by(
+                Shipment.id).with_for_update()))
+            route = session.get(TransportRoute, task.route_id)
+            if route is None:
+                raise NetworkDataNotInitializedError
+            if len(shipments) != len(associations) or any(
+                p.stage != ShipmentStage.AT_STATION or
+                p.last_scanned_station_id != route.origin_station_id for p in shipments):
+                raise InvalidTaskShipmentError
+            before["association_ids"] = [str(a.id) for a in associations]
+            task.status = TaskStatus.CANCELLED
+            task.cancelled_at = clock.current_time
+            task.cancel_reason = request.reason
+            for association in associations:
+                association.released_at = clock.current_time
+                released_ids.append(str(association.id))
+            session.flush()
+        else:
+            raise InvalidTransportTaskStateError
+        response = get_transport_task(session, task_id)
+        session.add(OperationLog(
+            idempotency_key=idempotency_key, request_hash=request_hash,
+            action="CANCEL_TRANSPORT_TASK", resource_type="TRANSPORT_TASK", resource_id=task_id,
+            before_data=before, after_data={"status": task.status,
+                "cancelled_at": task.cancelled_at.isoformat(), "cancel_reason": task.cancel_reason,
+                "released_association_ids": released_ids}, response_body=response,
+            response_status=200, occurred_at=clock.current_time))
+    return response

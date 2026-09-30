@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, aliased
 
 from errors import IdempotencyKeyReusedError, NetworkError, SimulationClockNotInitializedError
+from logistics_types import TaskStatus
 from models import OperationLog, Shipment, SimulationSettings, Station, TransportRoute, TransportTask
 
 
@@ -63,7 +64,7 @@ def _station_changes(session: Session, station: Station, changes: dict):
             Shipment.stage == "AT_STATION", Shipment.last_scanned_station_id == station.id).limit(1))
         endpoints = or_(TransportRoute.origin_station_id == station.id, TransportRoute.destination_station_id == station.id)
         tasks = session.scalar(select(TransportTask.id).join(TransportRoute).where(
-            endpoints, TransportTask.status != "ARRIVED").limit(1))
+            endpoints, TransportTask.status.in_([TaskStatus.PENDING_DEPARTURE, TaskStatus.IN_TRANSIT])).limit(1))
         routes = session.scalar(select(TransportRoute.id).where(endpoints, TransportRoute.enabled.is_(True)).limit(1))
         if inventory or tasks or routes:
             raise NetworkError("NETWORK_RESOURCE_IN_USE", "站点仍有在站运单、未完成任务或启用线路，请先处理")

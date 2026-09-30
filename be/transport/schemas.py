@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, StrictStr
 from network.schemas import NetworkCode
+from logistics_types import TaskStatus
 
 
 class CandidateShipmentResponse(BaseModel):
@@ -67,10 +68,12 @@ class TransportTaskResponse(BaseModel):
     route_code: str
     origin_station_id: str
     destination_station_id: str
-    status: str
+    status: TaskStatus
     expected_arrival_at: datetime
     departed_at: datetime | None
     arrived_at: datetime | None
+    cancelled_at: datetime | None
+    cancel_reason: str | None
     created_at: datetime
     shipments: list[TaskShipmentResponse]
 
@@ -99,10 +102,12 @@ class TransportTaskListItemResponse(BaseModel):
     id: str
     task_no: str
     route_code: str
-    status: str
+    status: TaskStatus
     expected_arrival_at: datetime
     departed_at: datetime | None
     arrived_at: datetime | None
+    cancelled_at: datetime | None
+    cancel_reason: str | None
     created_at: datetime
     delay_status: str
     delay_minutes: int | None
@@ -114,3 +119,34 @@ class TransportTaskListResponse(BaseModel):
     page: int
     page_size: int
     simulation_time: datetime
+
+class TransportTaskCancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: StrictStr
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not 1 <= len(value) <= 500:
+            raise ValueError("reason must contain 1–500 characters after trimming")
+        return value
+
+
+class ShipmentTaskHistoryItem(BaseModel):
+    id: str
+    task_no: str
+    route_code: str
+    status: TaskStatus
+    origin_station_id: str
+    destination_station_id: str
+    cancelled_at: datetime | None
+    cancel_reason: str | None
+    released_at: datetime | None
+
+
+class ShipmentTaskHistoryResponse(BaseModel):
+    items: list[ShipmentTaskHistoryItem]
+    total: int
+    page: int
+    page_size: int

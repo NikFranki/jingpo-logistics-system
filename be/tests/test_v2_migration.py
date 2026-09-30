@@ -23,7 +23,7 @@ from shipments.service import process_shipment_event
 
 
 V1 = "ccce65c68961"
-V2 = "a83c9e14d602"
+HEAD = "d92f4b76e301"
 STAGES = ["PENDING_PICKUP", "PICKED_UP", "AT_A", "IN_TRANSIT_AB", "AT_B",
           "IN_TRANSIT_BC", "AT_C", "OUT_FOR_DELIVERY", "SIGNED"]
 EVENTS = ["SHIPMENT_CREATED", "PICKUP", "ENTER_A", "DEPART_AB", "ARRIVE_B",
@@ -200,7 +200,7 @@ class V2MigrationTests(unittest.TestCase):
     def test_empty_database_upgrades(self):
         self.run_migration("head")
         with self.engine.connect() as conn:
-            self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), V2)
+            self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), HEAD)
             self.assertEqual(conn.execute(text("SELECT count(*) FROM shipments")).scalar_one(), 0)
 
 
