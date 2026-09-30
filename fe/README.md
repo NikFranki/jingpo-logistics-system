@@ -14,6 +14,20 @@ npm run dev
 
 浏览器打开 `http://localhost:5173`。开发服务器把 `/api` 请求代理到 `http://127.0.0.1:8000`。如需直连其他后端地址，在 `fe/.env.local` 设置 `VITE_API_BASE_URL`，并把前端地址加入后端 `CORS_ORIGINS`。
 
+## 页面地址
+
+订单/运单与运输任务详情使用独立页面，地址可直接打开或分享：
+
+| 页面 | 地址 |
+| --- | --- |
+| 订单列表 | `/orders` |
+| 订单与运单详情 | `/orders/:orderId` |
+| 运输任务列表 | `/tasks` |
+| 运输任务详情 | `/tasks/:taskId` |
+| 演示控制 | `/simulation` |
+
+生产环境的静态站点服务器需要把这些前端地址回退到 `index.html`，以支持刷新和直接打开详情链接。
+
 ```bash
 npm run build
 ```

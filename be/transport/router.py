@@ -11,6 +11,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from db import get_db
+from network.schemas import NetworkCode
 from errors import (
     IdempotencyKeyReusedError,
     InvalidExpectedArrivalError,
@@ -51,7 +52,7 @@ router = APIRouter(
 def read_transport_tasks(
     session: Annotated[Session, Depends(get_db)],
     task_no: str | None = None,
-    route_code: Literal["AB", "BC"] | None = None,
+    route_code: NetworkCode | None = None,
     status: Literal[
         "PENDING_DEPARTURE",
         "IN_TRANSIT",
@@ -88,7 +89,7 @@ def read_transport_tasks(
     response_model=CandidateShipmentListResponse,
 )
 def read_candidate_shipments(
-    route_code: Literal["AB", "BC"],
+    route_code: NetworkCode,
     session: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,

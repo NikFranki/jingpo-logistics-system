@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from db import get_db
 from models import Order
 from logistics_types import ShipmentStage
-from shipments.schemas import ShipmentDetailResponse
+from shipments.schemas import ShipmentDetailResponse, ShipmentCreateRequest
 from shipments.service import create_shipment
 
 from errors import (
@@ -163,6 +163,7 @@ def update_order(
 )
 def create_order_shipment(
     order_id: int,
+    request: ShipmentCreateRequest,
     response: Response,
     idempotency_key: Annotated[
         UUID,
@@ -175,6 +176,7 @@ def create_order_shipment(
             session=session,
             order_id=order_id,
             idempotency_key=idempotency_key,
+            destination_station_id=request.destination_station_id,
         )
     except OrderNotFoundError:
         raise HTTPException(

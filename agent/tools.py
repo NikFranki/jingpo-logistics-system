@@ -88,7 +88,7 @@ def _error(result: dict, exc: BEClientError) -> dict:
 def _shipment_summary(item: dict) -> dict:
     # 仅选取查询所需字段，不将完整地址传给模型。
     return {key: item[key] for key in (
-        "id", "shipment_no", "stage", "last_scanned_station_id",
+        "id", "shipment_no", "stage", "last_scanned_station_id", "destination_station_id",
     )}
 
 
@@ -266,6 +266,7 @@ def create_shipment_tracking_tool(base_url: str):
                 return {"id": str(station_id), "code": None, "name": None}
             return {key: station[key] for key in ("id", "code", "name")}
 
+        result["data"]["destination_station"] = station_summary(shipment["destination_station_id"])
         result["data"]["last_scanned_station"] = station_summary(shipment["last_scanned_station_id"])
         active = result["data"]["active_transport_task"]
         if active is not None:
@@ -326,7 +327,7 @@ def create_shipment_tracking_tool(base_url: str):
 
 TaskNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 TaskStatus = Literal["PENDING_DEPARTURE", "IN_TRANSIT", "ARRIVED"]
-RouteCode = Literal["AB", "BC"]
+RouteCode = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9_-]{0,31}$")]
 
 
 class TransportTaskSearchInput(BaseModel):
@@ -355,7 +356,7 @@ class TransportTaskDetailInput(BaseModel):
 def _task_summary(item: dict) -> dict:
     return {key: item[key] for key in (
         "id", "task_no", "route_code", "status", "expected_arrival_at",
-        "departed_at", "arrived_at", "delay_status", "delay_minutes",
+        "departed_at", "arrived_at", "delay_status", "delay_minutes", "delay_monitoring_enabled",
     )}
 
 
@@ -368,7 +369,7 @@ def create_transport_task_search_tool(base_url: str):
         page: int = 1,
         page_size: int = 10,
     ) -> dict:
-        """按完整任务号、AB/BC 线路、任务状态筛选运输任务，返回分页、演示时间和 BE 延误结果。"""
+        """按完整任务号、线路编码、任务状态筛选运输任务，返回分页、演示时间和 BE 延误结果。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:

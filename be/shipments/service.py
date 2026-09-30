@@ -14,6 +14,7 @@ from errors import (
     InvalidShipmentStateError,
     ShipmentNotFoundError,
     NetworkDataNotInitializedError,
+    NetworkError,
 )
 from models import (
     OperationLog,
@@ -94,11 +95,9 @@ def build_shipment_response_body(
         )
     ).one_or_none()
     task, route = active_task if active_task is not None else (None, None)
-    station_code = None
-    if shipment.stage == ShipmentStage.AT_STATION:
-        station_code = session.scalar(
-            select(Station.code).where(Station.id == shipment.last_scanned_station_id)
-        )
+    station = session.get(Station, shipment.last_scanned_station_id) if shipment.last_scanned_station_id else None
+    can_deliver = bool(station and station.enabled and station.allows_delivery
+        and station.id == shipment.destination_station_id and active_task is None)
     return {
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
@@ -107,6 +106,7 @@ def build_shipment_response_body(
         "recipient_address": shipment.recipient_address,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
+        "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": (
             str(shipment.last_scanned_station_id)
             if shipment.last_scanned_station_id is not None
@@ -142,21 +142,23 @@ def build_shipment_response_body(
             }
             for event in events
         ],
-        "allowed_actions": build_allowed_actions(shipment.stage, station_code),
+        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver),
     }
 
 def build_create_shipment_request_hash(
     order_id: int,
+    destination_station_id: int,
 ) -> str:
-    content = f"CREATE_SHIPMENT:{order_id}"
+    content = f"CREATE_SHIPMENT:{order_id}:{destination_station_id}"
     return hashlib.sha256(content.encode()).hexdigest()
 
 def create_shipment(
     session: Session,
     order_id: int,
     idempotency_key: UUID,
+    destination_station_id: int,
 ) -> tuple[dict, int]:
-    request_hash = build_create_shipment_request_hash(order_id)
+    request_hash = build_create_shipment_request_hash(order_id, destination_station_id)
 
     with session.begin():
         clock = session.scalar(
@@ -199,6 +201,8 @@ def create_shipment(
         )
 
         if existing_shipment is not None:
+            if existing_shipment.destination_station_id != destination_station_id:
+                raise NetworkError("INVALID_NETWORK_CONFIGURATION", "订单已有运单，目的站不能变更")
             result = get_shipment(
                 session=session,
                 shipment_id=existing_shipment.id,
@@ -230,8 +234,15 @@ def create_shipment(
         if order.status != "PENDING_SHIPMENT":
             raise OrderNotEditableError
 
+        destination = session.get(Station, destination_station_id)
+        if destination is None:
+            raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "目的站不存在", 404)
+        if not destination.enabled or not destination.allows_delivery:
+            raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
+
         shipment = Shipment(
             order_id=order.id,
+            destination_station_id=destination_station_id,
             sender_address=order.sender_address,
             recipient_address=order.recipient_address,
         )
@@ -505,13 +516,14 @@ def process_shipment_event(
             station = session.scalar(
                 select(Station).where(Station.id == int(request.station_id))
             )
-            if station is None or station.code != "A":
+            if station is None or not station.enabled or not station.allows_first_arrival:
                 raise InvalidShipmentStateError
         elif request.event_type == TrackingEventType.START_DELIVERY:
-            station_code = session.scalar(
-                select(Station.code).where(Station.id == shipment.last_scanned_station_id)
-            )
-            if station_code != "C":
+            delivery_station = session.get(Station, shipment.last_scanned_station_id)
+            occupied = session.scalar(select(TaskShipment.id).where(
+                TaskShipment.shipment_id == shipment.id, TaskShipment.released_at.is_(None)))
+            if (not delivery_station or not delivery_station.enabled or not delivery_station.allows_delivery
+                or shipment.last_scanned_station_id != shipment.destination_station_id or occupied):
                 raise InvalidShipmentStateError
 
         previous_stage = shipment.stage
@@ -585,7 +597,7 @@ def process_shipment_event(
 
     return response_body
 
-def build_allowed_actions(stage: str, station_code: str | None) -> list[dict]:
+def build_allowed_actions(stage: str, can_deliver: bool) -> list[dict]:
     rules = [
         (
             "UPDATE_ADDRESS",
@@ -604,8 +616,8 @@ def build_allowed_actions(stage: str, station_code: str | None) -> list[dict]:
         ),
         (
             "START_DELIVERY",
-            stage == ShipmentStage.AT_STATION and station_code == "C",
-            "Delivery requires arrival at station C",
+            stage == ShipmentStage.AT_STATION and can_deliver,
+            "Delivery requires arrival at the shipment destination station",
         ),
         (
             "SIGN",
@@ -667,6 +679,7 @@ def build_shipment_list_item(shipment: Shipment) -> dict:
         "recipient_address": shipment.recipient_address,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
+        "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": (
             str(shipment.last_scanned_station_id)
             if shipment.last_scanned_station_id is not None

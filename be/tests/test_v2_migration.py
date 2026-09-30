@@ -23,7 +23,7 @@ from shipments.service import process_shipment_event
 
 
 V1 = "ccce65c68961"
-V2 = "f714e269c2db"
+V2 = "a83c9e14d602"
 STAGES = ["PENDING_PICKUP", "PICKED_UP", "AT_A", "IN_TRANSIT_AB", "AT_B",
           "IN_TRANSIT_BC", "AT_C", "OUT_FOR_DELIVERY", "SIGNED"]
 EVENTS = ["SHIPMENT_CREATED", "PICKUP", "ENTER_A", "DEPART_AB", "ARRIVE_B",
@@ -175,7 +175,8 @@ class V2MigrationTests(unittest.TestCase):
         self.run_migration("head")
         after = self.snapshot()
         for table in ("transport_tasks", "task_shipments"):
-            self.assertEqual(after[table], before[table])
+            for old, new in zip(before[table], after[table]):
+                self.assertEqual({key: new[key] for key in old}, dict(old))
         self.assertEqual([row["stage"] for row in after["shipments"]], NEW_STAGES)
         for old, new in zip(before["tracking_events"], after["tracking_events"]):
             expected = dict(old)

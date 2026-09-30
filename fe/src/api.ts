@@ -1,18 +1,21 @@
 export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED'
 export type TaskStatus = 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED'
-export type RouteCode = 'AB' | 'BC'
+export type RouteCode = string
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
 export type Action = { action: string; enabled: boolean; reason_code: string | null; reason: string | null }
 export type Order = { id: string; order_no: string; product_name: string; quantity: number; sender_name: string; sender_address: string; recipient_name: string; recipient_address: string; region_code: string; status: string; created_at: string; updated_at: string }
 export type OrderDetail = Order & { shipment: { id: string; shipment_no: string; stage: Stage } | null }
-export type Shipment = { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; last_scanned_station_id: string | null; created_at: string; updated_at: string }
+export type Shipment = { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; destination_station_id: string; last_scanned_station_id: string | null; created_at: string; updated_at: string }
 export type TrackingEvent = { id: string; event_type: string; occurred_at: string; station_id: string | null; task_id: string | null }
 export type ActiveTransportTask = { id: string; route_code: RouteCode; origin_station_id: string; destination_station_id: string; status: TaskStatus }
 export type ShipmentDetail = Shipment & { active_transport_task: ActiveTransportTask | null; tracking_events: TrackingEvent[]; allowed_actions: Action[] }
-export type TaskItem = { id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
+export type TaskItem = { delay_monitoring_enabled: boolean; id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
 export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[] }
 export type TaskPage = Page<TaskItem> & { simulation_time: string }
-export type Station = { id: string; code: string; name: string }
+export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean }
+export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean }
+export type StationInput = Omit<Station, "id">
+export type RouteInput = { code: string; origin_station_id: number; destination_station_id: number; enabled: boolean; delay_monitoring_enabled: boolean }
 export type Candidate = Shipment & { last_scanned_station_id: string }
 export type OrderInput = Pick<Order, 'product_name' | 'quantity' | 'sender_name' | 'sender_address' | 'recipient_name' | 'recipient_address'>
 
@@ -68,27 +71,20 @@ function write<T>(path: string, method: 'POST' | 'PATCH', body?: unknown, key: s
   })
 }
 
-let stationsRequest: Promise<Station[]> | undefined
-
-function stations() {
-  if (!stationsRequest) {
-    stationsRequest = request<Station[]>('/api/v1/stations').catch(error => {
-      stationsRequest = undefined
-      throw error
-    })
-  }
-  return stationsRequest
-}
-
 export const api = {
   clock: () => request<{ current_time: string }>('/api/v1/simulation/clock'),
   advance: (minutes: 30 | 120, key?: string) => write<{ current_time: string }>('/api/v1/simulation/clock/advance', 'POST', { minutes }, key),
-  stations,
+  stations: () => request<Station[]>("/api/v1/stations"),
+  routes: () => request<TransportRoute[]>("/api/v1/routes"),
+  createStation: (body: StationInput, key?: string) => write<Station>("/api/v1/stations", "POST", body, key),
+  updateStation: (id: string, body: Partial<Omit<StationInput, "code">>, key?: string) => write<Station>(`/api/v1/stations/${id}`, "PATCH", body, key),
+  createRoute: (body: RouteInput, key?: string) => write<TransportRoute>("/api/v1/routes", "POST", body, key),
+  updateRoute: (id: string, body: { enabled?: boolean; delay_monitoring_enabled?: boolean }, key?: string) => write<TransportRoute>(`/api/v1/routes/${id}`, "PATCH", body, key),
   orders: (params: { page?: number; page_size?: number; order_no?: string; shipment_no?: string; stage?: string } = {}) => request<Page<Order>>(`/api/v1/orders${query(params)}`),
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
   updateOrder: (id: string, body: OrderInput, key?: string) => write<Order>(`/api/v1/orders/${id}`, 'PATCH', body, key),
-  createShipment: (orderId: string, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', undefined, key),
+  createShipment: (orderId: string, destination_station_id: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { destination_station_id }, key),
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   updateAddress: (id: string, body: { sender_address: string; recipient_address: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/address`, 'PATCH', body, key),

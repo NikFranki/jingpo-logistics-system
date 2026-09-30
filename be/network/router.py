@@ -1,64 +1,45 @@
 from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from uuid import UUID
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
-
 from db import get_db
-from models import Station
-from network.schemas import (
-    StationResponse,
-    TransportRouteResponse,
-)
-from network.service import (
-    list_routes as list_routes_service,
-    list_stations as list_stations_service,
-)
+from errors import IdempotencyKeyReusedError, SimulationClockNotInitializedError
+from network.schemas import (StationResponse, TransportRouteResponse, StationCreateRequest,
+    StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest)
+from network.service import list_stations, list_routes, station_body, route_body, write_network
 
+router = APIRouter(prefix="/api/v1", tags=["network"])
+DB = Annotated[Session, Depends(get_db)]
+Key = Annotated[UUID, Header(alias="Idempotency-Key")]
 
-router = APIRouter(
-    prefix="/api/v1",
-    tags=["network"],
-)
+@router.get("/stations", response_model=list[StationResponse])
+def read_stations(session: DB, enabled: bool | None = None):
+    return [station_body(station) for station in list_stations(session, enabled)]
 
+@router.get("/routes", response_model=list[TransportRouteResponse])
+def read_routes(session: DB, enabled: bool | None = None):
+    return [route_body(session, route) for route, _, _ in list_routes(session, enabled)]
 
-def to_station_response(station: Station) -> StationResponse:
-    return StationResponse(
-        id=str(station.id),
-        code=station.code,
-        name=station.name,
-    )
+def write(session, kind, request, key, resource_id=None):
+    try:
+        return write_network(session, kind, request, key, resource_id)
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+    except SimulationClockNotInitializedError:
+        raise HTTPException(503, "Simulation clock is not initialized")
 
+@router.post("/stations", response_model=StationResponse, status_code=201)
+def create_station(request: StationCreateRequest, idempotency_key: Key, session: DB):
+    return write(session, "STATION", request, idempotency_key)
 
-@router.get(
-    "/stations",
-    response_model=list[StationResponse],
-)
-def read_stations(
-    session: Annotated[Session, Depends(get_db)],
-) -> list[StationResponse]:
-    stations = list_stations_service(session)
+@router.patch("/stations/{station_id}", response_model=StationResponse)
+def update_station(station_id: int, request: StationUpdateRequest, idempotency_key: Key, session: DB):
+    return write(session, "STATION", request, idempotency_key, station_id)
 
-    return [
-        to_station_response(station)
-        for station in stations
-    ]
+@router.post("/routes", response_model=TransportRouteResponse, status_code=201)
+def create_route(request: RouteCreateRequest, idempotency_key: Key, session: DB):
+    return write(session, "ROUTE", request, idempotency_key)
 
-
-@router.get(
-    "/routes",
-    response_model=list[TransportRouteResponse],
-)
-def read_routes(
-    session: Annotated[Session, Depends(get_db)],
-) -> list[TransportRouteResponse]:
-    routes = list_routes_service(session)
-
-    return [
-        TransportRouteResponse(
-            id=str(route.id),
-            code=route.code,
-            origin=to_station_response(origin),
-            destination=to_station_response(destination),
-        )
-        for route, origin, destination in routes
-    ]
+@router.patch("/routes/{route_id}", response_model=TransportRouteResponse)
+def update_route(route_id: int, request: RouteUpdateRequest, idempotency_key: Key, session: DB):
+    return write(session, "ROUTE", request, idempotency_key, route_id)

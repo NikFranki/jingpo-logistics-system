@@ -26,6 +26,11 @@ class TrackingEventResponse(BaseModel):
     task_id: str | None
 
 
+class ShipmentCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    destination_station_id: int = Field(gt=0, strict=True)
+
+
 class ShipmentResponse(BaseModel):
     id: str
     shipment_no: str
@@ -34,6 +39,7 @@ class ShipmentResponse(BaseModel):
     recipient_address: str
     region_code: str
     stage: ShipmentStage
+    destination_station_id: str
     last_scanned_station_id: str | None
     created_at: datetime
     updated_at: datetime

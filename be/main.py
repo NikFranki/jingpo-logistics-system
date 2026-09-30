@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from db import engine
+from errors import NetworkError
 
 # 引入 simulation 路由
 from simulation.router import router as simulation_router
@@ -47,6 +48,14 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
+
+@app.exception_handler(NetworkError)
+async def handle_network_error(request: Request, exc: NetworkError):
+    request_id = request.state.request_id
+    return JSONResponse(status_code=exc.status, content={
+        "error": {"code": exc.code, "message": exc.message, "details": None},
+        "request_id": request_id,
+    }, headers={"X-Request-ID": request_id})
 
 @app.exception_handler(HTTPException)
 async def handle_http_exception(request: Request, exc: HTTPException):

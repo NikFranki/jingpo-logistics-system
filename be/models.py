@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Identity,
@@ -61,7 +62,7 @@ class OperationLog(Base):
         ),
         CheckConstraint(
             "resource_type IN "
-            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK')",
+            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE')",
             name="ck_logs_resource_type",
         ),
         CheckConstraint(
@@ -169,7 +170,7 @@ class Station(Base):
     __tablename__ = "stations"
     __table_args__ = (
         CheckConstraint(
-            "code IN ('A', 'B', 'C')",
+            "code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'",
             name="ck_stations_code",
         ),
         CheckConstraint(
@@ -184,17 +185,20 @@ class Station(Base):
         primary_key=True,
     )
     code: Mapped[str] = mapped_column(
-        String(1),
+        String(32),
         unique=True,
     )
     name: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    allows_first_arrival: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    allows_delivery: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
 
 class TransportRoute(Base):
     __tablename__ = "transport_routes"
     __table_args__ = (
         CheckConstraint(
-            "code IN ('AB', 'BC')",
+            "code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'",
             name="ck_routes_code",
         ),
         CheckConstraint(
@@ -214,9 +218,11 @@ class TransportRoute(Base):
         primary_key=True,
     )
     code: Mapped[str] = mapped_column(
-        String(2),
+        String(32),
         unique=True,
     )
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    delay_monitoring_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     origin_station_id: Mapped[int] = mapped_column(
         ForeignKey("stations.id"),
     )
@@ -276,6 +282,7 @@ class Shipment(Base):
         String(32),
         server_default="PENDING_PICKUP",
     )
+    destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     last_scanned_station_id: Mapped[int | None] = mapped_column(
         ForeignKey("stations.id"),
     )
@@ -323,6 +330,7 @@ class TransportTask(Base):
     route_id: Mapped[int] = mapped_column(
         ForeignKey("transport_routes.id"),
     )
+    delay_monitoring_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     status: Mapped[str] = mapped_column(
         String(32),
         server_default="PENDING_DEPARTURE",

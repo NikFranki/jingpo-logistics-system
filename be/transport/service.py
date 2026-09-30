@@ -27,6 +27,8 @@ from models import (
     TrackingEvent,
 )
 from transport.schemas import TransportTaskCreateRequest
+from network.service import require_enabled_route
+from errors import NetworkError
 
 def list_candidate_shipments(
     session: Session,
@@ -46,9 +48,10 @@ def list_candidate_shipments(
     ).one_or_none()
 
     if result is None:
-        raise NetworkDataNotInitializedError
+        raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "线路不存在", 404)
 
-    _, origin_station = result
+    route, origin_station = result
+    require_enabled_route(session, route)
     required_stage = ShipmentStage.AT_STATION
 
     occupied = (
@@ -63,6 +66,7 @@ def list_candidate_shipments(
     filters = (
         Shipment.stage == required_stage,
         Shipment.last_scanned_station_id == origin_station.id,
+        Shipment.destination_station_id != origin_station.id,
         ~occupied,
     )
 
@@ -94,6 +98,7 @@ def build_candidate_response(shipment: Shipment) -> dict:
         "recipient_address": shipment.recipient_address,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
+        "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": str(
             shipment.last_scanned_station_id
         ),
@@ -131,6 +136,7 @@ def build_task_response(
     return {
         "id": str(task.id),
         "task_no": task.task_no,
+        "delay_monitoring_enabled": task.delay_monitoring_enabled,
         "route_code": route.code,
         "origin_station_id": str(origin.id),
         "destination_station_id": str(destination.id),
@@ -207,9 +213,10 @@ def create_transport_task(
         ).one_or_none()
 
         if route_result is None:
-            raise NetworkDataNotInitializedError
+            raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "线路不存在", 404)
 
         route, origin_station, destination_station = route_result
+        require_enabled_route(session, route)
 
         shipments = list(
             session.scalars(
@@ -226,7 +233,8 @@ def create_transport_task(
         required_stage = ShipmentStage.AT_STATION
 
         if any(
-            shipment.stage != required_stage
+            shipment.destination_station_id == origin_station.id
+            or shipment.stage != required_stage
             or shipment.last_scanned_station_id
             != origin_station.id
             for shipment in shipments
@@ -249,6 +257,7 @@ def create_transport_task(
 
         task = TransportTask(
             route_id=route.id,
+            delay_monitoring_enabled=route.delay_monitoring_enabled,
             expected_arrival_at=request.expected_arrival_at,
         )
         session.add(task)
@@ -753,7 +762,7 @@ def calculate_task_delay(
     route_code: str,
     simulation_time: datetime,
 ) -> tuple[str, int | None]:
-    if route_code != "AB":
+    if not task.delay_monitoring_enabled:
         return "NOT_APPLICABLE", None
 
     if (
@@ -904,6 +913,7 @@ def list_transport_tasks(
             {
                 "id": str(task.id),
                 "task_no": task.task_no,
+        "delay_monitoring_enabled": task.delay_monitoring_enabled,
                 "route_code": route.code,
                 "status": task.status,
                 "expected_arrival_at": task.expected_arrival_at,

@@ -48,8 +48,11 @@ flowchart LR
 | V1 后端总体设计 | [技术方案](docs/技术方案/v1/be/be-v1技术方案.md)、[规格](docs/技术方案/v1/be/spec.md)、[实施与验证记录](docs/技术方案/v1/be/plan.md) |
 | V1 查询 Agent 设计 | [技术方案](docs/技术方案/v1/agent/agent-v1技术方案.md)、[规格](docs/技术方案/v1/agent/spec.md)、[实施与验证记录](docs/技术方案/v1/agent/plan.md) |
 | V2 通用物流阶段与轨迹事件 | [V2 PRD](docs/prd/v2/JINGPO-logistics-system-v2.md)、[后端规格](docs/技术方案/v2/be/spec.md)、[实施计划](docs/技术方案/v2/be/plan.md) |
+| V3 站点与线路配置（设计初稿） | [V3 PRD](docs/prd/v3/JINGPO-logistics-system-v3.md)、[规格](docs/技术方案/v3/be/spec.md)、[实施计划](docs/技术方案/v3/be/plan.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
+
+V3 已开始需求设计，PRD/spec/plan 初稿已形成；站点能力、运单目的站及停用规则属于本版设计建议，业务代码和迁移尚未实施。
 
 ## 每次交付怎么收尾
 

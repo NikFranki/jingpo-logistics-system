@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 
 Identifier = Annotated[str, StringConstraints(pattern=r"^[1-9][0-9]*$")]
 Text = Annotated[str, StringConstraints(min_length=1)]
+RouteCode = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9_-]{0,31}$")]
 Stage = Literal['PENDING_PICKUP', 'PICKED_UP', 'AT_STATION', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'SIGNED']
 
 
@@ -29,6 +30,7 @@ class ShipmentRef(Response):
 
 
 class Shipment(ShipmentRef):
+    destination_station_id: Identifier
     last_scanned_station_id: Identifier | None
 
 
@@ -42,7 +44,7 @@ class Event(Response):
 
 class ActiveTransportTask(Response):
     id: Identifier
-    route_code: Literal['AB', 'BC']
+    route_code: RouteCode
     origin_station_id: Identifier
     destination_station_id: Identifier
     status: Literal['PENDING_DEPARTURE', 'IN_TRANSIT', 'ARRIVED']
@@ -72,9 +74,10 @@ class OrderDetail(Order):
 
 
 class Task(Response):
+    delay_monitoring_enabled: bool
     id: Identifier
     task_no: Text
-    route_code: Literal['AB', 'BC']
+    route_code: RouteCode
     status: Literal['PENDING_DEPARTURE', 'IN_TRANSIT', 'ARRIVED']
     expected_arrival_at: Timestamp
     departed_at: Timestamp | None

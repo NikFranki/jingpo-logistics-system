@@ -25,13 +25,13 @@ from tools import (create_shipment_tracking_tool, create_shipment_search_tool,
                    create_transport_task_detail_tool, create_transport_task_search_tool)
 
 TIME = '2026-09-29T10:00:00+08:00'
-TASK = dict(id='7', task_no='TASK-7', route_code='AB', status='IN_TRANSIT',
+TASK = dict(delay_monitoring_enabled=True, id='7', task_no='TASK-7', route_code='AB', status='IN_TRANSIT',
             expected_arrival_at=TIME, departed_at=TIME, arrived_at=None,
             delay_status='OVERDUE', delay_minutes=10, origin_station_id='1',
             destination_station_id='2', simulation_time=TIME, shipments=[])
 EVENT = dict(id='1', event_type='DEPART', occurred_at=TIME, station_id='1', task_id='7')
 SHIPMENT = dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT',
-                last_scanned_station_id='1', tracking_events=[EVENT], sender_address='PRIVATE-ADDRESS',
+                destination_station_id='1', last_scanned_station_id='1', tracking_events=[EVENT], sender_address='PRIVATE-ADDRESS',
                 active_transport_task=dict(id='7', route_code='AB', origin_station_id='1', destination_station_id='2', status='IN_TRANSIT'))
 ORDER = dict(id='3', order_no='ORDER-3', product_name='parcel', quantity=1,
              status='SHIPPED', shipment=dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT'))

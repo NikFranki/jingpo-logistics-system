@@ -39,6 +39,10 @@ from transport.service import (
 class V2FlowTests(unittest.TestCase):
     @staticmethod
     def call(function, *args):
+        if function is create_shipment:
+            with SessionLocal() as session:
+                destination = session.scalar(select(Station.id).where(Station.code == "C"))
+            args = (*args, destination)
         with SessionLocal() as session:
             return function(session, *args)
 
@@ -88,10 +92,12 @@ class V2FlowTests(unittest.TestCase):
 
     def test_ab_delay_uses_task_time(self):
         expected = self._clock() + timedelta(hours=1)
-        task = TransportTask(status="IN_TRANSIT", expected_arrival_at=expected)
+        task = TransportTask(status="IN_TRANSIT", expected_arrival_at=expected, delay_monitoring_enabled=True)
         task.departed_at = expected - timedelta(hours=1)
         self.assertEqual(calculate_task_delay(task, "AB", expected + timedelta(minutes=9)), ("OVERDUE", 9))
+        task.delay_monitoring_enabled = False
         self.assertEqual(calculate_task_delay(task, "BC", expected + timedelta(minutes=9)), ("NOT_APPLICABLE", None))
+        task.delay_monitoring_enabled = True
         task.status = "ARRIVED"
         task.arrived_at = expected + timedelta(minutes=7)
         self.assertEqual(calculate_task_delay(task, "AB", expected + timedelta(hours=3)), ("LATE_ARRIVAL", 7))

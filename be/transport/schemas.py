@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from network.schemas import NetworkCode
 
 
 class CandidateShipmentResponse(BaseModel):
@@ -12,6 +13,7 @@ class CandidateShipmentResponse(BaseModel):
     recipient_address: str
     region_code: str
     stage: str
+    destination_station_id: str
     last_scanned_station_id: str
     created_at: datetime
     updated_at: datetime
@@ -24,7 +26,8 @@ class CandidateShipmentListResponse(BaseModel):
     page_size: int
 
 class TransportTaskCreateRequest(BaseModel):
-    route_code: Literal["AB", "BC"]
+    model_config = ConfigDict(extra="forbid")
+    route_code: NetworkCode
     expected_arrival_at: datetime
     shipment_ids: list[int] = Field(
         min_length=1,
@@ -58,6 +61,7 @@ class TaskShipmentResponse(BaseModel):
 
 
 class TransportTaskResponse(BaseModel):
+    delay_monitoring_enabled: bool
     id: str
     task_no: str
     route_code: str
@@ -91,6 +95,7 @@ class TransportTaskDetailResponse(TransportTaskResponse):
 
 
 class TransportTaskListItemResponse(BaseModel):
+    delay_monitoring_enabled: bool
     id: str
     task_no: str
     route_code: str
