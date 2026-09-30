@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models import Order
+from logistics_types import ShipmentStage
 from shipments.schemas import ShipmentDetailResponse
 from shipments.service import create_shipment
 
@@ -61,17 +62,7 @@ def read_orders(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     order_no: str | None = None,
     shipment_no: str | None = None,
-    stage: Literal[
-        "PENDING_PICKUP",
-        "PICKED_UP",
-        "AT_A",
-        "IN_TRANSIT_AB",
-        "AT_B",
-        "IN_TRANSIT_BC",
-        "AT_C",
-        "OUT_FOR_DELIVERY",
-        "SIGNED",
-    ] | None = None,
+    stage: ShipmentStage | None = None,
 ) -> OrderListResponse:
     orders, total = list_orders(
         session=session,

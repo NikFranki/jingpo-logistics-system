@@ -29,11 +29,12 @@ TASK = dict(id='7', task_no='TASK-7', route_code='AB', status='IN_TRANSIT',
             expected_arrival_at=TIME, departed_at=TIME, arrived_at=None,
             delay_status='OVERDUE', delay_minutes=10, origin_station_id='1',
             destination_station_id='2', simulation_time=TIME, shipments=[])
-EVENT = dict(id='1', event_type='DEPART_AB', occurred_at=TIME, station_id='1', task_id='7')
-SHIPMENT = dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT_AB',
-                last_scanned_station_id='1', tracking_events=[EVENT], sender_address='PRIVATE-ADDRESS')
+EVENT = dict(id='1', event_type='DEPART', occurred_at=TIME, station_id='1', task_id='7')
+SHIPMENT = dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT',
+                last_scanned_station_id='1', tracking_events=[EVENT], sender_address='PRIVATE-ADDRESS',
+                active_transport_task=dict(id='7', route_code='AB', origin_station_id='1', destination_station_id='2', status='IN_TRANSIT'))
 ORDER = dict(id='3', order_no='ORDER-3', product_name='parcel', quantity=1,
-             status='SHIPPED', shipment=dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT_AB'))
+             status='SHIPPED', shipment=dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT'))
 
 
 def page(items):
@@ -204,12 +205,40 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('PRIVATE-ADDRESS', json.dumps(data))
         self.assertEqual(data['data']['tasks'][0]['delay_status'], 'OVERDUE')
 
+    async def test_pending_task_is_visible_before_first_depart_event(self):
+        shipment = {**SHIPMENT,
+                    'stage': 'AT_STATION',
+                    'tracking_events': [dict(id='1', event_type='ARRIVE', occurred_at=TIME,
+                                             station_id='1', task_id=None)],
+                    'active_transport_task': {**SHIPMENT['active_transport_task'],
+                                              'status': 'PENDING_DEPARTURE'}}
+        task = {**TASK, 'status': 'PENDING_DEPARTURE', 'departed_at': None,
+                'delay_status': 'NONE', 'delay_minutes': 0}
+        paths = []
+        def handler(req):
+            paths.append(req.url.path)
+            payload = {'/api/v1/shipments/2': shipment,
+                       '/api/v1/stations': [dict(id='1', code='A', name='A station'),
+                                            dict(id='2', code='B', name='B station')],
+                       '/api/v1/transport-tasks/7': task}[req.url.path]
+            return httpx.Response(200, json=payload)
+        model = FakeModel([call('get_shipment_tracking', {'shipment_id': 2,
+                                                         'include_tasks': True}),
+                           AIMessage(content='done')])
+        with self.mocked(handler):
+            result, _ = await self.invoke(model, [create_shipment_tracking_tool('http://be')])
+        data = tool_results(result)[0]['data']
+        self.assertEqual(paths.count('/api/v1/transport-tasks/7'), 1)
+        self.assertEqual(data['active_transport_task']['status'], 'PENDING_DEPARTURE')
+        self.assertEqual(data['active_transport_task']['destination_station']['code'], 'B')
+        self.assertEqual(data['tasks'][0]['status'], 'PENDING_DEPARTURE')
+
     async def test_all_six_tools_and_order_chain(self):
         registry = [f('http://be') for f in (create_order_search_tool, create_order_detail_tool, create_shipment_search_tool,
                                             create_shipment_tracking_tool, create_transport_task_search_tool, create_transport_task_detail_tool)]
         payloads = {'/api/v1/orders': page([ORDER]), '/api/v1/orders/3': ORDER,
                     '/api/v1/shipments': page([SHIPMENT]), '/api/v1/shipments/2': SHIPMENT,
-                    '/api/v1/stations': [dict(id='1', code='A', name='A')],
+                    '/api/v1/stations': [dict(id='1', code='A', name='A'), dict(id='2', code='B', name='B')],
                     '/api/v1/transport-tasks': page([TASK]), '/api/v1/transport-tasks/7': TASK}
         def handler(req):
             self.assertEqual(req.method, 'GET')

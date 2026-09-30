@@ -11,6 +11,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from db import get_db
+from logistics_types import ShipmentStage
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -142,17 +143,7 @@ def create_shipment_event(
 def read_shipments(
     session: Annotated[Session, Depends(get_db)],
     shipment_no: str | None = None,
-    stage: Literal[
-        "PENDING_PICKUP",
-        "PICKED_UP",
-        "AT_A",
-        "IN_TRANSIT_AB",
-        "AT_B",
-        "IN_TRANSIT_BC",
-        "AT_C",
-        "OUT_FOR_DELIVERY",
-        "SIGNED",
-    ] | None = None,
+    stage: ShipmentStage | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ShipmentListResponse:
@@ -197,6 +188,7 @@ def read_shipment(
 
     return ShipmentDetailResponse.model_validate(
         build_shipment_response_body(
+            session=session,
             shipment=shipment,
             events=events,
         )

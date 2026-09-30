@@ -1,5 +1,6 @@
 from typing import Annotated, Literal, Self
 from datetime import datetime
+import re
 
 from pydantic import (
     BaseModel,
@@ -8,6 +9,7 @@ from pydantic import (
     Field,
     model_validator,
 )
+from logistics_types import ShipmentStage, TrackingEventType
 
 class AllowedActionResponse(BaseModel):
     action: str
@@ -18,7 +20,7 @@ class AllowedActionResponse(BaseModel):
 
 class TrackingEventResponse(BaseModel):
     id: str
-    event_type: str
+    event_type: TrackingEventType
     occurred_at: datetime
     station_id: str | None
     task_id: str | None
@@ -31,17 +33,26 @@ class ShipmentResponse(BaseModel):
     sender_address: str
     recipient_address: str
     region_code: str
-    stage: str
+    stage: ShipmentStage
     last_scanned_station_id: str | None
     created_at: datetime
     updated_at: datetime
 
 
 class ShipmentDetailResponse(ShipmentResponse):
+    active_transport_task: "ActiveTransportTaskResponse | None"
     tracking_events: list[TrackingEventResponse]
     allowed_actions: list[AllowedActionResponse] = Field(
         default_factory=list
     )
+
+
+class ActiveTransportTaskResponse(BaseModel):
+    id: str
+    route_code: str
+    origin_station_id: str
+    destination_station_id: str
+    status: str
 
 AddressText = Annotated[
     str,
@@ -75,11 +86,21 @@ class ShipmentEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_type: Literal[
-        "PICKUP",
-        "ENTER_A",
-        "START_DELIVERY",
-        "SIGN",
+        TrackingEventType.PICKUP,
+        TrackingEventType.ARRIVE,
+        TrackingEventType.START_DELIVERY,
+        TrackingEventType.SIGN,
     ]
+    station_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_station(self) -> Self:
+        if self.event_type == TrackingEventType.ARRIVE:
+            if self.station_id is None or re.fullmatch(r"[1-9][0-9]*", self.station_id) is None:
+                raise ValueError("ARRIVE requires a positive station_id")
+        elif self.station_id is not None:
+            raise ValueError("station_id is only allowed for ARRIVE")
+        return self
 
 class ShipmentListResponse(BaseModel):
     items: list[ShipmentResponse]

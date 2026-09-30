@@ -1,4 +1,4 @@
-export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_A' | 'IN_TRANSIT_AB' | 'AT_B' | 'IN_TRANSIT_BC' | 'AT_C' | 'OUT_FOR_DELIVERY' | 'SIGNED'
+export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED'
 export type TaskStatus = 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED'
 export type RouteCode = 'AB' | 'BC'
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
@@ -7,7 +7,8 @@ export type Order = { id: string; order_no: string; product_name: string; quanti
 export type OrderDetail = Order & { shipment: { id: string; shipment_no: string; stage: Stage } | null }
 export type Shipment = { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; last_scanned_station_id: string | null; created_at: string; updated_at: string }
 export type TrackingEvent = { id: string; event_type: string; occurred_at: string; station_id: string | null; task_id: string | null }
-export type ShipmentDetail = Shipment & { tracking_events: TrackingEvent[]; allowed_actions: Action[] }
+export type ActiveTransportTask = { id: string; route_code: RouteCode; origin_station_id: string; destination_station_id: string; status: TaskStatus }
+export type ShipmentDetail = Shipment & { active_transport_task: ActiveTransportTask | null; tracking_events: TrackingEvent[]; allowed_actions: Action[] }
 export type TaskItem = { id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
 export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[] }
 export type TaskPage = Page<TaskItem> & { simulation_time: string }
@@ -25,15 +26,31 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
+  const timeoutController = new AbortController()
+  const timeout = setTimeout(() => timeoutController.abort(), 15_000)
   try {
-    response = await fetch(`${base}${path}`, init)
-  } catch {
+    response = await fetch(`${base}${path}`, { ...init, signal: init?.signal ?? timeoutController.signal })
+  } catch (error) {
+    if (timeoutController.signal.aborted) throw new ApiError('请求超时，后端暂时没有响应，请重试。', 0)
+    if (error instanceof Error && error.name === 'AbortError') throw new ApiError('请求已取消。', 0)
     throw new ApiError('无法连接后端服务，请确认 BE 已启动后重试。', 0)
+  } finally {
+    clearTimeout(timeout)
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new ApiError(body?.error?.message ?? `请求失败 (${response.status})`, response.status, body?.request_id, body?.error?.details)
+    const fallback: Record<number, string> = {
+      400: '提交内容有误，请检查表单后重试。',
+      401: '请求未通过身份验证，请检查访问凭证。',
+      403: '当前账号没有执行此操作的权限。',
+      404: '目标记录不存在或已被删除，请刷新列表。',
+      409: '数据状态已变化，请刷新后重试。',
+      429: '操作过于频繁，请稍后重试。',
+    }
+    const message = body?.error?.message ?? fallback[response.status] ?? (response.status >= 500 ? '后端暂时无法处理请求，请稍后重试。' : `请求失败 (${response.status})`)
+    throw new ApiError(message, response.status, body?.request_id, body?.error?.details)
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -51,10 +68,22 @@ function write<T>(path: string, method: 'POST' | 'PATCH', body?: unknown, key: s
   })
 }
 
+let stationsRequest: Promise<Station[]> | undefined
+
+function stations() {
+  if (!stationsRequest) {
+    stationsRequest = request<Station[]>('/api/v1/stations').catch(error => {
+      stationsRequest = undefined
+      throw error
+    })
+  }
+  return stationsRequest
+}
+
 export const api = {
   clock: () => request<{ current_time: string }>('/api/v1/simulation/clock'),
   advance: (minutes: 30 | 120, key?: string) => write<{ current_time: string }>('/api/v1/simulation/clock/advance', 'POST', { minutes }, key),
-  stations: () => request<Station[]>('/api/v1/stations'),
+  stations,
   orders: (params: { page?: number; page_size?: number; order_no?: string; shipment_no?: string; stage?: string } = {}) => request<Page<Order>>(`/api/v1/orders${query(params)}`),
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
@@ -63,7 +92,7 @@ export const api = {
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   updateAddress: (id: string, body: { sender_address: string; recipient_address: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/address`, 'PATCH', body, key),
-  shipmentEvent: (id: string, event_type: string, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/events`, 'POST', { event_type }, key),
+  shipmentEvent: (id: string, event_type: string, station_id?: string, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/events`, 'POST', { event_type, ...(station_id ? { station_id } : {}) }, key),
   tasks: (params: { page?: number; page_size?: number; task_no?: string; route_code?: string; status?: string } = {}) => request<TaskPage>(`/api/v1/transport-tasks${query(params)}`),
   task: (id: string) => request<TaskDetail>(`/api/v1/transport-tasks/${id}`),
   candidates: (route_code: RouteCode, page = 1) => request<Page<Candidate>>(`/api/v1/transport-tasks/candidates${query({ route_code, page, page_size: 100 })}`),

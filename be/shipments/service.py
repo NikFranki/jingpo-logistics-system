@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from logistics_types import ShipmentStage, TrackingEventType
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -21,6 +22,9 @@ from models import (
     SimulationSettings,
     TrackingEvent,
     Station,
+    TaskShipment,
+    TransportTask,
+    TransportRoute,
 )
 
 from shipments.schemas import (
@@ -29,28 +33,24 @@ from shipments.schemas import (
 )
 
 SHIPMENT_EVENT_RULES = {
-    "PICKUP": {
-        "required_stage": "PENDING_PICKUP",
-        "next_stage": "PICKED_UP",
-        "station_code": None,
+    TrackingEventType.PICKUP: {
+        "required_stage": ShipmentStage.PENDING_PICKUP,
+        "next_stage": ShipmentStage.PICKED_UP,
         "action": "PICKUP_SHIPMENT",
     },
-    "ENTER_A": {
-        "required_stage": "PICKED_UP",
-        "next_stage": "AT_A",
-        "station_code": "A",
+    TrackingEventType.ARRIVE: {
+        "required_stage": ShipmentStage.PICKED_UP,
+        "next_stage": ShipmentStage.AT_STATION,
         "action": "ENTER_STATION",
     },
-    "START_DELIVERY": {
-        "required_stage": "AT_C",
-        "next_stage": "OUT_FOR_DELIVERY",
-        "station_code": None,
+    TrackingEventType.START_DELIVERY: {
+        "required_stage": ShipmentStage.AT_STATION,
+        "next_stage": ShipmentStage.OUT_FOR_DELIVERY,
         "action": "START_DELIVERY",
     },
-    "SIGN": {
-        "required_stage": "OUT_FOR_DELIVERY",
-        "next_stage": "SIGNED",
-        "station_code": None,
+    TrackingEventType.SIGN: {
+        "required_stage": ShipmentStage.OUT_FOR_DELIVERY,
+        "next_stage": ShipmentStage.SIGNED,
         "action": "SIGN_SHIPMENT",
     },
 }
@@ -80,9 +80,25 @@ def get_shipment(
 
 
 def build_shipment_response_body(
+    session: Session,
     shipment: Shipment,
     events: list[TrackingEvent],
 ) -> dict:
+    active_task = session.execute(
+        select(TransportTask, TransportRoute)
+        .join(TaskShipment, TaskShipment.task_id == TransportTask.id)
+        .join(TransportRoute, TransportTask.route_id == TransportRoute.id)
+        .where(
+            TaskShipment.shipment_id == shipment.id,
+            TaskShipment.released_at.is_(None),
+        )
+    ).one_or_none()
+    task, route = active_task if active_task is not None else (None, None)
+    station_code = None
+    if shipment.stage == ShipmentStage.AT_STATION:
+        station_code = session.scalar(
+            select(Station.code).where(Station.id == shipment.last_scanned_station_id)
+        )
     return {
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
@@ -95,6 +111,16 @@ def build_shipment_response_body(
             str(shipment.last_scanned_station_id)
             if shipment.last_scanned_station_id is not None
             else None
+        ),
+        "active_transport_task": (
+            {
+                "id": str(task.id),
+                "route_code": route.code,
+                "origin_station_id": str(route.origin_station_id),
+                "destination_station_id": str(route.destination_station_id),
+                "status": task.status,
+            }
+            if task is not None else None
         ),
         "created_at": shipment.created_at.isoformat(),
         "updated_at": shipment.updated_at.isoformat(),
@@ -116,7 +142,7 @@ def build_shipment_response_body(
             }
             for event in events
         ],
-        "allowed_actions": build_allowed_actions(shipment.stage),
+        "allowed_actions": build_allowed_actions(shipment.stage, station_code),
     }
 
 def build_create_shipment_request_hash(
@@ -179,6 +205,7 @@ def create_shipment(
             )
             shipment, events = result
             response_body = build_shipment_response_body(
+                session=session,
                 shipment=shipment,
                 events=events,
             )
@@ -245,6 +272,7 @@ def create_shipment(
         session.flush()
 
         response_body = build_shipment_response_body(
+            session=session,
             shipment=shipment,
             events=[event],
         )
@@ -339,6 +367,7 @@ def update_shipment_address(
             for field in changes
         }
         response_body = build_shipment_response_body(
+            session=session,
             shipment=shipment,
             events=events,
         )
@@ -367,7 +396,8 @@ def build_shipment_event_request_hash(
     content = (
         f"SHIPMENT_EVENT:"
         f"{shipment_id}:"
-        f"{request.event_type}"
+        f"{request.event_type}:"
+        f"{request.station_id or ''}"
     )
 
     return hashlib.sha256(content.encode()).hexdigest()
@@ -415,17 +445,24 @@ def process_shipment_event(
         if shipment is None:
             raise ShipmentNotFoundError
 
+        event_filters = [
+            TrackingEvent.shipment_id == shipment_id,
+            TrackingEvent.event_type == request.event_type,
+        ]
+        if request.event_type == TrackingEventType.ARRIVE:
+            event_filters.extend((
+                TrackingEvent.station_id == int(request.station_id),
+                TrackingEvent.task_id.is_(None),
+            ))
         existing_event = session.scalar(
-            select(TrackingEvent).where(
-                TrackingEvent.shipment_id == shipment_id,
-                TrackingEvent.event_type == request.event_type,
-            )
+            select(TrackingEvent).where(*event_filters)
         )
 
         if existing_event is not None:
             result = get_shipment(session, shipment.id)
             shipment, events = result
             response_body = build_shipment_response_body(
+                session=session,
                 shipment=shipment,
                 events=events,
             )
@@ -452,7 +489,7 @@ def process_shipment_event(
 
         order = None
 
-        if request.event_type == "SIGN":
+        if request.event_type == TrackingEventType.SIGN:
             order = session.scalar(
                 select(Order)
                 .where(Order.id == shipment.order_id)
@@ -464,15 +501,18 @@ def process_shipment_event(
 
         station = None
 
-        if rule["station_code"] is not None:
+        if request.event_type == TrackingEventType.ARRIVE:
             station = session.scalar(
-                select(Station).where(
-                    Station.code == rule["station_code"]
-                )
+                select(Station).where(Station.id == int(request.station_id))
             )
-
-            if station is None:
-                raise NetworkDataNotInitializedError
+            if station is None or station.code != "A":
+                raise InvalidShipmentStateError
+        elif request.event_type == TrackingEventType.START_DELIVERY:
+            station_code = session.scalar(
+                select(Station.code).where(Station.id == shipment.last_scanned_station_id)
+            )
+            if station_code != "C":
+                raise InvalidShipmentStateError
 
         previous_stage = shipment.stage
         previous_station_id = shipment.last_scanned_station_id
@@ -528,6 +568,7 @@ def process_shipment_event(
         result = get_shipment(session, shipment.id)
         shipment, events = result
         response_body = build_shipment_response_body(
+            session=session,
             shipment=shipment,
             events=events,
         )
@@ -544,7 +585,7 @@ def process_shipment_event(
 
     return response_body
 
-def build_allowed_actions(stage: str) -> list[dict]:
+def build_allowed_actions(stage: str, station_code: str | None) -> list[dict]:
     rules = [
         (
             "UPDATE_ADDRESS",
@@ -557,14 +598,14 @@ def build_allowed_actions(stage: str) -> list[dict]:
             "Pickup requires PENDING_PICKUP stage",
         ),
         (
-            "ENTER_A",
-            stage == "PICKED_UP",
-            "Entering station A requires PICKED_UP stage",
+            "ARRIVE",
+            stage == ShipmentStage.PICKED_UP,
+            "Entering the first station requires PICKED_UP stage",
         ),
         (
             "START_DELIVERY",
-            stage == "AT_C",
-            "Delivery requires AT_C stage",
+            stage == ShipmentStage.AT_STATION and station_code == "C",
+            "Delivery requires arrival at station C",
         ),
         (
             "SIGN",

@@ -12,8 +12,8 @@ from state import TurnContext, TurnLimitError
 
 
 ShipmentStage = Literal[
-    "PENDING_PICKUP", "PICKED_UP", "AT_A", "IN_TRANSIT_AB", "AT_B",
-    "IN_TRANSIT_BC", "AT_C", "OUT_FOR_DELIVERY", "SIGNED",
+    "PENDING_PICKUP", "PICKED_UP", "AT_STATION", "IN_TRANSIT",
+    "OUT_FOR_DELIVERY", "SIGNED",
 ]
 ShipmentNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OrderNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -56,7 +56,7 @@ class ShipmentTrackingInput(BaseModel):
 
     shipment_id: int | None = Field(default=None, gt=0, strict=True, description="运单数据库 ID，与运单号二选一")
     shipment_no: ShipmentNumber | None = Field(default=None, description="完整运单号，与数据库 ID 二选一")
-    include_tasks: bool = Field(default=False, strict=True, description="查询延误时设为 true，按轨迹中的任务 ID 查询关联任务")
+    include_tasks: bool = Field(default=False, strict=True, description="查询延误时设为 true，查询当前任务及轨迹关联的历史任务")
 
     @model_validator(mode="after")
     def validate_identifier(self) -> Self:
@@ -208,7 +208,7 @@ def create_shipment_tracking_tool(base_url: str):
         shipment_no: str | None = None,
         include_tasks: bool = False,
     ) -> dict:
-        """查询运单阶段、站点及轨迹；查询延误时设 include_tasks=true，组合查询轨迹中的运输任务。"""
+        """查询运单阶段、站点及轨迹；查询延误时设 include_tasks=true，组合查询当前任务及轨迹关联的历史任务。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
@@ -236,6 +236,7 @@ def create_shipment_tracking_tool(base_url: str):
             {key: event[key] for key in ("id", "event_type", "occurred_at", "station_id", "task_id")}
             for event in shipment["tracking_events"]
         ]
+        result["data"]["active_transport_task"] = shipment["active_transport_task"]
 
         stations = {}
         try:
@@ -266,6 +267,10 @@ def create_shipment_tracking_tool(base_url: str):
             return {key: station[key] for key in ("id", "code", "name")}
 
         result["data"]["last_scanned_station"] = station_summary(shipment["last_scanned_station_id"])
+        active = result["data"]["active_transport_task"]
+        if active is not None:
+            active["origin_station"] = station_summary(active["origin_station_id"])
+            active["destination_station"] = station_summary(active["destination_station_id"])
         for event in result["data"]["tracking_events"]:
             event["station"] = station_summary(event["station_id"])
 
@@ -279,12 +284,14 @@ def create_shipment_tracking_tool(base_url: str):
                 for event in shipment["tracking_events"]
                 if event["task_id"] is not None
             ))
+            if active is not None and int(active["id"]) not in task_ids:
+                task_ids.append(int(active["id"]))
             result["data"]["tasks"] = []
             result["data"]["task_errors"] = []
-            result["data"]["task_scope"] = "tracking_events"
+            result["data"]["task_scope"] = "tracking_events_and_active_task"
             if not task_ids:
                 result["warnings"].append(
-                    "轨迹中暂无任务 ID，无法据此判断延误，也不能认定没有关联任务；尚未发车的任务可能未进入轨迹。"
+                    "轨迹和当前任务中暂无任务 ID，无法据此判断延误。"
                 )
             for index, task_id in enumerate(task_ids):
                 try:

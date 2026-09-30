@@ -1,6 +1,6 @@
-# JINGPO 前端 V1
+# JINGPO 前端 V2
 
-技术栈：React + TypeScript + Vite + Ant Design + ProComponents。使用 ProLayout、PageContainer、ProTable 和 ModalForm 构建页面，对应 PRD V1 的订单与运单、运输任务、演示控制。所有业务状态与操作条件来自现有 FastAPI 接口。
+技术栈：React + TypeScript + Vite + Ant Design + ProComponents。页面对应 V2 的订单与运单、运输任务、演示控制。运单阶段使用通用的 `AT_STATION` 和 `IN_TRANSIT`，站点与线路从运单详情的关联字段展示。订单显示下单地址，运单显示当前履约地址。
 
 ## 启动
 
@@ -21,7 +21,7 @@ npm run build
 ## 使用顺序
 
 1. 在「订单 / 运单」创建订单、创建发货单。
-2. 在「演示控制」揽收、A 入站。
+2. 在「演示控制」揽收、A 入站。两项操作分开，揽收后尚不能创建 AB 任务。
 3. 在「运输任务」创建 A → B 任务；回「演示控制」发车、推进时钟、到达并入站。
 4. 按同样方式完成 B → C；然后开始派送、签收。
 

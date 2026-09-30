@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
+from logistics_types import ShipmentStage, TrackingEventType
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -27,33 +28,6 @@ from models import (
 )
 from transport.schemas import TransportTaskCreateRequest
 
-DEPARTURE_RULES = {
-    "AB": {
-        "required_shipment_stage": "AT_A",
-        "next_shipment_stage": "IN_TRANSIT_AB",
-        "event_type": "DEPART_AB",
-    },
-    "BC": {
-        "required_shipment_stage": "AT_B",
-        "next_shipment_stage": "IN_TRANSIT_BC",
-        "event_type": "DEPART_BC",
-    },
-}
-
-ARRIVAL_RULES = {
-    "AB": {
-        "required_shipment_stage": "IN_TRANSIT_AB",
-        "next_shipment_stage": "AT_B",
-        "event_type": "ARRIVE_B",
-    },
-    "BC": {
-        "required_shipment_stage": "IN_TRANSIT_BC",
-        "next_shipment_stage": "AT_C",
-        "event_type": "ARRIVE_C",
-    },
-}
-
-
 def list_candidate_shipments(
     session: Session,
     route_code: str,
@@ -75,7 +49,7 @@ def list_candidate_shipments(
         raise NetworkDataNotInitializedError
 
     _, origin_station = result
-    required_stage = f"AT_{origin_station.code}"
+    required_stage = ShipmentStage.AT_STATION
 
     occupied = (
         select(TaskShipment.id)
@@ -249,7 +223,7 @@ def create_transport_task(
         if len(shipments) != len(request.shipment_ids):
             raise InvalidTaskShipmentError
 
-        required_stage = f"AT_{origin_station.code}"
+        required_stage = ShipmentStage.AT_STATION
 
         if any(
             shipment.stage != required_stage
@@ -473,7 +447,6 @@ def depart_transport_task(
             raise NetworkDataNotInitializedError
 
         route, origin_station, destination_station = route_result
-        rule = DEPARTURE_RULES[route.code]
 
         associations = list(
             session.scalars(
@@ -508,8 +481,8 @@ def depart_transport_task(
             raise InvalidTaskShipmentError
 
         if any(
-            shipment.stage
-            != rule["required_shipment_stage"]
+            shipment.stage != ShipmentStage.AT_STATION
+            or shipment.last_scanned_station_id != origin_station.id
             for shipment in shipments
         ):
             raise InvalidTaskShipmentError
@@ -542,13 +515,13 @@ def depart_transport_task(
         updated_at = datetime.now(timezone.utc)
 
         for shipment in shipments:
-            shipment.stage = rule["next_shipment_stage"]
+            shipment.stage = ShipmentStage.IN_TRANSIT
             shipment.updated_at = updated_at
 
             session.add(
                 TrackingEvent(
                     shipment_id=shipment.id,
-                    event_type=rule["event_type"],
+                    event_type=TrackingEventType.DEPART,
                     occurred_at=clock.current_time,
                     station_id=origin_station.id,
                     task_id=task.id,
@@ -666,7 +639,6 @@ def arrive_transport_task(
             raise NetworkDataNotInitializedError
 
         route, origin_station, destination_station = route_result
-        rule = ARRIVAL_RULES[route.code]
 
         associations = list(
             session.scalars(
@@ -701,8 +673,8 @@ def arrive_transport_task(
             raise InvalidTaskShipmentError
 
         if any(
-            shipment.stage
-            != rule["required_shipment_stage"]
+            shipment.stage != ShipmentStage.IN_TRANSIT
+            or shipment.last_scanned_station_id != origin_station.id
             for shipment in shipments
         ):
             raise InvalidTaskShipmentError
@@ -738,7 +710,7 @@ def arrive_transport_task(
             association.released_at = clock.current_time
 
         for shipment in shipments:
-            shipment.stage = rule["next_shipment_stage"]
+            shipment.stage = ShipmentStage.AT_STATION
             shipment.last_scanned_station_id = (
                 destination_station.id
             )
@@ -747,7 +719,7 @@ def arrive_transport_task(
             session.add(
                 TrackingEvent(
                     shipment_id=shipment.id,
-                    event_type=rule["event_type"],
+                    event_type=TrackingEventType.ARRIVE,
                     occurred_at=clock.current_time,
                     station_id=destination_station.id,
                     task_id=task.id,

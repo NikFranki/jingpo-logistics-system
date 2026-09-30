@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 
 Identifier = Annotated[str, StringConstraints(pattern=r"^[1-9][0-9]*$")]
 Text = Annotated[str, StringConstraints(min_length=1)]
-Stage = Literal['PENDING_PICKUP', 'PICKED_UP', 'AT_A', 'IN_TRANSIT_AB', 'AT_B', 'IN_TRANSIT_BC', 'AT_C', 'OUT_FOR_DELIVERY', 'SIGNED']
+Stage = Literal['PENDING_PICKUP', 'PICKED_UP', 'AT_STATION', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'SIGNED']
 
 
 def aware_time(value: str) -> str:
@@ -40,7 +40,16 @@ class Event(Response):
     task_id: Identifier | None
 
 
+class ActiveTransportTask(Response):
+    id: Identifier
+    route_code: Literal['AB', 'BC']
+    origin_station_id: Identifier
+    destination_station_id: Identifier
+    status: Literal['PENDING_DEPARTURE', 'IN_TRANSIT', 'ARRIVED']
+
+
 class ShipmentDetail(Shipment):
+    active_transport_task: ActiveTransportTask | None
     tracking_events: list[Event]
 
 

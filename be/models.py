@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 
 from db import Base
+from logistics_types import ShipmentStage, TrackingEventType, sql_enum_values
 
 # 全局表 保存整个系统共享的一份配置或状态（全局表保存“系统现在处于什么环境或时间”）
 # SimulationSettings 是一个 ORM 模型，作用是把 Python 类映射到 PostgreSQL 的 simulation_settings 表
@@ -231,11 +232,7 @@ class Shipment(Base):
             name="ck_shipments_region",
         ),
         CheckConstraint(
-            "stage IN ("
-            "'PENDING_PICKUP', 'PICKED_UP', 'AT_A', "
-            "'IN_TRANSIT_AB', 'AT_B', 'IN_TRANSIT_BC', "
-            "'AT_C', 'OUT_FOR_DELIVERY', 'SIGNED'"
-            ")",
+            f"stage IN ({sql_enum_values(ShipmentStage)})",
             name="ck_shipments_stage",
         ),
         CheckConstraint(
@@ -390,28 +387,19 @@ class TrackingEvent(Base):
             name="uq_events_operation",
         ),
         CheckConstraint(
-            "event_type IN ("
-            "'SHIPMENT_CREATED', 'PICKUP', 'ENTER_A', "
-            "'DEPART_AB', 'ARRIVE_B', "
-            "'DEPART_BC', 'ARRIVE_C', "
-            "'START_DELIVERY', 'SIGN'"
-            ")",
+            f"event_type IN ({sql_enum_values(TrackingEventType)})",
             name="ck_events_type",
         ),
         CheckConstraint(
-            "(event_type IN "
-            "('DEPART_AB', 'ARRIVE_B', 'DEPART_BC', 'ARRIVE_C') "
-            "AND task_id IS NOT NULL) "
-            "OR "
-            "(event_type NOT IN "
-            "('DEPART_AB', 'ARRIVE_B', 'DEPART_BC', 'ARRIVE_C') "
-            "AND task_id IS NULL)",
+            "(event_type = 'DEPART' AND task_id IS NOT NULL) "
+            "OR (event_type = 'ARRIVE') "
+            "OR (event_type IN ('SHIPMENT_CREATED', 'PICKUP', "
+            "'START_DELIVERY', 'SIGN') AND task_id IS NULL)",
             name="ck_events_task",
         ),
         CheckConstraint(
             "(event_type IN "
-            "('ENTER_A', 'DEPART_AB', 'ARRIVE_B', "
-            "'DEPART_BC', 'ARRIVE_C') "
+            "('ARRIVE', 'DEPART') "
             "AND station_id IS NOT NULL) "
             "OR "
             "(event_type IN "

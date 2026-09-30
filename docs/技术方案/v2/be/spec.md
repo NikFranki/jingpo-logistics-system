@@ -1,6 +1,6 @@
 # JINGPO 后端 V2 · 开发规格
 
-> 2026-09-29 · 草案，供评审。本文约束 V2 实现和验收，不表示代码已经修改。
+> 2026-09-30 · V2 实现规格。验证结果见 [实施与验证记录](plan.md)。
 
 依据：[V2 PRD](../../../prd/v2/JINGPO-logistics-system-v2.md)、[V1 后端规格](../../v1/be/spec.md) 与 [领域术语](../../../../be/CONTEXT.md)。V1 未被本文明确改变的业务规则继续有效。
 
@@ -41,6 +41,19 @@
 ### 三者的联动状态机
 
 运单 `stage` 是这件货当前所处环节；任务 `status` 是某一段运输的进度；轨迹 `event_type` 是已发生、只追加的事实。一个运单可以先后参加多个任务，因此当前运单阶段不能从某个历史任务的状态直接推断。`POST /shipments/{id}/events` 的 `event_type` 是请求执行某项业务操作；校验成功并完成状态变更后，才生成对应的轨迹记录。业务操作在一个事务中更新当前状态、写轨迹和操作日志。
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING_PICKUP: 创建运单 / SHIPMENT_CREATED
+    PENDING_PICKUP --> PICKED_UP: 揽收 / PICKUP
+    PICKED_UP --> AT_STATION: 首次入 A / ARRIVE
+    AT_STATION --> IN_TRANSIT: 当前任务发车 / DEPART
+    IN_TRANSIT --> AT_STATION: 当前任务到达 / ARRIVE
+    AT_STATION --> OUT_FOR_DELIVERY: 在 C 开始派送 / START_DELIVERY
+    OUT_FOR_DELIVERY --> SIGNED: 签收 / SIGN
+```
+
+图中 `AT_STATION ↔ IN_TRANSIT` 可以随 AB、BC 任务重复；图上的事件是转换成功后留下的轨迹。运输任务本身按 `PENDING_DEPARTURE → IN_TRANSIT → ARRIVED` 前进，到达后释放运单占用，历史任务仍保留。
 
 | 业务操作 | 运单阶段变化 | 当前任务状态变化 | 新增轨迹及关联 |
 | --- | --- | --- | --- |
