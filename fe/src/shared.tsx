@@ -33,7 +33,7 @@ export function StatusTag({ tone, children, icon }: { tone: StatusTone; children
   return <Tag icon={icon} style={statusTagStyles[tone]}>{children}</Tag>
 }
 
-export type Mutate = <T,>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
+export type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
 export type Shared = { revision: number; busy: boolean; mutate: Mutate }
 export function useNetwork(revision: number) {
   const [stations, setStations] = useState<Station[]>([])

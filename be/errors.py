@@ -18,6 +18,10 @@ class ShipmentNotFoundError(Exception):
 class InvalidShipmentStateError(Exception):
     pass
 
+
+class InvalidShipmentDestinationError(Exception):
+    """A destination correction conflicts with the current fulfillment facts."""
+
 class NetworkDataNotInitializedError(Exception):
     pass
 

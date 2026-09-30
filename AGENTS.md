@@ -15,14 +15,14 @@ PRD 建议顺序：问题与目标 → 用户流程图/界面示意 → 范围�
 
 ## 项目一眼看懂
 
-物流演示系统：前端操作业务，后端维护物流事实，查询 Agent 用自然语言读取后端数据。
+物流演示系统：前端操作业务，后端维护物流事实与运输安排，查询 Agent 用自然语言读取后端数据。
 
 ```mermaid
 flowchart LR
     U[用户] --> FE[前端 fe\n业务操作与演示]
     U --> CLI[查询 Agent agent\n自然语言问答]
     CLI <--> LLM[DeepSeek 模型\n选择查询工具并组织回答]
-    FE -->|查询与写操作| BE[后端 be\nFastAPI /api/v1]
+    FE -->|查询与写操作| BE[后端 be\n物流事实、运输安排与操作历史]
     CLI -->|只读 HTTP 查询| BE
     BE --> DB[(PostgreSQL\n业务数据、轨迹与操作日志)]
 ```
@@ -50,12 +50,16 @@ flowchart LR
 | V2 通用物流阶段与轨迹事件 | [V2 PRD](docs/prd/v2/JINGPO-logistics-system-v2.md)、[后端规格](docs/技术方案/v2/be/spec.md)、[实施计划](docs/技术方案/v2/be/plan.md) |
 | V3 站点与线路配置（BE 已实现） | [V3 PRD](docs/prd/v3/JINGPO-logistics-system-v3.md)、[规格](docs/技术方案/v3/be/spec.md)、[实施计划](docs/技术方案/v3/be/plan.md) |
 | V4 发车前取消与业务操作归属（BE 已实现） | [V4 PRD](docs/prd/v4/JINGPO-logistics-system-v4.md)、[BE 规格](docs/技术方案/v4/be/spec.md)、[实施计划](docs/技术方案/v4/be/plan.md) |
+| V5 运单目的站更正（BE 已实现） | [V5 PRD](docs/prd/v5/JINGPO-logistics-system-v5.md)、[BE 规格](docs/技术方案/v5/be/spec.md)、[验收记录](docs/技术方案/v5/be/plan.md) |
+| V6 完整运输路径与未来段调整（规划草案） | [V6 规划](docs/prd/v6/JINGPO-logistics-system-v6.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
 
 V3 后端站点/线路配置、运单目的站、停用保护、任务延误快照与迁移已实现；16 项后端测试通过，迁移模型无差异。本轮用户明确只负责 BE，客户端由其负责方推进。开发库已备份并升级为 V3（`a83c9e14d602`），后端已恢复且只读检查通过；迁移版本和验证证据见 [V3 BE 验收记录](docs/技术方案/v3/be/plan.md)。
 
 V4 BE 已实现发车前取消任务、批量占用释放、取消信息与关联历史、操作资格和运单任务历史查询；开发库已备份并升级为 V4（`d92f4b76e301`），后端已重启且只读检查通过。业务操作回归运单和任务页面的 FE 工作，以及 Agent 适配，由其负责方验收。迁移与测试证据见 [V4 BE 验收记录](docs/技术方案/v4/be/plan.md)。
+
+V5 BE 已实现目的站更正、原站前提校验、幂等和更正历史查询；35 项联合后端测试及迁移结构检查通过。复用 V4 数据结构，不需要迁移，不自动更正开发库运单。FE/Agent 独立适配与验收。V6 只记录可复用完整路径、按下一段创建任务及未来段调整的建议，尚未实现。
 
 ## 每次交付怎么收尾
 

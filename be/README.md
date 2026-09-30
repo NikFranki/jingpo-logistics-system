@@ -1,5 +1,24 @@
 # BE
 
+## V5 运单目的站更正（后端已实现）
+
+目的站更正只修改运输安排，订单、运单地址、当前位置与物流轨迹保持原样。允许待揽收、已揽收、无任务占用的在站运单更正；运输中、派送中、已签收拒绝。待发车任务需先取消。新站必须启用且允许派送。
+
+- `PATCH /api/v1/shipments/{id}/destination`，要求 `Idempotency-Key`，返回最新运单详情。请求示例：
+
+```json
+{"expected_destination_station_id": 6, "destination_station_id": 5, "reason": "原目的站选择错误"}
+```
+
+两个 ID 必须为正整数，原因去首尾空白后为 1～500 字符。原目的站与当前不一致，或新站未变化，返回 409。相同 key 同内容重试返回首次缓存；不同内容返回 409。更正为当前所在站后允许开始派送，不自动派送。
+
+- 运单详情 `allowed_actions` 新增 `UPDATE_DESTINATION`，不可用时区分阶段限制与任务占用。
+- `GET /api/v1/shipments/{id}/destination-changes?page=1&page_size=20` 返回原站、新站、原因、演示时间；不是物流轨迹。
+
+**本版没有数据库迁移**，结构版本仍为 `d92f4b76e301`。历史幂等缓存不回写，客户端操作成功后重新 GET 详情取得当前资格。现有本地后端使用 reload，可自动加载代码；其他环境需重启进程。没有自动更正开发库中的运单。
+
+35 项联合后端测试通过，迁移结构无差异；验证命令沿用下方测试命令，将库名换为 `jingpo_logistics_v5_test`。客户端页面与 Agent 独立交接；详见 [V5 PRD](../docs/prd/v5/JINGPO-logistics-system-v5.md)、[spec](../docs/技术方案/v5/be/spec.md)、[验收记录](../docs/技术方案/v5/be/plan.md)。完整运输路径安排另见 [V6 规划草案](../docs/prd/v6/JINGPO-logistics-system-v6.md)。
+
 ## V4 待发车任务取消（后端已实现）
 
 后端迁移版本为 `d92f4b76e301`。待发车任务可取消并解除全部运单占用；任务及关联历史保留，运单位置、地址、订单和物流轨迹保持原样。取消原因不能被后续重试覆盖。

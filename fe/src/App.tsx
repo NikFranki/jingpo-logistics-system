@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Spin, message } from 'antd'
 import { AppstoreOutlined, ClockCircleOutlined, ControlOutlined, SwapOutlined, TruckOutlined } from '@ant-design/icons'
 import { ProLayout } from '@ant-design/pro-components'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from './api'
 import { apiError, formatTime, StatusTag, type Mutate } from './shared'
 
@@ -17,7 +17,6 @@ const NetworkPage = lazy(() => import('./NetworkPage'))
 
 export default function App() {
   const location = useLocation()
-  const navigate = useNavigate()
   const [clock, setClock] = useState<string>()
   const [messageApi, contextHolder] = message.useMessage()
   const [busy, setBusy] = useState(false)
@@ -60,7 +59,7 @@ export default function App() {
     fixSiderbar
     location={{ pathname: activePath }}
     route={{ routes: menuData }}
-    menuItemRender={(item, dom) => <a onClick={() => item.path && navigate(item.path)}>{dom}</a>}
+    menuItemRender={(item, dom) => item.path ? <Link to={item.path}>{dom}</Link> : dom}
     actionsRender={() => [<StatusTag key="clock" icon={<ClockCircleOutlined />} tone="info">演示时间 · {formatTime(clock)}</StatusTag>]}
     avatarProps={{ title: '演示操作员', size: 'small' }}
     contentStyle={{ minHeight: 'calc(100vh - 56px)' }}

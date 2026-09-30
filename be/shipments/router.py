@@ -17,6 +17,7 @@ from transport.schemas import ShipmentTaskHistoryResponse
 from errors import (
     IdempotencyKeyReusedError,
     InvalidShipmentStateError,
+    InvalidShipmentDestinationError,
     ShipmentNotFoundError,
     SimulationClockNotInitializedError,
     NetworkDataNotInitializedError,
@@ -26,6 +27,8 @@ from shipments.schemas import (
     ShipmentDetailResponse,
     ShipmentEventRequest,
     ShipmentListResponse,
+    ShipmentDestinationUpdateRequest,
+    DestinationChangeListResponse,
 )
 from shipments.service import (
     build_shipment_response_body,
@@ -35,6 +38,8 @@ from shipments.service import (
     build_shipment_list_item,
     list_shipments,
     list_shipment_transport_tasks,
+    update_shipment_destination,
+    list_destination_changes,
 )
 
 
@@ -42,6 +47,40 @@ router = APIRouter(
     prefix="/api/v1/shipments",
     tags=["shipments"],
 )
+
+
+@router.patch("/{shipment_id}/destination", response_model=ShipmentDetailResponse)
+def update_destination(
+    shipment_id: int,
+    request: ShipmentDestinationUpdateRequest,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    session: Annotated[Session, Depends(get_db)],
+) -> ShipmentDetailResponse:
+    try:
+        body = update_shipment_destination(session, shipment_id, request, idempotency_key)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    except InvalidShipmentDestinationError as error:
+        raise HTTPException(409, str(error))
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+    except SimulationClockNotInitializedError:
+        raise HTTPException(503, "Simulation clock is not initialized")
+    return ShipmentDetailResponse.model_validate(body)
+
+
+@router.get("/{shipment_id}/destination-changes", response_model=DestinationChangeListResponse)
+def read_destination_changes(
+    shipment_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> DestinationChangeListResponse:
+    try:
+        items, total = list_destination_changes(session, shipment_id, page, page_size)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    return DestinationChangeListResponse(items=items, total=total, page=page, page_size=page_size)
 
 @router.patch(
     "/{shipment_id}/address",

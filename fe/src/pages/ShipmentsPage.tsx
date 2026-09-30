@@ -8,11 +8,10 @@ import { api, type Shipment, type ShipmentDetail, type ShipmentTaskHistory } fro
 import { actionText, allowed, apiError, eventText, formatTime, stageText, StatusTag, taskStatusText, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
-const shipmentEvents = ['PICKUP', 'ARRIVE', 'START_DELIVERY', 'SIGN'] as const
+type ShipmentEvent = 'PICKUP' | 'ARRIVE' | 'START_DELIVERY' | 'SIGN'
 
 function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   const actionRef = useRef<ActionType | undefined>(undefined)
-  const navigate = useNavigate()
   const [loadError, setLoadError] = useState<string>()
   useEffect(() => { actionRef.current?.reload() }, [revision])
   const columns: ProColumns<Shipment>[] = [
@@ -21,7 +20,7 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
     { title: '当前站点', dataIndex: 'last_scanned_station_id', search: false, render: (_, row) => row.last_scanned_station_id ? <StationName id={row.last_scanned_station_id} /> : '—' },
     { title: '目的站', dataIndex: 'destination_station_id', search: false, render: (_, row) => <StationName id={row.destination_station_id} /> },
     { title: '最近更新', dataIndex: 'updated_at', valueType: 'dateTime', search: false },
-    { title: '操作', valueType: 'option', render: (_, row) => <a onClick={() => navigate('/shipments/' + row.id)}>查看运单</a> },
+    { title: '操作', valueType: 'option', render: (_, row) => <Link to={'/shipments/' + row.id}>查看运单</Link> },
   ]
   return <PageContainer title="运单" subTitle="处理揽收、站点入站、运输安排和末端派送。">
     {loadError && <Alert type="error" showIcon message="运单列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
@@ -45,7 +44,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   const [historyError, setHistoryError] = useState<string>()
   const [retry, setRetry] = useState(0)
   const [firstStation, setFirstStation] = useState<string>()
-  const [eventToConfirm, setEventToConfirm] = useState<typeof shipmentEvents[number]>()
+  const [eventToConfirm, setEventToConfirm] = useState<ShipmentEvent>()
   const [eventSaving, setEventSaving] = useState(false)
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
@@ -66,7 +65,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
     return () => { active = false }
   }, [shipmentId, revision, retry, historyPage])
 
-  const runEvent = (event: typeof shipmentEvents[number]) => {
+  const runEvent = (event: ShipmentEvent) => {
     if (!detail) return
     if (event === 'ARRIVE' && !firstStation) { messageApi.error('请选择包裹实际入站的站点'); return }
     setEventToConfirm(event)
@@ -122,12 +121,12 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
           { title: '取消原因', dataIndex: 'cancel_reason', render: value => value || '—' },
         ]} /> : <Empty description="该运单还没有关联运输任务" /> },
       ]} />
-      <ModalForm<{ sender_address: string; recipient_address: string }> title="编辑运单履约地址" open={addressOpen} onOpenChange={setAddressOpen} initialValues={{ sender_address: detail.sender_address, recipient_address: detail.recipient_address }} modalProps={{ destroyOnClose: true }} onFinish={async values => {
+      <ModalForm<{ sender_address: string; recipient_address: string }> title="编辑运单履约地址" open={addressOpen} onOpenChange={setAddressOpen} initialValues={{ sender_address: detail.sender_address, recipient_address: detail.recipient_address }} modalProps={{ destroyOnHidden: true }} onFinish={async values => {
         const result = await mutate('address:' + detail.id + ':' + JSON.stringify(values), key => api.updateAddress(detail.id, values, key), '运单地址已更新')
         if (result) { setDetail(result); setAddressOpen(false) }
         return Boolean(result)
       }}><ProFormText name="sender_address" label="发件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /><ProFormText name="recipient_address" label="收件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /></ModalForm>
-      <ModalForm<{ route_code: string; expected_arrival_at: string }> title="创建运输任务" open={taskOpen} onOpenChange={setTaskOpen} modalProps={{ destroyOnClose: true }} onFinish={openTask}>
+      <ModalForm<{ route_code: string; expected_arrival_at: string }> title="创建运输任务" open={taskOpen} onOpenChange={setTaskOpen} modalProps={{ destroyOnHidden: true }} onFinish={openTask}>
         <ProFormSelect name="route_code" label="出站线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled && r.origin.id === detail.last_scanned_station_id).map(r => ({ value: r.code, label: r.code + ' · ' + r.origin.code + ' → ' + r.destination.code }))} rules={[{ required: true }]} fieldProps={{ placeholder: '选择从当前站出发的可用线路', notFoundContent: '当前站暂无可用出站线路' }} />
         <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => date.isBefore(dayjs(), 'day') }} />
         <Text type="secondary">目的站可为中转站。提交时后端会再次验证线路和运单是否仍可用。</Text>

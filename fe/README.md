@@ -34,6 +34,16 @@ npm run dev
 npm run build
 ```
 
+## 代码风格检查
+
+项目使用 ESLint 固定 TypeScript、React Hooks 与基础格式规则。提交前可运行：
+
+```bash
+npm run lint
+```
+
+纯格式问题可用 `npm run lint:fix` 自动修复；规则配置见 `eslint.config.js`。
+
 ## V4 页面职责
 
 | 页面 | 操作 |

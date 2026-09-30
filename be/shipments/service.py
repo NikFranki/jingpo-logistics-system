@@ -12,6 +12,7 @@ from errors import (
     OrderNotFoundError,
     SimulationClockNotInitializedError,
     InvalidShipmentStateError,
+    InvalidShipmentDestinationError,
     ShipmentNotFoundError,
     NetworkDataNotInitializedError,
     NetworkError,
@@ -31,7 +32,12 @@ from models import (
 from shipments.schemas import (
     ShipmentAddressUpdateRequest,
     ShipmentEventRequest,
+    ShipmentDestinationUpdateRequest,
 )
+
+DESTINATION_EDITABLE_STAGES = frozenset({
+    ShipmentStage.PENDING_PICKUP, ShipmentStage.PICKED_UP, ShipmentStage.AT_STATION,
+})
 
 SHIPMENT_EVENT_RULES = {
     TrackingEventType.PICKUP: {
@@ -151,8 +157,20 @@ def build_shipment_response_body(
             }
             for event in events
         ],
-        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task),
+        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task)
+        + [build_destination_action(shipment.stage, active_task is not None)],
     }
+
+
+def build_destination_action(stage: str, occupied: bool) -> dict:
+    if stage not in DESTINATION_EDITABLE_STAGES:
+        code, reason = "INVALID_STAGE", "当前阶段不允许更正目的站"
+    elif occupied:
+        code, reason = "TASK_OCCUPIED", "运单已被运输任务占用，请先取消待发车任务"
+    else:
+        code, reason = None, None
+    return {"action": "UPDATE_DESTINATION", "enabled": code is None,
+            "reason_code": code, "reason": reason}
 
 def build_create_shipment_request_hash(
     order_id: int,
@@ -716,4 +734,90 @@ def list_shipment_transport_tasks(session: Session, shipment_id: int, page: int,
         "destination_station_id": str(route.destination_station_id),
         "cancelled_at": task.cancelled_at, "cancel_reason": task.cancel_reason,
         "released_at": association.released_at} for association, task, route in rows]
+    return items, total
+
+
+def build_update_destination_request_hash(
+    shipment_id: int, request: ShipmentDestinationUpdateRequest,
+) -> str:
+    content = json.dumps({
+        "action": "UPDATE_SHIPMENT_DESTINATION", "shipment_id": shipment_id,
+        "body": request.model_dump(),
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def update_shipment_destination(
+    session: Session,
+    shipment_id: int,
+    request: ShipmentDestinationUpdateRequest,
+    idempotency_key: UUID,
+) -> dict:
+    request_hash = build_update_destination_request_hash(shipment_id, request)
+    with session.begin():
+        # All network, shipment and transport writes take this lock first.
+        clock = session.scalar(select(SimulationSettings).where(
+            SimulationSettings.id == 1).with_for_update())
+        if clock is None:
+            raise SimulationClockNotInitializedError
+        existing = session.scalar(select(OperationLog).where(
+            OperationLog.idempotency_key == idempotency_key))
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise IdempotencyKeyReusedError
+            return existing.response_body
+        shipment = session.scalar(select(Shipment).where(
+            Shipment.id == shipment_id).with_for_update())
+        if shipment is None:
+            raise ShipmentNotFoundError
+        occupied = session.scalar(select(TaskShipment.id).where(
+            TaskShipment.shipment_id == shipment_id,
+            TaskShipment.released_at.is_(None)).limit(1))
+        action = build_destination_action(shipment.stage, occupied is not None)
+        if not action["enabled"]:
+            raise InvalidShipmentDestinationError(action["reason"])
+        if shipment.destination_station_id != request.expected_destination_station_id:
+            raise InvalidShipmentDestinationError("目的站已变化，请刷新详情后重新确认")
+        if shipment.destination_station_id == request.destination_station_id:
+            raise InvalidShipmentDestinationError("新目的站与当前目的站相同，无需更正")
+        destination = session.get(Station, request.destination_station_id)
+        if destination is None:
+            raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "目的站不存在", 404)
+        if not destination.enabled or not destination.allows_delivery:
+            raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
+        previous_destination = shipment.destination_station_id
+        shipment.destination_station_id = request.destination_station_id
+        shipment.updated_at = datetime.now(timezone.utc)
+        session.flush()
+        shipment, events = get_shipment(session, shipment_id)
+        body = build_shipment_response_body(session, shipment, events)
+        session.add(OperationLog(
+            idempotency_key=idempotency_key, request_hash=request_hash,
+            action="UPDATE_SHIPMENT_DESTINATION", resource_type="SHIPMENT", resource_id=shipment_id,
+            before_data={"destination_station_id": str(previous_destination)},
+            after_data={"destination_station_id": str(request.destination_station_id), "reason": request.reason},
+            response_body=body, response_status=200, occurred_at=clock.current_time,
+        ))
+    return body
+
+
+def list_destination_changes(
+    session: Session, shipment_id: int, page: int, page_size: int,
+) -> tuple[list[dict], int]:
+    if session.get(Shipment, shipment_id) is None:
+        raise ShipmentNotFoundError
+    filters = (
+        OperationLog.resource_type == "SHIPMENT",
+        OperationLog.resource_id == shipment_id,
+        OperationLog.action == "UPDATE_SHIPMENT_DESTINATION",
+    )
+    total = session.scalar(select(func.count(OperationLog.id)).where(*filters)) or 0
+    logs = session.scalars(select(OperationLog).where(*filters).order_by(OperationLog.id.desc())
+        .offset((page - 1) * page_size).limit(page_size))
+    items = [{
+        "id": str(log.id),
+        "previous_destination_station_id": log.before_data["destination_station_id"],
+        "destination_station_id": log.after_data["destination_station_id"],
+        "reason": log.after_data["reason"], "occurred_at": log.occurred_at,
+    } for log in logs]
     return items, total

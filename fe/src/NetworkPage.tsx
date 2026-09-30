@@ -6,7 +6,7 @@ import { PageContainer } from '@ant-design/pro-components'
 import { api, type RouteInput, type Station, type StationInput, type TransportRoute } from './api'
 
 const { Text } = Typography
-type Mutate = <T,>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
+type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
 type Props = { revision: number; busy: boolean; mutate: Mutate }
 type StationForm = StationInput
 type RouteForm = Omit<RouteInput, 'origin_station_id' | 'destination_station_id'> & { origin_station_id: string; destination_station_id: string }
@@ -90,7 +90,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     </Card>
     <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>站点编码和线路起终点创建后不可修改。停用受在途任务、在站运单和未签收目的运单约束。</Text>
   </PageContainer>
-  <Modal title={editingStation ? `编辑站点 ${editingStation.code}` : '新增站点'} open={stationModal} onCancel={() => setStationModal(false)} onOk={() => stationForm.submit()} confirmLoading={busy} destroyOnClose>
+  <Modal title={editingStation ? `编辑站点 ${editingStation.code}` : '新增站点'} open={stationModal} onCancel={() => setStationModal(false)} onOk={() => stationForm.submit()} confirmLoading={busy} destroyOnHidden>
     <Form form={stationForm} layout="vertical" initialValues={{ enabled: true, allows_first_arrival: false, allows_delivery: false }} onFinish={values => void saveStation(values)}>
       {!editingStation && <Form.Item name="code" label="站点编码" rules={[{ required: true, message: '请输入编码' }, { pattern: /^[A-Z0-9][A-Z0-9_-]{0,31}$/, message: '使用大写字母、数字、下划线或连字符，最多 32 位' }]}><Input maxLength={32} placeholder="例如 HUB_A" /></Form.Item>}
       <Form.Item name="name" label="站点名称" rules={[{ required: true, whitespace: true, message: '请输入站点名称' }, { max: 100, message: '最多 100 个字符' }]}><Input maxLength={100} /></Form.Item>
@@ -99,7 +99,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
       <Form.Item name="allows_delivery" label="允许最终派送" valuePropName="checked"><Switch /></Form.Item>
     </Form>
   </Modal>
-  <Modal title="新增运输线路" open={routeModal} onCancel={() => setRouteModal(false)} onOk={() => routeForm.submit()} confirmLoading={busy} destroyOnClose>
+  <Modal title="新增运输线路" open={routeModal} onCancel={() => setRouteModal(false)} onOk={() => routeForm.submit()} confirmLoading={busy} destroyOnHidden>
     <Form form={routeForm} layout="vertical" initialValues={{ enabled: true, delay_monitoring_enabled: false }} onFinish={values => void saveRoute(values)}>
       <Form.Item name="code" label="线路编码" rules={[{ required: true, message: '请输入编码' }, { pattern: /^[A-Z0-9][A-Z0-9_-]{0,31}$/, message: '使用大写字母、数字、下划线或连字符，最多 32 位' }]}><Input maxLength={32} placeholder="例如 ROUTE_AB" /></Form.Item>
       <Form.Item name="origin_station_id" label="起点站" rules={[{ required: true, message: '请选择起点站' }]}><Select options={stations.filter(item => item.enabled).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))} placeholder="选择启用站点" /></Form.Item>

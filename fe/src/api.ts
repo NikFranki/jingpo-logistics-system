@@ -16,7 +16,7 @@ export type ShipmentTaskHistory = { id: string; task_no: string; route_code: str
 export type ShipmentTaskHistoryPage = Page<ShipmentTaskHistory>
 export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean }
 export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean }
-export type StationInput = Omit<Station, "id">
+export type StationInput = Omit<Station, 'id'>
 export type RouteInput = { code: string; origin_station_id: number; destination_station_id: number; enabled: boolean; delay_monitoring_enabled: boolean }
 export type Candidate = Shipment & { last_scanned_station_id: string }
 export type OrderInput = Pick<Order, 'product_name' | 'quantity' | 'sender_name' | 'sender_address' | 'recipient_name' | 'recipient_address'>
@@ -73,15 +73,55 @@ function write<T>(path: string, method: 'POST' | 'PATCH', body?: unknown, key: s
   })
 }
 
+let stationsRequest: Promise<Station[]> | undefined
+let routesRequest: Promise<TransportRoute[]> | undefined
+let stationsCachedAt = 0
+let routesCachedAt = 0
+const networkCacheTtl = 30_000
+
+function stations() {
+  if (!stationsRequest || Date.now() - stationsCachedAt > networkCacheTtl) {
+    stationsCachedAt = Date.now()
+    stationsRequest = request<Station[]>('/api/v1/stations').catch(error => {
+      stationsRequest = undefined
+      stationsCachedAt = 0
+      throw error
+    })
+  }
+  return stationsRequest
+}
+
+function routes() {
+  if (!routesRequest || Date.now() - routesCachedAt > networkCacheTtl) {
+    routesCachedAt = Date.now()
+    routesRequest = request<TransportRoute[]>('/api/v1/routes').catch(error => {
+      routesRequest = undefined
+      routesCachedAt = 0
+      throw error
+    })
+  }
+  return routesRequest
+}
+
+function writeNetwork<T>(path: string, method: 'POST' | 'PATCH', body: unknown, key?: string) {
+  return write<T>(path, method, body, key).then(result => {
+    stationsRequest = undefined
+    routesRequest = undefined
+    stationsCachedAt = 0
+    routesCachedAt = 0
+    return result
+  })
+}
+
 export const api = {
   clock: () => request<{ current_time: string }>('/api/v1/simulation/clock'),
   advance: (minutes: 30 | 120, key?: string) => write<{ current_time: string }>('/api/v1/simulation/clock/advance', 'POST', { minutes }, key),
-  stations: () => request<Station[]>("/api/v1/stations"),
-  routes: () => request<TransportRoute[]>("/api/v1/routes"),
-  createStation: (body: StationInput, key?: string) => write<Station>("/api/v1/stations", "POST", body, key),
-  updateStation: (id: string, body: Partial<Omit<StationInput, "code">>, key?: string) => write<Station>(`/api/v1/stations/${id}`, "PATCH", body, key),
-  createRoute: (body: RouteInput, key?: string) => write<TransportRoute>("/api/v1/routes", "POST", body, key),
-  updateRoute: (id: string, body: { enabled?: boolean; delay_monitoring_enabled?: boolean }, key?: string) => write<TransportRoute>(`/api/v1/routes/${id}`, "PATCH", body, key),
+  stations,
+  routes,
+  createStation: (body: StationInput, key?: string) => writeNetwork<Station>('/api/v1/stations', 'POST', body, key),
+  updateStation: (id: string, body: Partial<Omit<StationInput, 'code'>>, key?: string) => writeNetwork<Station>(`/api/v1/stations/${id}`, 'PATCH', body, key),
+  createRoute: (body: RouteInput, key?: string) => writeNetwork<TransportRoute>('/api/v1/routes', 'POST', body, key),
+  updateRoute: (id: string, body: { enabled?: boolean; delay_monitoring_enabled?: boolean }, key?: string) => writeNetwork<TransportRoute>(`/api/v1/routes/${id}`, 'PATCH', body, key),
   orders: (params: { page?: number; page_size?: number; order_no?: string; shipment_no?: string; stage?: string } = {}) => request<Page<Order>>(`/api/v1/orders${query(params)}`),
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
@@ -94,7 +134,7 @@ export const api = {
   shipmentEvent: (id: string, event_type: string, station_id?: string, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/events`, 'POST', { event_type, ...(station_id ? { station_id } : {}) }, key),
   tasks: (params: { page?: number; page_size?: number; task_no?: string; route_code?: string; status?: string } = {}) => request<TaskPage>(`/api/v1/transport-tasks${query(params)}`),
   task: (id: string) => request<TaskDetail>(`/api/v1/transport-tasks/${id}`),
-  candidates: (route_code: RouteCode, page = 1) => request<Page<Candidate>>(`/api/v1/transport-tasks/candidates${query({ route_code, page, page_size: 100 })}`),
+  candidates: (route_code: RouteCode, page = 1, page_size = 100) => request<Page<Candidate>>(`/api/v1/transport-tasks/candidates${query({ route_code, page, page_size })}`),
   createTask: (body: { route_code: RouteCode; expected_arrival_at: string; shipment_ids: number[] }, key?: string) => write<TaskDetail>('/api/v1/transport-tasks/create', 'POST', body, key),
   taskAction: (id: string, action: 'depart' | 'arrive', key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/${action}`, 'POST', undefined, key),
   cancelTask: (id: string, reason: string, key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/cancel`, 'POST', { reason }, key),

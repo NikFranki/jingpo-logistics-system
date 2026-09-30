@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space, Spin, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Order, type OrderDetail, type OrderInput } from '../api'
 import { apiError, blankOrder, stageLabel, stageText, stages, StatusTag, type Shared, useNetwork } from '../shared'
 
@@ -21,7 +21,7 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
     { title: '订单状态', dataIndex: 'status', search: false, valueEnum: { PENDING_SHIPMENT: { text: '待创建运单' }, SHIPMENT_CREATED: { text: '运单已创建' }, COMPLETED: { text: '已完成' } } },
     { title: '运单 / 运输阶段', dataIndex: 'stage', valueType: 'select', valueEnum: stages, fieldProps: { placeholder: '全部运输阶段' }, render: (_, row) => <OrderShipment orderId={row.id} orderStatus={row.status} revision={revision} /> },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', search: false },
-    { title: '操作', valueType: 'option', render: (_, row) => <a onClick={() => navigate(`/orders/${row.id}`)}>查看详情</a> },
+    { title: '操作', valueType: 'option', render: (_, row) => <Link to={`/orders/${row.id}`}>查看详情</Link> },
   ]
   return <PageContainer title="订单" subTitle="创建订单并管理对应的运单。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setFormOpen(true)}>创建模拟订单</Button>}>
     {loadError && <Alert type="error" showIcon message="订单列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
@@ -32,7 +32,7 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
         return { data: result.items, success: true, total: result.total }
       } catch (error) { const reason = apiError(error); setLoadError(reason); return { data: [], success: false, total: 0 } }
     }} />
-    <ModalForm<OrderInput> title="创建模拟订单" open={formOpen} onOpenChange={setFormOpen} initialValues={blankOrder} modalProps={{ destroyOnClose: true }} submitter={{ searchConfig: { submitText: '创建订单' } }} onFinish={async values => {
+    <ModalForm<OrderInput> title="创建模拟订单" open={formOpen} onOpenChange={setFormOpen} initialValues={blankOrder} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '创建订单' } }} onFinish={async values => {
       const saved = await mutate(`create-order:${JSON.stringify(values)}`, key => api.createOrder(values, key), '订单已创建')
       if (saved) { actionRef.current?.reload(); navigate(`/orders/${saved.id}`) }
       return Boolean(saved)
@@ -83,7 +83,7 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
       </Descriptions>
       <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>订单配送区域固定为 Z；运单创建后，履约操作和物流轨迹在运单详情中查看。</Text>
     </>}
-    <ModalForm<{ destination_station_id: string }> title="创建运单" open={shipmentOpen} onOpenChange={setShipmentOpen} modalProps={{ destroyOnClose: true }} onFinish={async values => {
+    <ModalForm<{ destination_station_id: string }> title="创建运单" open={shipmentOpen} onOpenChange={setShipmentOpen} modalProps={{ destroyOnHidden: true }} onFinish={async values => {
       if (!detail) return false
       const destination = Number(values.destination_station_id)
       return Boolean(await mutate(`create-shipment:${detail.id}:${destination}`, key => api.createShipment(detail.id, destination, key), '运单已创建'))
@@ -92,7 +92,7 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
       <ProFormSelect name="destination_station_id" label="目的站" options={network.stations.filter(s => s.enabled && s.allows_delivery).map(s => ({ value: s.id, label: `${s.code} · ${s.name}` }))} rules={[{ required: true }]} fieldProps={{ placeholder: '选择负责最终派送的站点', notFoundContent: '暂无可派送站点，请先在网络配置中创建' }} />
       <Text type="secondary">目的站创建后不可变更；运单到达该站后才能开始派送。</Text>
     </ModalForm>
-    <ModalForm<OrderInput> title={`编辑订单 ${detail?.order_no ?? ''}`} open={editOrderOpen} onOpenChange={setEditOrderOpen} initialValues={detail ? { product_name: detail.product_name, quantity: detail.quantity, sender_name: detail.sender_name, sender_address: detail.sender_address, recipient_name: detail.recipient_name, recipient_address: detail.recipient_address } : blankOrder} modalProps={{ destroyOnClose: true }} submitter={{ searchConfig: { submitText: '保存修改' } }} onFinish={async values => {
+    <ModalForm<OrderInput> title={`编辑订单 ${detail?.order_no ?? ''}`} open={editOrderOpen} onOpenChange={setEditOrderOpen} initialValues={detail ? { product_name: detail.product_name, quantity: detail.quantity, sender_name: detail.sender_name, sender_address: detail.sender_address, recipient_name: detail.recipient_name, recipient_address: detail.recipient_address } : blankOrder} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '保存修改' } }} onFinish={async values => {
       if (!detail) return false
       const result = await mutate(`edit-order:${detail.id}:${JSON.stringify(values)}`, key => api.updateOrder(detail.id, values, key), '订单已更新')
       if (result) setEditOrderOpen(false)

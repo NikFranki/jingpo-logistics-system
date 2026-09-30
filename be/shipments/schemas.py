@@ -88,6 +88,31 @@ class ShipmentAddressUpdateRequest(BaseModel):
 
         return self
 
+
+class ShipmentDestinationUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_destination_station_id: int = Field(gt=0, strict=True)
+    destination_station_id: int = Field(gt=0, strict=True)
+    reason: Annotated[str, StringConstraints(
+        strict=True, strip_whitespace=True, min_length=1, max_length=500,
+    )]
+
+
+class DestinationChangeResponse(BaseModel):
+    id: str
+    previous_destination_station_id: str
+    destination_station_id: str
+    reason: str
+    occurred_at: datetime
+
+
+class DestinationChangeListResponse(BaseModel):
+    items: list[DestinationChangeResponse]
+    total: int
+    page: int
+    page_size: int
+
 class ShipmentEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
