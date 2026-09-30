@@ -103,7 +103,7 @@ class V3NetworkTests(unittest.TestCase):
         with SessionLocal() as session:
             self.assertIn(int(created['id']), [s.id for s in list_stations(session)])
             self.assertNotIn(int(created['id']), [s.id for s in list_stations(session, True)])
-            logs = list(session.scalars(select(OperationLog).where(OperationLog.resource_type=='STATION', OperationLog.resource_id==int(created['id']))))
+            logs = list(session.scalars(select(OperationLog).where(OperationLog.resource_type=='STATION', OperationLog.resource_id==int(created['id'])).order_by(OperationLog.id)))
             self.assertEqual(len(logs), 3)
             self.assertEqual(logs[1].before_data['name'], '备用站')
             self.assertEqual(logs[1].after_data['name'], '新名称')
@@ -123,13 +123,13 @@ class V3NetworkTests(unittest.TestCase):
         with SessionLocal() as session:
             current = session.get(TransportTask, int(task['id']))
             self.assertTrue(current.delay_monitoring_enabled)
-            self.assertEqual(calculate_task_delay(current, self.first['code'], self.clock+timedelta(hours=2)), ('OVERDUE',60))
+            self.assertEqual(calculate_task_delay(current, self.clock+timedelta(hours=2)), ('OVERDUE',60))
         self.call(arrive_transport_task, int(task['id']), uuid4())
         self.call(write_network, 'ROUTE', RouteUpdateRequest(enabled=True), uuid4(), int(self.first['id']))
         newer = self.task(self.first, other)
         self.assertFalse(newer['delay_monitoring_enabled'])
         with SessionLocal() as session:
-            self.assertEqual(calculate_task_delay(session.get(TransportTask, int(newer['id'])), self.first['code'], self.clock+timedelta(hours=2)), ('NOT_APPLICABLE',None))
+            self.assertEqual(calculate_task_delay(session.get(TransportTask, int(newer['id'])), self.clock+timedelta(hours=2)), ('NOT_APPLICABLE',None))
 
     def test_station_protection_and_first_station_is_destination(self):
         local = self.station('LOCAL', first=True, delivery=True)
@@ -154,6 +154,37 @@ class V3NetworkTests(unittest.TestCase):
             order_id=session.get(Shipment,shipment).order_id
         with self.assertRaises(NetworkError):
             self.call(create_shipment,order_id,uuid4(),int(self.target['id']))
+
+    def test_station_inventory_tasks_routes_and_capability_guards(self):
+        source_id=int(self.source['id'])
+        # Enabled routes alone prevent disabling an otherwise empty station.
+        with self.assertRaises(NetworkError) as blocked:
+            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
+        self.assertEqual(blocked.exception.code,'NETWORK_RESOURCE_IN_USE')
+        self.call(write_network,'STATION',StationUpdateRequest(allows_first_arrival=False),uuid4(),source_id)
+        shipment,_=self.parcel()
+        self.event(shipment,'PICKUP')
+        with self.assertRaises(InvalidShipmentStateError):
+            self.event(shipment,'ARRIVE',self.source)
+        self.call(write_network,'STATION',StationUpdateRequest(allows_first_arrival=True),uuid4(),source_id)
+        self.event(shipment,'ARRIVE',self.source)
+        task=self.task(self.first,shipment)
+        self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=False),uuid4(),int(self.first['id']))
+        self.call(depart_transport_task,int(task['id']),uuid4())
+        # No enabled route or in-station inventory at source; unfinished task still protects it.
+        with self.assertRaises(NetworkError):
+            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
+        self.call(arrive_transport_task,int(task['id']),uuid4())
+        self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
+        with self.assertRaises(NetworkError):
+            self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=True),uuid4(),int(self.first['id']))
+        self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=False),uuid4(),int(self.second['id']))
+        # All incident routes disabled and prior task arrived; in-station inventory still protects middle.
+        with self.assertRaises(NetworkError):
+            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),int(self.middle['id']))
+        with SessionLocal() as session:
+            current=session.get(Station,int(self.middle['id']))
+            self.assertTrue(current.enabled)
 
     def test_concurrent_disabling_and_new_destination(self):
         target=self.station('RACE',delivery=True)

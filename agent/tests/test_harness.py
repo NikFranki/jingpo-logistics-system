@@ -205,6 +205,37 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('PRIVATE-ADDRESS', json.dumps(data))
         self.assertEqual(data['data']['tasks'][0]['delay_status'], 'OVERDUE')
 
+    async def test_configured_route_and_destination_are_distinct(self):
+        shipment = {**SHIPMENT, 'destination_station_id': '3',
+                    'active_transport_task': {**SHIPMENT['active_transport_task'], 'route_code': 'GZ_WH'}}
+        task = {**TASK, 'route_code': 'GZ_WH'}
+        paths = []
+        def handler(req):
+            paths.append(req.url.path)
+            if req.url.path == '/api/v1/stations':
+                payload = [dict(id='1', code='GZ', name='广州'), dict(id='2', code='WH', name='武汉'), dict(id='3', code='HZ', name='杭州')]
+            elif req.url.path == '/api/v1/shipments/2':
+                payload = shipment
+            else:
+                payload = task
+            return httpx.Response(200, json=payload)
+        with self.mocked(handler):
+            result, _ = await self.invoke(FakeModel([call('get_shipment_tracking', {'shipment_id': 2, 'include_tasks': True}), AIMessage(content='done')]), [create_shipment_tracking_tool('http://be')])
+        payload = tool_results(result)[0]
+        self.assertEqual(payload['status'], 'ok')
+        self.assertEqual(payload['data']['destination_station']['code'], 'HZ')
+        self.assertEqual(payload['data']['last_scanned_station']['code'], 'GZ')
+        self.assertEqual(payload['data']['active_transport_task']['destination_station']['code'], 'WH')
+        self.assertEqual(payload['data']['tasks'][0]['route_code'], 'GZ_WH')
+
+    async def test_search_accepts_configured_route_code(self):
+        def handler(req):
+            self.assertEqual(req.url.params['route_code'], 'GZ_WH')
+            return httpx.Response(200, json=page([{**TASK, 'route_code': 'GZ_WH'}]))
+        with self.mocked(handler):
+            result, _ = await self.invoke(FakeModel([call('search_transport_tasks', {'route_code': 'GZ_WH'}), AIMessage(content='done')]), [create_transport_task_search_tool('http://be')])
+        self.assertEqual(tool_results(result)[0]['data']['items'][0]['route_code'], 'GZ_WH')
+
     async def test_pending_task_is_visible_before_first_depart_event(self):
         shipment = {**SHIPMENT,
                     'stage': 'AT_STATION',

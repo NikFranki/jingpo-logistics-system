@@ -1,6 +1,6 @@
 # JINGPO V3 · 开发规格
 
-> 2026-09-30 · 设计初稿，尚未实现。依据 [V3 PRD](../../../prd/v3/JINGPO-logistics-system-v3.md)。
+> 2026-09-30 · BE 实现规格；验收证据见 [plan](plan.md)。本轮按用户指示只负责 BE，客户端由其他工作负责。依据 [V3 PRD](../../../prd/v3/JINGPO-logistics-system-v3.md)。
 
 ## 1. 怎么解决
 
@@ -32,7 +32,7 @@ flowchart LR
 
 V3 配置规模按演示项目处理，GET 网络列表沿用数组结构；列表默认含停用记录，接受 enabled 过滤。大规模分页留后续版本。
 
-## 3. 接口建议
+## 3. 接口契约
 
 沿用 `/api/v1`，本版需要 BE、FE、Agent 同步更新。
 
@@ -45,11 +45,11 @@ V3 配置规模按演示项目处理，GET 网络列表沿用数组结构；列�
 | PATCH /routes/{id} | 修改启用状态及监测开关，禁止提交编码与起终点 |
 | 创建运单的现有 POST | 增加必填 destination_station_id；纳入请求 hash。已存在运单的新 key 请求须目的站一致，否则冲突；同 key 返回首次响应 |
 | POST /shipments/{id}/events | 首次 ARRIVE 仍传 station_id，校验首站能力；派送校验当前扫描站=运单目的站且允许派送 |
-| 任务创建、候选与查询 | route_code 改为通用编码，查数据库确认线路；错误编码返回业务错误 |
+| 任务创建、候选与查询 | route_code 改为通用编码；创建/候选校验线路存在及启用，未知线路 404；列表按编码筛选，无匹配时空列表 |
 
-路径均以 `/api/v1` 为前缀。配置写入要求 Idempotency-Key；采用现有事务和日志缓存机制，服务端禁止忽略未知字段。
+路径均以 `/api/v1` 为前缀。创建运单目的站及创建线路起终点 ID 为 JSON 正整数；响应 ID 为字符串，首次入站 station_id 仍为正整数字符串。配置写入要求 Idempotency-Key；采用现有事务和日志缓存机制，服务端禁止忽略未知字段。
 
-建议错误码：NETWORK_RESOURCE_NOT_FOUND（404）、NETWORK_CODE_CONFLICT（409）、NETWORK_RESOURCE_DISABLED（409）、NETWORK_RESOURCE_IN_USE（409）、INVALID_NETWORK_CONFIGURATION（409）。保留 V2 物流操作错误码，响应结构不变。
+网络业务错误码：NETWORK_RESOURCE_NOT_FOUND（404）、NETWORK_CODE_CONFLICT（409）、NETWORK_RESOURCE_DISABLED（409）、NETWORK_RESOURCE_IN_USE（409）、INVALID_NETWORK_CONFIGURATION（409）。保留 V2 物流操作错误码，响应结构不变。
 
 ## 4. 一致性与停用规则
 
@@ -77,7 +77,7 @@ Agent 保持只读；RouteCode、当前任务和任务响应由 AB/BC Literal �
 2. 既有站点均启用；A 允许首次入站、C 允许派送，其他能力 false。既有线路启用；AB 监测 true、BC false。
 3. 既有运单目的站回填 C；旧任务按旧线路规则回填监测快照。含运单但不存在 C，或端点与旧网络不一致时停止并报告。真正空库允许迁移，网络需后续初始化。
 4. 校验回填后再设置非空约束，保留运单、事件、任务 ID、时间与关联。
-5. 为旧创建运单日志补齐目的站和新请求 hash；转换旧缓存中出现的运单、站点、线路与任务响应。以旧 key 和新契约请求实际重放验证，不能删除成功日志绕过兼容。
+5. 为旧创建运单日志补齐目的站和新请求 hash；转换旧缓存中出现的运单与任务响应（V2 网络只有查询接口，没有配置写响应缓存）。以旧 key 和新契约请求实际重放验证，不能删除成功日志绕过兼容。
 
 先备份，使用 V2 副本和空库演练。进入任意新网络数据后无法通用还原为 V2 固定编码约束；downgrade 明确拒绝猜测，回退恢复备份。发布时重启客户端并刷新页面。
 
@@ -85,4 +85,4 @@ Agent 保持只读；RouteCode、当前任务和任务响应由 AB/BC Literal �
 
 逐项覆盖 PRD V3-01～08，特别验证：非 ABC 网络全流程、首站即目的站、经过另一个配送站仍不能派送、线路停用后已有任务完成、停用与新业务并发、延误快照稳定、全阶段 V2 迁移和幂等缓存重放。
 
-BE PostgreSQL 集成测试、FE 构建与页面全流程、Agent 受控测试与真实只读接口检查都需要记录实际结果。配置能力与目的站引入的规则尚需 review；文档通过不等于实现通过。
+本轮 BE 验收通过 PostgreSQL 集成测试和真实 HTTP 测试证明；FE/Agent 的适配和页面验收由其负责方记录，不作为本轮后端交付的完成声明。开发库迁移尚未执行。

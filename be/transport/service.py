@@ -759,7 +759,6 @@ def arrive_transport_task(
 
 def calculate_task_delay(
     task: TransportTask,
-    route_code: str,
     simulation_time: datetime,
 ) -> tuple[str, int | None]:
     if not task.delay_monitoring_enabled:
@@ -812,7 +811,6 @@ def build_task_detail_response(
 
     delay_status, delay_minutes = calculate_task_delay(
         task=task,
-        route_code=route.code,
         simulation_time=simulation_time,
     )
 
@@ -905,7 +903,6 @@ def list_transport_tasks(
     for task, route in rows:
         delay_status, delay_minutes = calculate_task_delay(
             task=task,
-            route_code=route.code,
             simulation_time=simulation_time,
         )
 

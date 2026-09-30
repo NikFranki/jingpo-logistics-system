@@ -94,13 +94,13 @@ class V2FlowTests(unittest.TestCase):
         expected = self._clock() + timedelta(hours=1)
         task = TransportTask(status="IN_TRANSIT", expected_arrival_at=expected, delay_monitoring_enabled=True)
         task.departed_at = expected - timedelta(hours=1)
-        self.assertEqual(calculate_task_delay(task, "AB", expected + timedelta(minutes=9)), ("OVERDUE", 9))
+        self.assertEqual(calculate_task_delay(task, expected + timedelta(minutes=9)), ("OVERDUE", 9))
         task.delay_monitoring_enabled = False
-        self.assertEqual(calculate_task_delay(task, "BC", expected + timedelta(minutes=9)), ("NOT_APPLICABLE", None))
+        self.assertEqual(calculate_task_delay(task, expected + timedelta(minutes=9)), ("NOT_APPLICABLE", None))
         task.delay_monitoring_enabled = True
         task.status = "ARRIVED"
         task.arrived_at = expected + timedelta(minutes=7)
-        self.assertEqual(calculate_task_delay(task, "AB", expected + timedelta(hours=3)), ("LATE_ARRIVAL", 7))
+        self.assertEqual(calculate_task_delay(task, expected + timedelta(hours=3)), ("LATE_ARRIVAL", 7))
 
     @staticmethod
     def _clock():
