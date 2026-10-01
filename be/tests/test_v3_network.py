@@ -16,6 +16,8 @@ from orders.schemas import OrderCreateRequest
 from orders.service import create_order
 from shipments.schemas import ShipmentEventRequest
 from shipments.service import create_shipment, process_shipment_event, build_shipment_response_body, get_shipment
+from planning.schemas import PathPlanCreateRequest
+from planning.service import write_plan
 from transport.schemas import TransportTaskCreateRequest
 from transport.service import create_transport_task, depart_transport_task, arrive_transport_task, list_candidate_shipments, get_transport_task, calculate_task_delay
 
@@ -32,6 +34,10 @@ class V3NetworkTests(unittest.TestCase):
         self.target = self.station('HZ', delivery=True)
         self.first = self.route(self.source, self.middle, 'GZ_WH', monitor=True)
         self.second = self.route(self.middle, self.target, 'WH_HZ')
+        for suffix, route_ids in [('FULL',[int(self.first['id']),int(self.second['id'])]),
+                                  ('FIRST',[int(self.first['id'])]),('SECOND',[int(self.second['id'])])]:
+            self.call(write_plan,PathPlanCreateRequest(code=self.prefix+'_'+suffix,name=suffix,
+                route_ids=route_ids),uuid4())
         with SessionLocal() as session:
             self.clock = session.get(SimulationSettings, 1).current_time
 

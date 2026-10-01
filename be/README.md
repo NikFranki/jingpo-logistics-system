@@ -1,5 +1,63 @@
 # BE
 
+## V6 完整运输路径（后端已实现，开发库已升级）
+
+配置一次完整路径方案，多张运单可复用。首次入站后按首站/目的站唯一匹配时自动绑定，多个方案只选择一次，无方案提示配置；中转后直接采用下一段。已绑定路径保存独立版本，不随方案编辑而变化。
+
+```mermaid
+flowchart LR
+    N[站点/线路] --> P[planning 路径方案]
+    P --> S[运单路径和版本]
+    S --> T[按下一段创建批量任务]
+    T --> S
+    S --> H[未来修改保留冻结前缀与历史]
+```
+
+### 主要契约
+
+- `GET/POST /api/v1/path-plans`，`PATCH /api/v1/path-plans/{id}`：完整方案创建、查询、版本校验和启停；有序 `route_ids` 必须连续且最终站允许派送。
+- `GET/PUT /api/v1/shipments/{id}/path`：当前完整路径与未来修改。PUT 要求 expected_version、expected_anchor_station_id、reason，以及 route_ids 或 plan_id/expected_plan_version。
+- `GET /api/v1/shipments/{id}/path-options`：从接续站到运单目的站的可用方案。
+- `GET /api/v1/shipments/{id}/path-history?page=1&page_size=20`：路径布局版本，区别于实际物流轨迹。
+- 运单详情新增 path_version、transport_path 和 UPDATE_PATH 资格；运输中从本段终点修改未来路径，已完成/运输段保留，待发车任务先取消。
+- `POST /api/v1/transport-tasks/create` 可省略 route_code，提供每张运单的 expected_path_versions，自动取共同下一段；不同下一段需先分组。原显式线路请求仍校验下一段，无法任意改线路。
+
+自动任务请求示例（ID 和版本按实际数据填写）：
+
+```json
+{"shipment_ids":[10,11],"expected_arrival_at":"2026-10-02T12:00:00+08:00","expected_path_versions":{"10":1,"11":2}}
+```
+
+停用方案不修改绑定路径，停用未来线路会阻止新任务并提示重规划，已有任务仍可完成。更正目的站废弃旧未来段，保留已到达前缀并重新匹配。所有写入要求 Idempotency-Key，版本与接续站冲突后刷新再确认。
+
+代码入口为 `planning/schemas.py`、`planning/service.py`、`planning/router.py`；通过 shipments/transport/network 集成自动绑定、下一段校验和停用保护。详细规则见 [V6 PRD](../docs/prd/v6/JINGPO-logistics-system-v6.md)、[spec](../docs/技术方案/v6/be/spec.md)、[验收记录](../docs/技术方案/v6/be/plan.md)。
+
+### 从 V5 升级
+
+**V6 需要数据库迁移**。开发库已于 2026-10-01 备份并升级到 e61a7c93b204，本地后端已启动，`/health` 与 `/health/ready` 检查通过。备份文件为 `backups/jingpo_logistics_before_v6_20261001_134940.dump`。其他环境升级前需停止后端并备份；新接口与运单查询依赖新表/字段：
+
+```bash
+mkdir -p backups
+pg_dump -Fc jingpo_logistics -f "backups/jingpo_logistics_before_v6_$(date +%Y%m%d_%H%M%S).dump"
+export DATABASE_URL="postgresql+psycopg:///jingpo_logistics"
+./.venv/bin/python -m alembic upgrade head
+./.venv/bin/python -m alembic current
+./.venv/bin/python -m uvicorn main:app --reload
+```
+
+目标版本 e61a7c93b204。迁移不自动创建方案或推测历史路径，旧任务可继续；旧运单后续新任务需要完整剩余路径。旧缓存/key/hash 保留，写后重新 GET。回退恢复升级前备份，不能直接 downgrade。
+
+### 验证
+
+```bash
+DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" RUN_V2_MIGRATION_TESTS=1 \
+  ./.venv/bin/python -m unittest discover -s tests -v
+DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" \
+  ./.venv/bin/python -m alembic check
+```
+
+48 项联合测试通过，结构检查无差异。测试库需先升级 head，原 V2 回归需要后文 A/B/C 网络与时钟；测试样本自行配置完整方案。迁移演练需 CREATE DATABASE 权限，自动清理自己创建的临时库；不启用 RUN_V2_MIGRATION_TESTS 时 8 项迁移测试跳过。客户端适配和页面/Agent 验收由其负责方完成。
+
 ## V5 运单目的站更正（后端已实现）
 
 目的站更正只修改运输安排，订单、运单地址、当前位置与物流轨迹保持原样。允许待揽收、已揽收、无任务占用的在站运单更正；运输中、派送中、已签收拒绝。待发车任务需先取消。新站必须启用且允许派送。

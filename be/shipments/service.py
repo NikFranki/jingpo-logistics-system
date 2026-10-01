@@ -3,8 +3,8 @@ import json
 from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, aliased
-from logistics_types import ShipmentStage, TrackingEventType
+from sqlalchemy.orm import Session
+from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -28,6 +28,8 @@ from models import (
     TransportTask,
     TransportRoute,
 )
+
+from planning.service import shipment_path_body, auto_bind_path, invalidate_destination_path
 
 from shipments.schemas import (
     ShipmentAddressUpdateRequest,
@@ -104,15 +106,10 @@ def build_shipment_response_body(
     station = session.get(Station, shipment.last_scanned_station_id) if shipment.last_scanned_station_id else None
     can_deliver = bool(station and station.enabled and station.allows_delivery
         and station.id == shipment.destination_station_id and active_task is None)
-    outgoing_destination = aliased(Station)
-    can_create_task = bool(
-        shipment.stage == ShipmentStage.AT_STATION and active_task is None
-        and station and station.enabled and station.id != shipment.destination_station_id
-        and session.scalar(select(TransportRoute.id).join(outgoing_destination,
-            TransportRoute.destination_station_id == outgoing_destination.id).where(
-            TransportRoute.origin_station_id == station.id, TransportRoute.enabled.is_(True),
-            outgoing_destination.enabled.is_(True)).limit(1))
-    )
+    path = shipment_path_body(session, shipment)
+    can_create_task = path['status'] == 'READY' and path['next_route_id'] is not None
+    can_update_path = shipment.stage in (ShipmentStage.AT_STATION, ShipmentStage.IN_TRANSIT) and (
+        task is None or task.status == TaskStatus.IN_TRANSIT)
     return {
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
@@ -157,8 +154,13 @@ def build_shipment_response_body(
             }
             for event in events
         ],
+        "path_version": shipment.path_version,
+        "transport_path": path,
         "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task)
-        + [build_destination_action(shipment.stage, active_task is not None)],
+        + [build_destination_action(shipment.stage, active_task is not None),
+           {"action": "UPDATE_PATH", "enabled": can_update_path,
+            "reason_code": None if can_update_path else "INVALID_PATH_STATE",
+            "reason": None if can_update_path else "首次入站后可安排路径，待发车任务需先取消"}],
     }
 
 
@@ -602,6 +604,8 @@ def process_shipment_event(
         )
         session.add(event)
         session.flush()
+        if request.event_type == TrackingEventType.ARRIVE:
+            auto_bind_path(session, shipment, clock.current_time)
         session.refresh(shipment)
 
         result = get_shipment(session, shipment.id)
@@ -787,6 +791,7 @@ def update_shipment_destination(
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
         previous_destination = shipment.destination_station_id
         shipment.destination_station_id = request.destination_station_id
+        invalidate_destination_path(session, shipment, clock.current_time, "目的站更正：" + request.reason[:494])
         shipment.updated_at = datetime.now(timezone.utc)
         session.flush()
         shipment, events = get_shipment(session, shipment_id)

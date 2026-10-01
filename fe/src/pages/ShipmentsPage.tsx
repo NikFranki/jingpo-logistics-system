@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Descriptions, Empty, Form, message, Modal, Select, Space, Spin, Table, Tabs, Timeline, Typography } from 'antd'
+import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Radio, Select, Space, Spin, Table, Tabs, Timeline, Typography } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type Shipment, type ShipmentDetail, type ShipmentTaskHistory } from '../api'
+import { api, type DestinationChange, type PathHistoryPage, type PathOptions, type PathVersion, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
 import { actionText, allowed, apiError, eventText, formatTime, stageText, StatusTag, taskStatusText, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
 type ShipmentEvent = 'PICKUP' | 'ARRIVE' | 'START_DELIVERY' | 'SIGN'
+type PathForm = { mode: 'plan' | 'routes'; plan_id?: string; route_ids?: string[]; reason: string }
+const pathStatusText: Record<string, string> = { WAITING_FIRST_ARRIVAL: '等待首次入站', NEEDS_PLANNING: '待规划', READY: '可按下一段运输', RESERVED: '等待任务发车', IN_TRANSIT: '当前段运输中', COMPLETED: '路径已完成', BLOCKED: '未来路径受阻' }
+const pathLegStateText: Record<string, string> = { PENDING: '待运输', RESERVED: '待发车', IN_TRANSIT: '运输中', ARRIVED: '已到达' }
 
 function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -39,15 +42,33 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   const [history, setHistory] = useState<ShipmentTaskHistory[]>([])
   const [historyTotal, setHistoryTotal] = useState(0)
   const [historyPage, setHistoryPage] = useState(1)
+  const [destinationChanges, setDestinationChanges] = useState<DestinationChange[]>([])
+  const [destinationChangesTotal, setDestinationChangesTotal] = useState(0)
+  const [destinationChangesPage, setDestinationChangesPage] = useState(1)
+  const [pathHistory, setPathHistory] = useState<PathVersion[]>([])
+  const [pathHistoryTotal, setPathHistoryTotal] = useState(0)
+  const [pathHistoryPage, setPathHistoryPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string>()
   const [historyError, setHistoryError] = useState<string>()
+  const [destinationChangesError, setDestinationChangesError] = useState<string>()
+  const [pathHistoryError, setPathHistoryError] = useState<string>()
   const [retry, setRetry] = useState(0)
   const [firstStation, setFirstStation] = useState<string>()
   const [eventToConfirm, setEventToConfirm] = useState<ShipmentEvent>()
   const [eventSaving, setEventSaving] = useState(false)
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
+  const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
+  const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
+  const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
+  const [pathOptions, setPathOptions] = useState<PathOptions>()
+  const [pathModalStep, setPathModalStep] = useState<'edit' | 'confirm'>()
+  const [pathDraft, setPathDraft] = useState<PathForm>()
+  const [pathForm] = Form.useForm<PathForm>()
+  const pathMode = Form.useWatch('mode', pathForm)
+  const selectedPlanId = Form.useWatch('plan_id', pathForm)
+  const selectedPathRouteIds = Form.useWatch('route_ids', pathForm) ?? []
   const [messageApi, holder] = message.useMessage()
 
   useEffect(() => {
@@ -56,14 +77,21 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
     Promise.all([api.shipment(shipmentId), api.shipmentTasks(shipmentId, historyPage).catch(error => {
       if (active) setHistoryError(apiError(error))
       return undefined
-    })]).then(([shipment, tasks]) => {
+    }), api.shipmentDestinationChanges(shipmentId, destinationChangesPage).catch(error => {
+      if (active) setDestinationChangesError(apiError(error))
+      return undefined
+    }), api.shipmentPathHistory(shipmentId, pathHistoryPage).catch(error => {
+      if (active) setPathHistoryError(apiError(error))
+      return undefined
+    })]).then(([shipment, tasks, changes]) => {
       if (active) {
         setDetail(shipment)
         if (tasks) { setHistory(tasks.items); setHistoryTotal(tasks.total); setHistoryError(undefined) }
+        if (changes) { setDestinationChanges(changes.items); setDestinationChangesTotal(changes.total); setDestinationChangesError(undefined) }
       }
     }).catch(error => { if (active) setLoadError(apiError(error)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [shipmentId, revision, retry, historyPage])
+  }, [shipmentId, revision, retry, historyPage, destinationChangesPage, pathHistoryPage])
 
   const runEvent = (event: ShipmentEvent) => {
     if (!detail) return
@@ -87,6 +115,37 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
     return Boolean(result)
   }
   const actionEnabled = (name: string) => allowed(detail?.allowed_actions ?? [], name)?.enabled === true
+  const destinationAction = allowed(detail?.allowed_actions ?? [], 'UPDATE_DESTINATION')
+  const deliveryStations = network.stations.filter(station => station.enabled && station.allows_delivery && station.id !== detail?.destination_station_id)
+  const closeDestinationModal = () => {
+    setDestinationModalStep(undefined)
+    setDestinationDraft(undefined)
+    destinationForm.resetFields()
+  }
+  const confirmDestinationCorrection = async () => {
+    if (!detail || !destinationDraft) return
+    const body = {
+      expected_destination_station_id: Number(detail.destination_station_id),
+      destination_station_id: Number(destinationDraft.destination_station_id),
+      reason: destinationDraft.reason.trim(),
+    }
+    const result = await mutate(
+      'shipment-destination:' + detail.id + ':' + JSON.stringify(body),
+      key => api.updateShipmentDestination(detail.id, body, key),
+      '运单目的站已更正',
+    )
+    if (result) {
+      setDetail(result)
+      closeDestinationModal()
+      setDestinationChangesPage(1)
+      setRetry(value => value + 1)
+    } else {
+      // A 409 may mean the destination or shipment state changed while the dialog was open.
+      // Refresh the current facts while keeping the user's form values for another confirmation.
+      void api.shipment(detail.id).then(setDetail).catch(error => setLoadError(apiError(error)))
+      setRetry(value => value + 1)
+    }
+  }
 
   return <>{holder}<PageContainer title={detail?.shipment_no ?? '运单详情'} subTitle="当前站点、运输区间、履约操作和关联任务历史。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/shipments')}>返回运单列表</Button></Space>}>
     {loadError && <Alert type="error" showIcon message="运单详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
@@ -101,7 +160,13 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
       </Descriptions>
       <div style={{ margin: '20px 0 28px' }}>
         <Text strong style={{ display: 'block', marginBottom: 12 }}>下一步操作</Text>
-        {detail.stage === 'PENDING_PICKUP' && <Space wrap><Button type="primary" disabled={busy || !actionEnabled('PICKUP')} onClick={() => runEvent('PICKUP')}>确认揽收</Button><Button disabled={busy || !actionEnabled('UPDATE_ADDRESS')} onClick={() => setAddressOpen(true)}>编辑履约地址</Button></Space>}
+        <Space wrap>
+          {detail.stage === 'PENDING_PICKUP' && <Button type="primary" disabled={busy || !actionEnabled('PICKUP')} onClick={() => runEvent('PICKUP')}>确认揽收</Button>}
+          {detail.stage === 'PENDING_PICKUP' && <Button disabled={busy || !actionEnabled('UPDATE_ADDRESS')} onClick={() => setAddressOpen(true)}>编辑履约地址</Button>}
+          <Button disabled={busy || !destinationAction?.enabled} onClick={() => { destinationForm.resetFields(); setDestinationModalStep('edit') }}>更正目的站</Button>
+        </Space>
+        {destinationAction && !destinationAction.enabled && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>{destinationAction.reason ?? '当前运单暂不可更正目的站。'}</Text>}
+        {!destinationAction && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>后端未返回目的站更正资格，请刷新运单后重试。</Text>}
         {detail.stage === 'PICKED_UP' && <><Form.Item label="首次入站站点" style={{ marginBottom: 12, maxWidth: 360 }}><Select value={firstStation} onChange={setFirstStation} options={network.stations.filter(s => s.enabled && s.allows_first_arrival).map(s => ({ value: s.id, label: s.code + ' · ' + s.name }))} placeholder="选择包裹实际进入的站点" /></Form.Item><Button type="primary" disabled={busy || !firstStation || !actionEnabled('ARRIVE')} onClick={() => runEvent('ARRIVE')}>确认入站</Button></>}
         {detail.stage === 'AT_STATION' && actionEnabled('START_DELIVERY') && <Space wrap><Button type="primary" disabled={busy} onClick={() => runEvent('START_DELIVERY')}>开始派送</Button><Text type="secondary">运单已到达目的站，可以交给末端配送。</Text></Space>}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && detail.active_transport_task && <Alert type="info" showIcon message="运单正在等待或进行站间运输" description={<Space wrap><span><StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></span><Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button></Space>} />}
@@ -113,6 +178,12 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
       </div>
       <Tabs items={[
         { key: 'tracking', label: '物流轨迹', children: detail.tracking_events.length ? <Timeline items={detail.tracking_events.map(event => ({ children: <><Text strong>{eventText[event.event_type] ?? event.event_type}</Text><br /><Text type="secondary">{formatTime(event.occurred_at)}{event.station_id ? ' · ' : ''}</Text>{event.station_id && <StationName id={event.station_id} />}</> }))} /> : <Empty description="暂无物流轨迹" /> },
+        { key: 'destinations', label: '目的站更正记录', children: destinationChangesError ? <Alert type="warning" showIcon message="更正记录暂不可用" description={destinationChangesError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : <Table<DestinationChange> rowKey="id" dataSource={destinationChanges} pagination={{ current: destinationChangesPage, pageSize: 20, total: destinationChangesTotal, onChange: setDestinationChangesPage }} locale={{ emptyText: <Empty description="暂无目的站更正记录" /> }} columns={[
+          { title: '原目的站', dataIndex: 'previous_destination_station_id', render: value => <StationName id={value} /> },
+          { title: '新目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
+          { title: '更正原因', dataIndex: 'reason' },
+          { title: '操作时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
+        ]} /> },
         { key: 'tasks', label: '运输任务历史', children: historyError ? <Alert type="warning" showIcon message="任务历史暂不可用" description={historyError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : history.length ? <Table<ShipmentTaskHistory> rowKey="id" pagination={{ current: historyPage, pageSize: 20, total: historyTotal, onChange: setHistoryPage }} dataSource={history} columns={[
           { title: '任务号', dataIndex: 'task_no', render: (value, row) => <Link to={'/tasks/' + row.id}>{value}</Link> },
           { title: '线路', render: (_, row) => <>{row.route_code} · <StationName id={row.origin_station_id} /> → <StationName id={row.destination_station_id} /></> },
@@ -131,6 +202,45 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
         <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => date.isBefore(dayjs(), 'day') }} />
         <Text type="secondary">目的站可为中转站。提交时后端会再次验证线路和运单是否仍可用。</Text>
       </ModalForm>
+      <Modal
+        title={destinationModalStep === 'confirm' ? '确认更正目的站' : '更正目的站'}
+        open={Boolean(destinationModalStep)}
+        onCancel={() => destinationModalStep === 'confirm' ? setDestinationModalStep('edit') : closeDestinationModal()}
+        onOk={() => {
+          if (destinationModalStep === 'confirm') void confirmDestinationCorrection()
+          else void destinationForm.validateFields().then(values => {
+            setDestinationDraft(values)
+            setDestinationModalStep('confirm')
+          }).catch(() => undefined)
+        }}
+        okText={destinationModalStep === 'confirm' ? '确认更正' : '检查更正内容'}
+        cancelText={destinationModalStep === 'confirm' ? '返回修改' : '取消'}
+        confirmLoading={busy}
+        okButtonProps={{ disabled: busy || !destinationAction?.enabled || network.stations.length === 0 }}
+      >
+        {destinationModalStep === 'edit' ? <>
+          {network.error && <Alert type="error" showIcon message="站点列表加载失败" description={network.error} style={{ marginBottom: 16 }} />}
+          <Alert type="info" showIcon message="更正目的站不会改变货物位置或收件地址。请确认新站能够负责该地址的配送。" style={{ marginBottom: 16 }} />
+          <Form form={destinationForm} layout="vertical">
+            <Form.Item label="当前目的站">
+              <Text><StationName id={detail.destination_station_id} /></Text>
+            </Form.Item>
+            <Form.Item name="destination_station_id" label="新的目的站" rules={[{ required: true, message: '请选择新的目的站' }]}>
+              <Select showSearch optionFilterProp="label" options={deliveryStations.map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} placeholder="选择启用且允许派送的站点" notFoundContent="没有可选择的其他派送站点" />
+            </Form.Item>
+            <Form.Item name="reason" label="更正原因" rules={[{ required: true, whitespace: true, message: '请填写更正原因' }, { max: 500, message: '更正原因不能超过 500 个字符' }]}>
+              <Input.TextArea maxLength={500} showCount rows={3} placeholder="说明为什么需要更正目的站" />
+            </Form.Item>
+          </Form>
+        </> : destinationDraft && <>
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="原目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item>
+            <Descriptions.Item label="更正为"><StationName id={destinationDraft.destination_station_id} /></Descriptions.Item>
+            <Descriptions.Item label="更正原因">{destinationDraft.reason.trim()}</Descriptions.Item>
+          </Descriptions>
+          <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
+        </>}
+      </Modal>
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}

@@ -62,7 +62,7 @@ class OperationLog(Base):
         ),
         CheckConstraint(
             "resource_type IN "
-            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE')",
+            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN')",
             name="ck_logs_resource_type",
         ),
         CheckConstraint(
@@ -233,6 +233,7 @@ class TransportRoute(Base):
 class Shipment(Base):
     __tablename__ = "shipments"
     __table_args__ = (
+        CheckConstraint("path_version >= 0", name="ck_shipments_path_version"),
         CheckConstraint(
             "region_code = 'Z'",
             name="ck_shipments_region",
@@ -282,6 +283,7 @@ class Shipment(Base):
         String(32),
         server_default="PENDING_PICKUP",
     )
+    path_version: Mapped[int] = mapped_column(Integer, server_default="0")
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     last_scanned_station_id: Mapped[int | None] = mapped_column(
         ForeignKey("stations.id"),
@@ -354,6 +356,8 @@ class TaskShipment(Base):
             "shipment_id",
             name="uq_task_shipments",
         ),
+        Index("uq_task_shipments_active_leg", "path_leg_id", unique=True,
+              postgresql_where=text("released_at IS NULL AND path_leg_id IS NOT NULL")),
         Index(
             "uq_task_shipments_active",
             "shipment_id",
@@ -378,6 +382,7 @@ class TaskShipment(Base):
     shipment_id: Mapped[int] = mapped_column(
         ForeignKey("shipments.id"),
     )
+    path_leg_id: Mapped[int | None] = mapped_column(ForeignKey("shipment_path_legs.id"))
     released_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
     )
@@ -444,3 +449,65 @@ class TrackingEvent(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
+
+class PathPlan(Base):
+    __tablename__ = "path_plans"
+    __table_args__ = (
+        CheckConstraint("code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'", name="ck_path_plans_code"),
+        CheckConstraint("length(btrim(name)) > 0", name="ck_path_plans_name"),
+        CheckConstraint("version > 0", name="ck_path_plans_version"),
+        CheckConstraint("origin_station_id <> destination_station_id", name="ck_path_plans_endpoints"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, server_default="1")
+    origin_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+    destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+
+
+class PathPlanLeg(Base):
+    __tablename__ = "path_plan_legs"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "position", name="uq_path_plan_legs_position"),
+        CheckConstraint("position >= 0", name="ck_path_plan_legs_position"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id"))
+    position: Mapped[int] = mapped_column(Integer)
+    route_id: Mapped[int] = mapped_column(ForeignKey("transport_routes.id"))
+
+
+class ShipmentPathLeg(Base):
+    __tablename__ = "shipment_path_legs"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_shipment_path_legs_position"),
+        Index("uq_shipment_path_legs_current", "shipment_id", "position", unique=True,
+              postgresql_where=text("superseded_at IS NULL")),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
+    position: Mapped[int] = mapped_column(Integer)
+    route_id: Mapped[int] = mapped_column(ForeignKey("transport_routes.id"))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShipmentPathVersion(Base):
+    __tablename__ = "shipment_path_versions"
+    __table_args__ = (
+        UniqueConstraint("shipment_id", "version", name="uq_shipment_path_versions"),
+        CheckConstraint("version > 0", name="ck_shipment_path_versions_version"),
+        CheckConstraint("jsonb_typeof(legs) = 'array'", name="ck_shipment_path_versions_legs"),
+        CheckConstraint("length(btrim(reason)) BETWEEN 1 AND 500", name="ck_shipment_path_versions_reason"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+    source_plan_id: Mapped[int | None] = mapped_column(ForeignKey("path_plans.id"))
+    source_plan_version: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(500))
+    legs: Mapped[list] = mapped_column(JSONB)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

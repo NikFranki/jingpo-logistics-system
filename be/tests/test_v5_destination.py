@@ -54,7 +54,7 @@ class V5DestinationTests(unittest.TestCase):
             result = self.change(shipment,old,new,reason=f'  更正 {index}  ')
             self.assertEqual(result['destination_station_id'],new['id'])
             for field in before:
-                if field not in ('destination_station_id','updated_at','allowed_actions'):
+                if field not in ('destination_station_id','updated_at','allowed_actions','path_version','transport_path'):
                     self.assertEqual(before[field],result[field])
             if index == 0: self.event(shipment,'PICKUP')
             if index == 1: self.event(shipment,'ARRIVE',self.source)

@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, aliased
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
@@ -25,8 +25,10 @@ from models import (
     TransportRoute,
     TransportTask,
     TrackingEvent,
+    ShipmentPathLeg,
 )
 from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
+from planning.service import auto_bind_path, next_path_leg
 from network.service import require_enabled_route
 from errors import NetworkError
 
@@ -63,11 +65,29 @@ def list_candidate_shipments(
         .exists()
     )
 
+    arrived = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
+        TaskShipment.path_leg_id == ShipmentPathLeg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+    first_leg = select(ShipmentPathLeg.id).where(
+        ShipmentPathLeg.shipment_id == Shipment.id, ShipmentPathLeg.superseded_at.is_(None), ~arrived
+        ).order_by(ShipmentPathLeg.position).limit(1).correlate(Shipment).scalar_subquery()
+    follows_path = select(ShipmentPathLeg.id).where(
+        ShipmentPathLeg.id == first_leg, ShipmentPathLeg.route_id == route.id).exists()
+    future_leg, future_route = aliased(ShipmentPathLeg), aliased(TransportRoute)
+    future_origin, future_destination = aliased(Station), aliased(Station)
+    completed_future = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
+        TaskShipment.path_leg_id == future_leg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+    blocked_future = select(future_leg.id).join(future_route,future_leg.route_id == future_route.id).join(
+        future_origin,future_route.origin_station_id == future_origin.id).join(
+        future_destination,future_route.destination_station_id == future_destination.id).where(
+        future_leg.shipment_id == Shipment.id, future_leg.superseded_at.is_(None), ~completed_future,
+        or_(future_route.enabled.is_(False),future_origin.enabled.is_(False),future_destination.enabled.is_(False))).exists()
     filters = (
         Shipment.stage == required_stage,
         Shipment.last_scanned_station_id == origin_station.id,
         Shipment.destination_station_id != origin_station.id,
         ~occupied,
+        follows_path,
+        ~blocked_future,
     )
 
     total = session.scalar(
@@ -109,8 +129,7 @@ def build_candidate_response(shipment: Shipment) -> dict:
 def build_create_task_request_hash(
     request: TransportTaskCreateRequest,
 ) -> str:
-    content = json.dumps(
-        {
+    payload = {
             "route_code": request.route_code,
             "expected_arrival_at": (
                 request.expected_arrival_at
@@ -118,7 +137,11 @@ def build_create_task_request_hash(
                 .isoformat()
             ),
             "shipment_ids": sorted(request.shipment_ids),
-        },
+        }
+    if request.expected_path_versions is not None:
+        payload["expected_path_versions"] = request.expected_path_versions
+    content = json.dumps(
+        payload,
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -197,6 +220,21 @@ def create_transport_task(
         if request.expected_arrival_at <= clock.current_time:
             raise InvalidExpectedArrivalError
 
+        shipments = list(session.scalars(select(Shipment).where(
+            Shipment.id.in_(request.shipment_ids)).order_by(Shipment.id).with_for_update()))
+        if len(shipments) != len(request.shipment_ids):
+            raise InvalidTaskShipmentError
+        for shipment in shipments:
+            auto_bind_path(session, shipment, clock.current_time)
+        if request.expected_path_versions is not None and any(
+            request.expected_path_versions[str(s.id)] != s.path_version for s in shipments):
+            raise InvalidTaskShipmentError
+        route_code = request.route_code
+        if route_code is None:
+            legs = [next_path_leg(session, s) for s in shipments]
+            if any(l is None for l in legs) or len({l.route_id for l in legs}) != 1:
+                raise InvalidTaskShipmentError
+            route_code = session.get(TransportRoute, legs[0].route_id).code
         origin = aliased(Station)
         destination = aliased(Station)
 
@@ -211,7 +249,7 @@ def create_transport_task(
                 TransportRoute.destination_station_id
                 == destination.id,
             )
-            .where(TransportRoute.code == request.route_code)
+            .where(TransportRoute.code == route_code)
         ).one_or_none()
 
         if route_result is None:
@@ -219,18 +257,6 @@ def create_transport_task(
 
         route, origin_station, destination_station = route_result
         require_enabled_route(session, route)
-
-        shipments = list(
-            session.scalars(
-                select(Shipment)
-                .where(Shipment.id.in_(request.shipment_ids))
-                .order_by(Shipment.id)
-                .with_for_update()
-            )
-        )
-
-        if len(shipments) != len(request.shipment_ids):
-            raise InvalidTaskShipmentError
 
         required_stage = ShipmentStage.AT_STATION
 
@@ -257,6 +283,9 @@ def create_transport_task(
         if occupied_count:
             raise InvalidTaskShipmentError
 
+        path_legs = {s.id: next_path_leg(session, s) for s in shipments}
+        if any(leg is None or leg.route_id != route.id for leg in path_legs.values()):
+            raise InvalidTaskShipmentError
         task = TransportTask(
             route_id=route.id,
             delay_monitoring_enabled=route.delay_monitoring_enabled,
@@ -270,6 +299,7 @@ def create_transport_task(
                 TaskShipment(
                     task_id=task.id,
                     shipment_id=shipment.id,
+                    path_leg_id=path_legs[shipment.id].id,
                 )
                 for shipment in shipments
             ]
@@ -740,6 +770,8 @@ def arrive_transport_task(
 
         session.flush()
 
+        for shipment in shipments:
+            auto_bind_path(session, shipment, clock.current_time)
         response_body = build_task_response(
             task=task,
             route=route,

@@ -1,6 +1,6 @@
 # JINGPO 前端
 
-技术栈：React + TypeScript + Vite + Ant Design + ProComponents。前端正在按 V4 交接方案迁移：订单、运单和运输任务各有独立详情页，业务操作回到所属详情页，演示控制仅保留模拟时钟。V4 API 需要配套 BE 实现后才能完成联调。
+技术栈：React + TypeScript + Vite + Ant Design + ProComponents。订单、运单和运输任务各有独立详情页，业务操作回到所属详情页，演示控制仅保留模拟时钟。V4 页面职责已落地；V5 运单目的站更正已接入后端接口。
 
 ## 启动
 
@@ -44,7 +44,7 @@ npm run lint
 
 纯格式问题可用 `npm run lint:fix` 自动修复；规则配置见 `eslint.config.js`。
 
-## V4 页面职责
+## 页面职责
 
 | 页面 | 操作 |
 | --- | --- |
@@ -53,6 +53,6 @@ npm run lint
 | 运输任务 | 批量创建任务；确认发车、到达；发车前填写原因取消任务 |
 | 演示时钟 | 查看并推进模拟时间，不执行物流业务操作 |
 
-BE V4 接口尚未联调前，运单任务历史和任务取消入口会依赖相应接口实现。
+运单详情的目的站更正记录单独展示，不混入物流轨迹；更正操作以 BE 返回的 `UPDATE_DESTINATION` 资格为准。V5 接口契约与前端验证记录见 [V5 FE 适配记录](../docs/技术方案/v5/fe/plan.md)。
 
 写请求带 `Idempotency-Key`；同一操作失败后，保留原 key 供重试。时间均按 Asia/Shanghai 展示，延误状态从后端读取。

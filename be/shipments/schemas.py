@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     model_validator,
 )
+from planning.schemas import ShipmentTransportPathResponse
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 class AllowedActionResponse(BaseModel):
@@ -46,6 +47,8 @@ class ShipmentResponse(BaseModel):
 
 
 class ShipmentDetailResponse(ShipmentResponse):
+    path_version: int = 0
+    transport_path: ShipmentTransportPathResponse | None = None
     active_transport_task: "ActiveTransportTaskResponse | None"
     tracking_events: list[TrackingEventResponse]
     allowed_actions: list[AllowedActionResponse] = Field(

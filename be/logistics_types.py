@@ -34,3 +34,20 @@ class TaskStatus(StrEnum):
 def sql_enum_values(enum_type: type[StrEnum]) -> str:
     """Render trusted application enum values for model CHECK constraints."""
     return ", ".join(f"'{item.value}'" for item in enum_type)
+
+
+class PathLegState(StrEnum):
+    PENDING = "PENDING"
+    RESERVED = "RESERVED"
+    IN_TRANSIT = "IN_TRANSIT"
+    ARRIVED = "ARRIVED"
+
+
+class TransportPathStatus(StrEnum):
+    WAITING_FIRST_ARRIVAL = "WAITING_FIRST_ARRIVAL"
+    NEEDS_PLANNING = "NEEDS_PLANNING"
+    READY = "READY"
+    RESERVED = "RESERVED"
+    IN_TRANSIT = "IN_TRANSIT"
+    COMPLETED = "COMPLETED"
+    BLOCKED = "BLOCKED"

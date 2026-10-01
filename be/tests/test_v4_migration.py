@@ -53,7 +53,7 @@ class V4MigrationTests(unittest.TestCase):
         self.run_migration('head')
         after = self.snapshot()
         for table in ('shipments', 'task_shipments', 'tracking_events'):
-            self.assertEqual(after[table], before[table])
+            self.assertEqual([{k:r[k] for k in old} for old,r in zip(before[table],after[table])], before[table])
         for old, new in zip(before['transport_tasks'], after['transport_tasks']):
             self.assertEqual({k:new[k] for k in old}, dict(old))
             self.assertIsNone(new['cancelled_at']); self.assertIsNone(new['cancel_reason'])
@@ -91,7 +91,7 @@ class V4MigrationTests(unittest.TestCase):
                 dict(key=uuid4(), hash='1'*64, body=json.dumps({'nested':{'task_no':'TRIP-OLD','route_code':'OLD','status':'PENDING_DEPARTURE','allowed_actions':[]}})))
         self.run_migration('head')
         with self.engine.connect() as conn:
-            self.assertEqual(conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one(), V4)
+            self.assertEqual(conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one(), helpers.HEAD)
             body = conn.execute(text('SELECT response_body FROM operation_logs')).scalar_one()['nested']
             self.assertTrue(body['allowed_actions'][0]['enabled'])
             self.assertIsNone(body['cancel_reason'])

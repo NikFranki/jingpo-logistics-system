@@ -1,0 +1,99 @@
+from datetime import datetime
+from typing import Annotated, Self
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from network.schemas import NetworkCode, NetworkName
+from logistics_types import PathLegState, TransportPathStatus
+
+PositiveId = Annotated[int, Field(gt=0, strict=True)]
+Reason = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=500)]
+
+class PathPlanCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: NetworkCode
+    name: NetworkName
+    route_ids: list[PositiveId] = Field(min_length=1, max_length=100)
+    enabled: bool = Field(default=True, strict=True)
+
+class PathPlanUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(gt=0, strict=True)
+    name: NetworkName | None = None
+    route_ids: list[PositiveId] | None = Field(default=None, min_length=1, max_length=100)
+    enabled: bool | None = Field(default=None, strict=True)
+
+    @model_validator(mode="after")
+    def changes_required(self) -> Self:
+        fields = self.model_dump(exclude_unset=True)
+        fields.pop("expected_version")
+        if not fields or any(value is None for value in fields.values()):
+            raise ValueError("Provide at least one non-null change")
+        return self
+
+class ShipmentPathUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0, strict=True)
+    expected_anchor_station_id: PositiveId
+    reason: Reason
+    plan_id: PositiveId | None = None
+    expected_plan_version: int | None = Field(default=None, gt=0, strict=True)
+    route_ids: list[PositiveId] | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def exactly_one_path(self) -> Self:
+        if (self.plan_id is None) == (self.route_ids is None):
+            raise ValueError("Provide either plan_id or the complete future route_ids")
+        if (self.plan_id is None) != (self.expected_plan_version is None):
+            raise ValueError("plan_id requires expected_plan_version")
+        return self
+
+class PathLegResponse(BaseModel):
+    id: str
+    position: int
+    route_id: str
+    route_code: str
+    origin_station_id: str
+    destination_station_id: str
+    state: PathLegState
+    task_id: str | None
+
+class ShipmentTransportPathResponse(BaseModel):
+    version: int
+    status: TransportPathStatus
+    anchor_station_id: str | None
+    destination_station_id: str
+    next_route_id: str | None
+    next_route_code: str | None
+    reason_code: str | None
+    reason: str | None
+    legs: list[PathLegResponse]
+
+class PathPlanResponse(BaseModel):
+    id: str
+    code: str
+    name: str
+    enabled: bool
+    version: int
+    origin_station_id: str
+    destination_station_id: str
+    usable: bool
+    reason: str | None
+    route_ids: list[str]
+
+class PathOptionsResponse(BaseModel):
+    path: ShipmentTransportPathResponse
+    plans: list[PathPlanResponse]
+
+class PathVersionResponse(BaseModel):
+    version: int
+    destination_station_id: str
+    source_plan_id: str | None
+    source_plan_version: int | None
+    reason: str
+    occurred_at: datetime
+    legs: list[dict]
+
+class PathHistoryResponse(BaseModel):
+    items: list[PathVersionResponse]
+    total: int
+    page: int
+    page_size: int

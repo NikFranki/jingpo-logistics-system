@@ -55,7 +55,7 @@ class V3MigrationTests(unittest.TestCase):
         self.run_migration('head')
         after=self.snapshot()
         self.assertEqual(after['tracking_events'],before['tracking_events'])
-        self.assertEqual(after['task_shipments'],before['task_shipments'])
+        self.assertEqual([{k:r[k] for k in old} for old,r in zip(before['task_shipments'],after['task_shipments'])],before['task_shipments'])
         with self.engine.connect() as conn:
             c=conn.execute(text("SELECT id FROM stations WHERE code='C'")).scalar_one()
             capabilities=conn.execute(text('SELECT code,allows_first_arrival,allows_delivery FROM stations ORDER BY code')).all()

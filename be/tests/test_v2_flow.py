@@ -37,6 +37,18 @@ from transport.service import (
 
 @unittest.skipUnless((make_url(os.environ["DATABASE_URL"]).database or "").endswith("_test") if os.getenv("DATABASE_URL") else False, "requires an isolated *_test PostgreSQL database")
 class V2FlowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from models import PathPlan, TransportRoute
+        from planning.schemas import PathPlanCreateRequest
+        from planning.service import write_plan
+        with SessionLocal() as session:
+            existing = session.scalar(select(PathPlan.id).where(PathPlan.code == 'V2_ABC'))
+            ids = {r.code:r.id for r in session.scalars(select(TransportRoute).where(TransportRoute.code.in_(['AB','BC'])))}
+        if not existing:
+            with SessionLocal() as session:
+                write_plan(session,PathPlanCreateRequest(code='V2_ABC',name='V2 regression',route_ids=[ids['AB'],ids['BC']]),uuid4())
+
     @staticmethod
     def call(function, *args):
         if function is create_shipment:

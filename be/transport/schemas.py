@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, field_validator, StrictStr, model_validator
 from network.schemas import NetworkCode
 from logistics_types import TaskStatus
 
@@ -28,7 +28,8 @@ class CandidateShipmentListResponse(BaseModel):
 
 class TransportTaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    route_code: NetworkCode
+    route_code: NetworkCode | None = None
+    expected_path_versions: dict[str, Annotated[int, Field(gt=0, strict=True)]] | None = None
     expected_arrival_at: datetime
     shipment_ids: list[int] = Field(
         min_length=1,
@@ -53,6 +54,17 @@ class TransportTaskCreateRequest(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("shipment_ids cannot contain duplicates")
         return value
+
+    @model_validator(mode="after")
+    def validate_path_versions(self):
+        if self.route_code is None and self.expected_path_versions is None:
+            raise ValueError("Automatic next-leg creation requires expected_path_versions")
+        if self.expected_path_versions is not None:
+            if set(self.expected_path_versions) != {str(i) for i in self.shipment_ids}:
+                raise ValueError("expected_path_versions must cover precisely the shipment_ids")
+            if any(type(v) is not int or v < 1 for v in self.expected_path_versions.values()):
+                raise ValueError("expected_path_versions values must be positive integers")
+        return self
 
 
 class TaskShipmentResponse(BaseModel):
