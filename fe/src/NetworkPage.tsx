@@ -4,6 +4,7 @@ import type { TableColumnsType } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { api, type PathPlan, type PathPlanInput, type PathPlanUpdate, type RouteInput, type Station, type StationInput, type TransportRoute } from './api'
+import { RouteSequenceEditor } from './RouteSequenceEditor'
 
 const { Text } = Typography
 type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
@@ -37,8 +38,6 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
       setError(undefined)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '网络配置加载失败，请重试。')
-    } finally {
-      setLoading(false)
     }
     try {
       setPathPlans(await api.pathPlans())
@@ -46,6 +45,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     } catch (reason) {
       setPathPlanError(reason instanceof Error ? reason.message : '路径方案加载失败，请重试。')
     }
+    setLoading(false)
   }, [])
   useEffect(() => { void refresh() }, [revision, refresh])
 
@@ -79,7 +79,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
   }
   const openEditPathPlan = (plan: PathPlan) => {
     setEditingPathPlan(plan)
-    pathPlanForm.setFieldsValue({ name: plan.name, route_ids: plan.route_ids, enabled: plan.enabled })
+    pathPlanForm.setFieldsValue({ name: plan.name, route_ids: plan.route_ids.map(String), enabled: plan.enabled })
     setPathPlanModal(true)
   }
   const savePathPlan = async (values: PathPlanForm) => {
@@ -92,6 +92,13 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
       )
       : await mutate(`create-path-plan:${JSON.stringify(body)}`, key => api.createPathPlan(body, key), '完整路径方案已创建')
     if (result) { setPathPlanModal(false); pathPlanForm.resetFields() }
+    else if (editingPathPlan) {
+      try {
+        const latest = await api.pathPlans()
+        setPathPlans(latest)
+        setEditingPathPlan(latest.find(plan => plan.id === editingPathPlan.id) ?? editingPathPlan)
+      } catch { /* Keep the edited form and its version visible if refresh also fails. */ }
+    }
     return Boolean(result)
   }
   const changeStation = (station: Station, change: Partial<Omit<StationInput, 'code'>>) =>
@@ -108,11 +115,6 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     if (!selected.length) return '—'
     return `${selected[0].origin.code} ${selected.map(route => `→ ${route.destination.code}`).join(' ')}`
   }
-  const selectedPlanRoutes = (routeIds: string[]) => routeIds.map(id => routeById.get(id)).filter((route): route is TransportRoute => Boolean(route))
-  const planRouteIds = Form.useWatch('route_ids', pathPlanForm) ?? []
-  const planRouteRows = selectedPlanRoutes(planRouteIds)
-  const planChainValid = planRouteRows.every((route, index) => index === 0 || planRouteRows[index - 1].destination.id === route.origin.id)
-
   const stationColumns: TableColumnsType<Station> = [
     { title: '编码', dataIndex: 'code', width: 150, render: value => <Text strong>{value}</Text> },
     { title: '站点名称', dataIndex: 'name', width: 220 },
@@ -132,7 +134,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     { title: '方案名称', dataIndex: 'name', width: 180 },
     { title: '完整路径', render: (_, row) => <>{pathLabel(row.route_ids)} <Text type="secondary">· v{row.version}</Text></> },
     { title: '可用状态', render: (_, row) => <Space direction="vertical" size={0}><Tag color={row.usable ? 'green' : 'default'}>{row.usable ? '可用于新绑定' : row.enabled ? '当前不可用' : '已停用'}</Tag>{row.reason && <Text type="secondary">{row.reason}</Text>}</Space> },
-    { title: '启用方案', width: 110, render: (_, row) => <Switch checked={row.enabled} disabled={busy || (!row.enabled && !row.usable)} onChange={value => void changePathPlanEnabled(row, value)} /> },
+    { title: '启用方案', width: 110, render: (_, row) => <Switch checked={row.enabled} disabled={busy} onChange={value => void changePathPlanEnabled(row, value)} /> },
     { title: '操作', width: 90, render: (_, row) => <Button type="link" size="small" disabled={busy} onClick={() => openEditPathPlan(row)}>编辑</Button> },
   ]
 
@@ -174,10 +176,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     <Form form={pathPlanForm} layout="vertical" initialValues={{ enabled: true, route_ids: [] }} onFinish={values => void savePathPlan(values)}>
       {!editingPathPlan && <Form.Item name="code" label="方案编码" rules={[{ required: true, message: '请输入编码' }, { pattern: /^[A-Z0-9][A-Z0-9_-]{0,31}$/, message: '使用大写字母、数字、下划线或连字符，最多 32 位' }]}><Input maxLength={32} placeholder="例如 SH_SZ_DG" /></Form.Item>}
       <Form.Item name="name" label="方案名称" rules={[{ required: true, whitespace: true, message: '请输入方案名称' }, { max: 100 }]}><Input maxLength={100} /></Form.Item>
-      <Form.Item name="route_ids" label="按运输顺序选择线路" rules={[{ required: true, message: '至少选择一段线路' }]}>
-        <Select mode="multiple" showSearch optionFilterProp="label" options={routes.map(route => ({ value: route.id, label: `${route.code} · ${route.origin.code} → ${route.destination.code}${route.enabled ? '' : '（停用）'}` }))} placeholder="依次选择连续线路" maxTagCount="responsive" />
-      </Form.Item>
-      {planRouteRows.length > 0 && <Alert type={planChainValid ? 'info' : 'warning'} showIcon message={`路径预览：${pathLabel(planRouteIds)}`} description={planChainValid ? '路径按当前选择顺序连续。' : '所选线路未连续，请调整顺序或选择其他线路。'} style={{ marginBottom: 16 }} />}
+      <RouteSequenceEditor name="route_ids" routes={routes} title="逐段配置完整路径" emptyText="添加第一段线路，系统会按顺序连接每个站点。" />
       <Form.Item name="enabled" label="启用方案" valuePropName="checked"><Switch /></Form.Item>
       {editingPathPlan && <Text type="secondary">方案编码和起终点创建后不可修改；当前版本 v{editingPathPlan.version}。提交时会校验版本，避免覆盖其他人的更新。</Text>}
     </Form>

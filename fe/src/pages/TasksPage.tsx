@@ -20,7 +20,10 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
   const [candidateTotal, setCandidateTotal] = useState(0)
   const [candidatePage, setCandidatePage] = useState(0)
   const [candidateLoading, setCandidateLoading] = useState(false)
+  const [candidateVersionLoading, setCandidateVersionLoading] = useState(false)
+  const [candidatePathVersions, setCandidatePathVersions] = useState<Record<string, number>>({})
   const candidateRequestId = useRef(0)
+  const candidateVersionRequestId = useRef(0)
   const navigate = useNavigate()
   const selectedRoute = Form.useWatch('route_code', taskForm)
   useEffect(() => { actionRef.current?.reload() }, [revision])
@@ -29,6 +32,7 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
     setCandidateOptions([])
     setCandidateTotal(0)
     setCandidatePage(0)
+    setCandidatePathVersions({})
     if (!selectedRoute) return
 
     let active = true
@@ -45,6 +49,23 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
     })
     return () => { active = false }
   }, [selectedRoute, messageApi])
+
+  const loadCandidatePathVersions = async (shipmentIds: string[]) => {
+    const requestId = ++candidateVersionRequestId.current
+    const retained = Object.fromEntries(shipmentIds.filter(id => candidatePathVersions[id] !== undefined).map(id => [id, candidatePathVersions[id]]))
+    setCandidatePathVersions(retained)
+    const pendingIds = shipmentIds.filter(id => candidatePathVersions[id] === undefined)
+    if (!pendingIds.length) { setCandidateVersionLoading(false); return }
+    setCandidateVersionLoading(true)
+    try {
+      const entries = await Promise.all(pendingIds.map(async id => [id, (await api.shipmentPath(id)).version] as const))
+      if (requestId === candidateVersionRequestId.current) setCandidatePathVersions(current => ({ ...current, ...Object.fromEntries(entries) }))
+    } catch (error) {
+      if (requestId === candidateVersionRequestId.current) messageApi.error(apiError(error))
+    } finally {
+      if (requestId === candidateVersionRequestId.current) setCandidateVersionLoading(false)
+    }
+  }
 
   const loadMoreCandidates = async (event: React.UIEvent<HTMLDivElement>) => {
     const holder = event.currentTarget
@@ -77,23 +98,36 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
     { title: '延误提示', dataIndex: 'delay_status', search: false, render: (_, row) => row.delay_status === 'OVERDUE' ? <StatusTag tone="error">{delayText(row)}</StatusTag> : row.delay_status === 'LATE_ARRIVAL' ? <StatusTag tone="warning">{delayText(row)}</StatusTag> : delayText(row) },
     { title: '操作', valueType: 'option', render: (_, row) => <Link to={`/tasks/${row.id}`}>查看详情</Link> },
   ]
-  return <>{holder}<PageContainer title="运输任务" subTitle="选择已配置的线路创建任务，并跟踪运输状态。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>创建运输任务</Button>}>
+  return <>{holder}<PageContainer title="运输任务" subTitle="按运单路径的下一段线路归集候选，再批量创建运输任务。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => { taskForm.resetFields(); setCandidatePathVersions({}); setCreateOpen(true) }}>创建运输任务</Button>}>
     {network.error && <Alert type="error" message={network.error} style={{ marginBottom: 16 }} />}{loadError && <Alert type="error" showIcon message="运输任务列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
     <ProTable<TaskItem> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 90 }} pagination={{ pageSize: 20 }} request={async params => {
       try { const result = await api.tasks({ page: params.current ?? 1, page_size: params.pageSize ?? 20, task_no: params.task_no as string, route_code: params.route_code as string, status: params.status as string }); setLoadError(undefined); return { data: result.items, success: true, total: result.total } }
       catch (error) { const reason = apiError(error); setLoadError(reason); return { data: [], success: false, total: 0 } }
     }} />
-    <ModalForm title="创建运输任务" dateFormatter="string" open={createOpen} onOpenChange={setCreateOpen} form={taskForm} onValuesChange={changes => { if ('route_code' in changes) taskForm.setFieldValue('shipment_ids', []) }} modalProps={{ destroyOnHidden: true }} onFinish={async (values: { route_code: RouteCode; expected_arrival_at: string; shipment_ids: string[] }) => {
+    <ModalForm title="创建运输任务" dateFormatter="string" open={createOpen} onOpenChange={setCreateOpen} form={taskForm} onValuesChange={changes => {
+      if ('route_code' in changes) {
+        taskForm.setFieldValue('shipment_ids', [])
+        setCandidatePathVersions({})
+        candidateVersionRequestId.current += 1
+        setCandidateVersionLoading(false)
+      }
+    }} modalProps={{ destroyOnHidden: true }} onFinish={async (values: { route_code: RouteCode; expected_arrival_at: string; shipment_ids: string[] }) => {
       // ProForm submits dateTime as a formatted string; this field is explicitly Beijing time.
-      const body = { route_code: values.route_code, expected_arrival_at: `${values.expected_arrival_at.replace(' ', 'T')}+08:00`, shipment_ids: values.shipment_ids.map(Number) }
+      if (candidateVersionLoading || values.shipment_ids.some(id => candidatePathVersions[id] === undefined)) {
+        messageApi.error('正在读取所选运单的路径版本，请稍后再提交。')
+        return false
+      }
+      const expected_path_versions = Object.fromEntries(values.shipment_ids.map(id => [id, candidatePathVersions[id]]))
+      const body = { route_code: values.route_code, expected_path_versions, expected_arrival_at: `${values.expected_arrival_at.replace(' ', 'T')}+08:00`, shipment_ids: values.shipment_ids.map(Number) }
       const result = await mutate(`create-task:${JSON.stringify(body)}`, key => api.createTask(body, key), '运输任务已创建；运单仍在起点站')
       if (result) { setCreateOpen(false); actionRef.current?.reload(); navigate(`/tasks/${result.id}`) }
       return Boolean(result)
     }}>
-      <ProFormSelect name="route_code" label="运输线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled).map(r => ({ label: `${r.code} · ${r.origin.code} → ${r.destination.code}`, value: r.code }))} fieldProps={{ notFoundContent: '暂无可用线路，请先配置站点和线路' }} rules={[{ required: true }]} />
+      <ProFormSelect name="route_code" label="下一段线路分组" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled).map(r => ({ label: `${r.code} · ${r.origin.code} → ${r.destination.code}`, value: r.code }))} fieldProps={{ notFoundContent: '暂无可用线路，请先配置站点、线路和运单路径' }} rules={[{ required: true }]} />
       <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => Boolean(clock && date.isBefore(dayjs(clock), 'day')) }} />
-      <ProFormSelect name="shipment_ids" label="待出站运单" mode="multiple" dependencies={['route_code']} options={candidateOptions.map(item => ({ label: `${item.shipment_no} · ${stageText[item.stage]}`, value: item.id }))} rules={[{ required: true, message: '至少选择一张运单' }]} fieldProps={{ loading: candidateLoading, showSearch: true, optionFilterProp: 'label', placeholder: '选择一张或多张运单', maxTagCount: 'responsive', onPopupScroll: loadMoreCandidates, notFoundContent: candidateLoading ? '正在加载运单…' : '当前线路暂无可选运单' }} />
-      <Text type="secondary">预计到达须晚于当前演示时间 {formatTime(clock)}。任务创建后不可编辑。</Text>
+      <ProFormSelect name="shipment_ids" label="下一段为该线路的运单" mode="multiple" dependencies={['route_code']} options={candidateOptions.map(item => ({ label: `${item.shipment_no} · ${stageText[item.stage]}`, value: item.id }))} rules={[{ required: true, message: '至少选择一张运单' }]} fieldProps={{ loading: candidateLoading || candidateVersionLoading, showSearch: true, optionFilterProp: 'label', placeholder: '系统只列出下一段匹配该线路的运单', maxCount: 100, maxTagCount: 'responsive', onPopupScroll: loadMoreCandidates, onChange: (ids: string[]) => void loadCandidatePathVersions(ids), notFoundContent: candidateLoading ? '正在加载运单…' : '当前线路暂无可选运单' }} />
+      <Text type="secondary">候选按路径的下一段线路分组；提交会带上每张运单当前看到的路径版本，后端冲突时整批不创建。若提示路径版本冲突，可刷新版本后核对并重试。预计到达须晚于当前演示时间 {formatTime(clock)}。</Text>
+      <Button type="link" size="small" disabled={!selectedRoute || !taskForm.getFieldValue('shipment_ids')?.length || candidateVersionLoading} loading={candidateVersionLoading} onClick={() => void loadCandidatePathVersions(taskForm.getFieldValue('shipment_ids') ?? [])}>刷新已选运单路径版本</Button>
     </ModalForm>
   </PageContainer></>
 }

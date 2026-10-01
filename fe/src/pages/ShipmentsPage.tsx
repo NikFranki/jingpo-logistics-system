@@ -4,7 +4,8 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type DestinationChange, type PathHistoryPage, type PathOptions, type PathVersion, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
+import { api, type DestinationChange, type PathLeg, type PathOptions, type PathVersion, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
+import { RouteSequenceEditor } from '../RouteSequenceEditor'
 import { actionText, allowed, apiError, eventText, formatTime, stageText, StatusTag, taskStatusText, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
@@ -62,6 +63,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
+  const [taskForm] = Form.useForm<{ route_code: string; expected_arrival_at: string }>()
   const [pathOptions, setPathOptions] = useState<PathOptions>()
   const [pathModalStep, setPathModalStep] = useState<'edit' | 'confirm'>()
   const [pathDraft, setPathDraft] = useState<PathForm>()
@@ -83,11 +85,12 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
     }), api.shipmentPathHistory(shipmentId, pathHistoryPage).catch(error => {
       if (active) setPathHistoryError(apiError(error))
       return undefined
-    })]).then(([shipment, tasks, changes]) => {
+    })]).then(([shipment, tasks, changes, pathVersions]) => {
       if (active) {
         setDetail(shipment)
         if (tasks) { setHistory(tasks.items); setHistoryTotal(tasks.total); setHistoryError(undefined) }
         if (changes) { setDestinationChanges(changes.items); setDestinationChangesTotal(changes.total); setDestinationChangesError(undefined) }
+        if (pathVersions) { setPathHistory(pathVersions.items); setPathHistoryTotal(pathVersions.total); setPathHistoryError(undefined) }
       }
     }).catch(error => { if (active) setLoadError(apiError(error)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -109,14 +112,40 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   }
   const openTask = async (values: { route_code: string; expected_arrival_at: string }) => {
     if (!detail) return false
-    const body = { route_code: values.route_code, expected_arrival_at: values.expected_arrival_at.replace(' ', 'T') + '+08:00', shipment_ids: [Number(detail.id)] }
+    if (!currentPath?.version || !values.route_code) {
+      messageApi.error('当前运单没有可用的完整路径，请先完成路径规划。')
+      return false
+    }
+    const body = { route_code: values.route_code, expected_path_versions: { [detail.id]: currentPath.version }, expected_arrival_at: values.expected_arrival_at.replace(' ', 'T') + '+08:00', shipment_ids: [Number(detail.id)] }
     const result = await mutate('create-task:' + JSON.stringify(body), key => api.createTask(body, key), '运输任务已创建')
     if (result) { setTaskOpen(false); navigate('/tasks/' + result.id) }
     return Boolean(result)
   }
+  const openNextTask = () => {
+    taskForm.setFieldsValue({ route_code: currentPath?.next_route_code ?? undefined, expected_arrival_at: undefined })
+    setTaskOpen(true)
+  }
   const actionEnabled = (name: string) => allowed(detail?.allowed_actions ?? [], name)?.enabled === true
   const destinationAction = allowed(detail?.allowed_actions ?? [], 'UPDATE_DESTINATION')
+  const pathAction = allowed(detail?.allowed_actions ?? [], 'UPDATE_PATH')
+  const currentPath = detail?.transport_path
   const deliveryStations = network.stations.filter(station => station.enabled && station.allows_delivery && station.id !== detail?.destination_station_id)
+  const routeById = new Map(network.routes.map(route => [route.id, route]))
+  const activePathPlan = pathOptions?.plans.find(plan => plan.id === selectedPlanId)
+  const selectedRouteRows = (pathMode === 'plan' ? activePathPlan?.route_ids : selectedPathRouteIds)
+    ?.map(id => routeById.get(id)).filter((route): route is TransportRoute => Boolean(route)) ?? []
+  const pathRouteChainValid = (() => {
+    const anchorId = pathOptions?.path.anchor_station_id
+    const destinationId = detail?.destination_station_id
+    if (!anchorId || !destinationId) return false
+    if (!selectedRouteRows.length) return anchorId === destinationId
+    return selectedRouteRows[0].origin.id === anchorId
+      && selectedRouteRows.every((route, index) => index === 0 || selectedRouteRows[index - 1].destination.id === route.origin.id)
+      && selectedRouteRows[selectedRouteRows.length - 1].destination.id === destinationId
+  })()
+  const draftPlan = pathDraft?.mode === 'plan' ? pathOptions?.plans.find(plan => plan.id === pathDraft.plan_id) : undefined
+  const draftRouteRows = (pathDraft?.mode === 'plan' ? draftPlan?.route_ids : pathDraft?.route_ids)
+    ?.map(id => routeById.get(id)).filter((route): route is TransportRoute => Boolean(route)) ?? []
   const closeDestinationModal = () => {
     setDestinationModalStep(undefined)
     setDestinationDraft(undefined)
@@ -146,6 +175,53 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
       setRetry(value => value + 1)
     }
   }
+  const openPathPlanner = async () => {
+    if (!detail) return
+    try {
+      const options = await api.shipmentPathOptions(detail.id)
+      setPathOptions(options)
+      pathForm.setFieldsValue({ mode: options.plans.length ? 'plan' : 'routes', plan_id: undefined, route_ids: [], reason: '' })
+      setPathModalStep('edit')
+    } catch (error) {
+      messageApi.error(apiError(error))
+    }
+  }
+  const closePathPlanner = () => {
+    setPathModalStep(undefined)
+    setPathDraft(undefined)
+    setPathOptions(undefined)
+    pathForm.resetFields()
+  }
+  const confirmPathUpdate = async () => {
+    if (!detail || !pathOptions || !pathDraft || !pathOptions.path.anchor_station_id) return
+    const base = {
+      expected_version: pathOptions.path.version,
+      expected_anchor_station_id: Number(pathOptions.path.anchor_station_id),
+      reason: pathDraft.reason.trim(),
+    }
+    let body: ShipmentPathUpdate
+    if (pathDraft.mode === 'plan') {
+      const plan = pathOptions.plans.find(item => item.id === pathDraft.plan_id)
+      if (!plan) { messageApi.error('选中的路径方案已不可用，请重新加载后选择'); return }
+      body = { ...base, plan_id: Number(plan.id), expected_plan_version: plan.version }
+    } else {
+      body = { ...base, route_ids: (pathDraft.route_ids ?? []).map(Number) }
+    }
+    const result = await mutate(
+      'shipment-path:' + detail.id + ':' + JSON.stringify(body),
+      key => api.updateShipmentPath(detail.id, body, key),
+      '运单未来路径已更新',
+    )
+    if (result) {
+      closePathPlanner()
+      setPathHistoryPage(1)
+      setRetry(value => value + 1)
+    } else {
+      // Refresh the version, anchor and options after a conflict while keeping the proposed edits.
+      void api.shipmentPathOptions(detail.id).then(setPathOptions).catch(error => messageApi.error(apiError(error)))
+      setRetry(value => value + 1)
+    }
+  }
 
   return <>{holder}<PageContainer title={detail?.shipment_no ?? '运单详情'} subTitle="当前站点、运输区间、履约操作和关联任务历史。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/shipments')}>返回运单列表</Button></Space>}>
     {loadError && <Alert type="error" showIcon message="运单详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
@@ -158,6 +234,29 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
         <Descriptions.Item label="运单目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item><Descriptions.Item label="当前配送地址"><span className="jp-wrap-anywhere">{detail.recipient_address}</span></Descriptions.Item>
         <Descriptions.Item label="发件地址"><span className="jp-wrap-anywhere">{detail.sender_address}</span></Descriptions.Item><Descriptions.Item label="创建时间">{formatTime(detail.created_at)}</Descriptions.Item>
       </Descriptions>
+      <section style={{ marginTop: 24 }}>
+        <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
+          <Text strong>完整路径与当前进度</Text>
+          <Button disabled={busy || !pathAction?.enabled} onClick={() => void openPathPlanner()}>{currentPath?.version ? '调整未来路径' : '规划完整路径'}</Button>
+        </Space>
+        {!currentPath && <Alert type="info" showIcon message="后端尚未返回运单路径信息。" description={pathAction?.reason ?? '请确认后端已升级至 V6。'} />}
+        {currentPath && <>
+          <Alert type={currentPath.status === 'BLOCKED' || currentPath.status === 'NEEDS_PLANNING' ? 'warning' : currentPath.status === 'COMPLETED' ? 'success' : 'info'} showIcon message={`${pathStatusText[currentPath.status] ?? currentPath.status} · 路径版本 v${currentPath.version}`} description={<>
+            {currentPath.anchor_station_id && <>当前接续站：<StationName id={currentPath.anchor_station_id} />。 </>}
+            {currentPath.next_route_code && <>下一段：<Text strong>{currentPath.next_route_code}</Text>。 </>}
+            {currentPath.reason && <>{currentPath.reason} </>}
+            <Text type="secondary">路径是运输安排；只有对应运输任务发车、到达后，才会形成实际物流进度。</Text>
+          </>} style={{ marginBottom: 12 }} />
+          {currentPath.legs.length ? <Table<PathLeg> size="small" rowKey="id" pagination={false} dataSource={currentPath.legs} columns={[
+            { title: '顺序', dataIndex: 'position', width: 72, render: value => value + 1 },
+            { title: '线路', dataIndex: 'route_code', width: 140 },
+            { title: '运输区间', render: (_, leg) => <><StationName id={leg.origin_station_id} /> → <StationName id={leg.destination_station_id} /></> },
+            { title: '当前进度', dataIndex: 'state', width: 120, render: value => pathLegStateText[value] ?? value },
+            { title: '任务', dataIndex: 'task_id', width: 140, render: value => value ? <Link to={`/tasks/${value}`}>查看任务</Link> : '尚未创建' },
+          ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={currentPath.status === 'WAITING_FIRST_ARRIVAL' ? '首次入站后才确定完整路径' : '当前没有已绑定路径段'} />}
+        </>}
+        {pathAction && !pathAction.enabled && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>{pathAction.reason ?? '当前阶段暂不能调整路径。'}</Text>}
+      </section>
       <div style={{ margin: '20px 0 28px' }}>
         <Text strong style={{ display: 'block', marginBottom: 12 }}>下一步操作</Text>
         <Space wrap>
@@ -170,7 +269,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
         {detail.stage === 'PICKED_UP' && <><Form.Item label="首次入站站点" style={{ marginBottom: 12, maxWidth: 360 }}><Select value={firstStation} onChange={setFirstStation} options={network.stations.filter(s => s.enabled && s.allows_first_arrival).map(s => ({ value: s.id, label: s.code + ' · ' + s.name }))} placeholder="选择包裹实际进入的站点" /></Form.Item><Button type="primary" disabled={busy || !firstStation || !actionEnabled('ARRIVE')} onClick={() => runEvent('ARRIVE')}>确认入站</Button></>}
         {detail.stage === 'AT_STATION' && actionEnabled('START_DELIVERY') && <Space wrap><Button type="primary" disabled={busy} onClick={() => runEvent('START_DELIVERY')}>开始派送</Button><Text type="secondary">运单已到达目的站，可以交给末端配送。</Text></Space>}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && detail.active_transport_task && <Alert type="info" showIcon message="运单正在等待或进行站间运输" description={<Space wrap><span><StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></span><Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button></Space>} />}
-        {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && actionEnabled('CREATE_TRANSPORT_TASK') && <Alert type="info" showIcon message="运单还没有到达目的站" description={<Space wrap><span>当前所在站：<StationName id={detail.last_scanned_station_id ?? ''} />；目的站：<StationName id={detail.destination_station_id} />。先创建一段运输任务，到达目的站后才能开始派送。</span><Button type="primary" onClick={() => setTaskOpen(true)}>选择线路并创建运输任务</Button></Space>} />}
+        {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && actionEnabled('CREATE_TRANSPORT_TASK') && <Alert type="info" showIcon message="运单已准备好进入下一段运输" description={<Space wrap><span>下一段线路：<Text strong>{currentPath?.next_route_code ?? '尚未确定'}</Text>；到达目的站后才能开始派送。</span><Button type="primary" onClick={openNextTask}>按下一段创建运输任务</Button></Space>} />}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && !actionEnabled('CREATE_TRANSPORT_TASK') && <Text type="secondary">{allowed(detail.allowed_actions, 'CREATE_TRANSPORT_TASK')?.reason ?? '当前运单暂不可创建运输任务。'}</Text>}
         {detail.stage === 'IN_TRANSIT' && detail.active_transport_task && <Alert type="info" showIcon message="运单在途，到达并入站后再继续操作。" description={<Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button>} />}
         {detail.stage === 'OUT_FOR_DELIVERY' && <Button type="primary" disabled={busy || !actionEnabled('SIGN')} onClick={() => runEvent('SIGN')}>确认买家签收</Button>}
@@ -178,6 +277,14 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
       </div>
       <Tabs items={[
         { key: 'tracking', label: '物流轨迹', children: detail.tracking_events.length ? <Timeline items={detail.tracking_events.map(event => ({ children: <><Text strong>{eventText[event.event_type] ?? event.event_type}</Text><br /><Text type="secondary">{formatTime(event.occurred_at)}{event.station_id ? ' · ' : ''}</Text>{event.station_id && <StationName id={event.station_id} />}</> }))} /> : <Empty description="暂无物流轨迹" /> },
+        { key: 'path-history', label: '路径安排历史', children: pathHistoryError ? <Alert type="warning" showIcon message="路径历史暂不可用" description={pathHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : pathHistory.length ? <Table<PathVersion> rowKey="version" dataSource={pathHistory} pagination={{ current: pathHistoryPage, pageSize: 20, total: pathHistoryTotal, onChange: setPathHistoryPage }} columns={[
+          { title: '版本', dataIndex: 'version', width: 80, render: value => `v${value}` },
+          { title: '目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
+          { title: '来源方案', render: (_, row) => row.source_plan_id ? `方案 ${row.source_plan_id} · v${row.source_plan_version}` : '手动安排' },
+          { title: '当时路径', render: (_, row) => row.legs.map(leg => leg.route_code).join(' → ') || '无后续段' },
+          { title: '调整原因', dataIndex: 'reason' },
+          { title: '记录时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
+        ]} /> : <Empty description="尚无路径安排历史；未绑定前的旧任务和轨迹仍见各自历史记录。" /> },
         { key: 'destinations', label: '目的站更正记录', children: destinationChangesError ? <Alert type="warning" showIcon message="更正记录暂不可用" description={destinationChangesError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : <Table<DestinationChange> rowKey="id" dataSource={destinationChanges} pagination={{ current: destinationChangesPage, pageSize: 20, total: destinationChangesTotal, onChange: setDestinationChangesPage }} locale={{ emptyText: <Empty description="暂无目的站更正记录" /> }} columns={[
           { title: '原目的站', dataIndex: 'previous_destination_station_id', render: value => <StationName id={value} /> },
           { title: '新目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
@@ -197,11 +304,46 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
         if (result) { setDetail(result); setAddressOpen(false) }
         return Boolean(result)
       }}><ProFormText name="sender_address" label="发件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /><ProFormText name="recipient_address" label="收件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /></ModalForm>
-      <ModalForm<{ route_code: string; expected_arrival_at: string }> title="创建运输任务" open={taskOpen} onOpenChange={setTaskOpen} modalProps={{ destroyOnHidden: true }} onFinish={openTask}>
-        <ProFormSelect name="route_code" label="出站线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled && r.origin.id === detail.last_scanned_station_id).map(r => ({ value: r.code, label: r.code + ' · ' + r.origin.code + ' → ' + r.destination.code }))} rules={[{ required: true }]} fieldProps={{ placeholder: '选择从当前站出发的可用线路', notFoundContent: '当前站暂无可用出站线路' }} />
+      <ModalForm<{ route_code: string; expected_arrival_at: string }> title="创建运输任务" open={taskOpen} onOpenChange={setTaskOpen} form={taskForm} modalProps={{ destroyOnHidden: true }} onFinish={openTask}>
+        <ProFormSelect name="route_code" label="路径下一段线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled && r.code === currentPath?.next_route_code).map(r => ({ value: r.code, label: r.code + ' · ' + r.origin.code + ' → ' + r.destination.code }))} rules={[{ required: true }]} fieldProps={{ placeholder: '按完整路径自动确定', notFoundContent: '当前路径没有可创建的下一段' }} />
         <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => date.isBefore(dayjs(), 'day') }} />
-        <Text type="secondary">目的站可为中转站。提交时后端会再次验证线路和运单是否仍可用。</Text>
+        <Text type="secondary">此任务只创建当前下一段。提交时会带上路径版本，后端会再次检查线路、运单位置和版本是否仍有效。</Text>
       </ModalForm>
+      <Modal title={pathModalStep === 'confirm' ? '确认未来路径安排' : '规划或调整未来路径'} open={Boolean(pathModalStep)} onCancel={() => pathModalStep === 'confirm' ? setPathModalStep('edit') : closePathPlanner()} onOk={() => {
+        if (pathModalStep === 'confirm') void confirmPathUpdate()
+        else void pathForm.validateFields().then(values => {
+          if (!pathRouteChainValid) { messageApi.error('所选路径必须从接续站连续到运单目的站'); return }
+          setPathDraft(values)
+          setPathModalStep('confirm')
+        }).catch(() => undefined)
+      }} okText={pathModalStep === 'confirm' ? '确认保存路径' : '检查路径安排'} cancelText={pathModalStep === 'confirm' ? '返回修改' : '取消'} confirmLoading={busy} okButtonProps={{ disabled: busy || !pathAction?.enabled || !pathOptions?.path.anchor_station_id }} width={680}>
+        {pathModalStep === 'edit' && pathOptions && <>
+          <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="冻结前缀">{pathOptions.path.legs.filter(leg => leg.state === 'ARRIVED' || leg.state === 'IN_TRANSIT').map(leg => `${leg.route_code} (${pathLegStateText[leg.state]})`).join(' → ') || '暂无已完成或运输中的路径段'}</Descriptions.Item>
+            <Descriptions.Item label="接续站"><StationName id={pathOptions.path.anchor_station_id ?? ''} /></Descriptions.Item>
+            <Descriptions.Item label="最终目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item>
+          </Descriptions>
+          {pathOptions.plans.length === 0 && <Alert type="info" showIcon message="当前没有匹配的可用方案，可按顺序选择线路组成完整路径。" style={{ marginBottom: 16 }} />}
+          <Form form={pathForm} layout="vertical">
+            {pathOptions.plans.length > 0 && <Form.Item name="mode" label="路径来源"><Radio.Group options={[{ label: '使用完整路径方案', value: 'plan' }, { label: '手动选择线路', value: 'routes' }]} /></Form.Item>}
+            {pathMode === 'plan' && <Form.Item name="plan_id" label="完整路径方案" rules={[{ required: true, message: '请选择一个路径方案' }]}><Select options={pathOptions.plans.map(plan => ({ value: plan.id, label: `${plan.code} · ${plan.name} · ${plan.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')}` }))} placeholder="选择一次性采用的完整方案" /></Form.Item>}
+            {(pathMode === 'routes' || pathOptions.plans.length === 0) && <RouteSequenceEditor name="route_ids" routes={network.routes} title="逐段配置未来路径" emptyText="从接续站开始添加线路，直到运单目的站。" anchorStationId={pathOptions.path.anchor_station_id ?? undefined} destinationStationId={detail.destination_station_id} />}
+            <Form.Item name="reason" label="调整原因" rules={[{ required: true, whitespace: true, message: '请填写安排原因' }, { max: 500, message: '最多 500 个字符' }]}><Input.TextArea maxLength={500} showCount rows={3} placeholder="说明为什么采用或调整这条路径" /></Form.Item>
+          </Form>
+          {pathMode === 'plan' && activePathPlan && <Alert type={pathRouteChainValid ? 'success' : 'warning'} showIcon message={`方案路径：${selectedRouteRows.length ? `${selectedRouteRows[0].origin.code} ${selectedRouteRows.map(route => `→ ${route.destination.code}`).join(' ')}` : '—'}`} description={pathRouteChainValid ? '方案从接续站连续到运单目的站。' : '此方案与当前运单的接续站或目的站不匹配。'} />}
+        </>}
+        {pathModalStep === 'confirm' && pathDraft && pathOptions && <>
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="冻结前缀">{pathOptions.path.legs.filter(leg => leg.state === 'ARRIVED' || leg.state === 'IN_TRANSIT').map(leg => `${leg.route_code} (${pathLegStateText[leg.state]})`).join(' → ') || '无'}</Descriptions.Item>
+            <Descriptions.Item label="接续站"><StationName id={pathOptions.path.anchor_station_id ?? ''} /></Descriptions.Item>
+            <Descriptions.Item label="未来路径">{draftRouteRows.map(route => route.code).join(' → ') || '无后续段（接续站即目的站）'}</Descriptions.Item>
+            <Descriptions.Item label="最终目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item>
+            <Descriptions.Item label="路径前提">v{pathOptions.path.version} · 接续站 <StationName id={pathOptions.path.anchor_station_id ?? ''} /></Descriptions.Item>
+            <Descriptions.Item label="调整原因">{pathDraft.reason.trim()}</Descriptions.Item>
+          </Descriptions>
+          <Alert type="warning" showIcon message="保存只调整接续站之后的未来安排；已到达和正在运输的路径段、运输任务及物流轨迹保持不变。" style={{ marginTop: 16 }} />
+        </>}
+      </Modal>
       <Modal
         title={destinationModalStep === 'confirm' ? '确认更正目的站' : '更正目的站'}
         open={Boolean(destinationModalStep)}

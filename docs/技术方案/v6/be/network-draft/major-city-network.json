@@ -1,0 +1,1169 @@
+{
+  "status": "draft_for_review",
+  "stations": [
+    {
+      "code": "BEIJING",
+      "name": "北京站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "TIANJIN",
+      "name": "天津站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SHIJIAZHUANG",
+      "name": "石家庄站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "TAIYUAN",
+      "name": "太原站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "HOHHOT",
+      "name": "呼和浩特站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "BAOTOU",
+      "name": "包头站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SHENYANG",
+      "name": "沈阳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "DALIAN",
+      "name": "大连站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "CHANGCHUN",
+      "name": "长春站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "HARBIN",
+      "name": "哈尔滨站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SHANGHAI",
+      "name": "上海站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "NANJING",
+      "name": "南京站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "WUXI",
+      "name": "无锡站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SUZHOU",
+      "name": "苏州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "HANGZHOU",
+      "name": "杭州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "NINGBO",
+      "name": "宁波站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "WENZHOU",
+      "name": "温州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "HEFEI",
+      "name": "合肥站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "JINAN",
+      "name": "济南站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "QINGDAO",
+      "name": "青岛站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "FUZHOU",
+      "name": "福州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "XIAMEN",
+      "name": "厦门站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "NANCHANG",
+      "name": "南昌站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "ZHENGZHOU",
+      "name": "郑州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "WUHAN",
+      "name": "武汉站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "CHANGSHA",
+      "name": "长沙站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "GUANGZHOU",
+      "name": "广州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SHENZHEN",
+      "name": "深圳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "DONGGUAN",
+      "name": "东莞站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "FOSHAN",
+      "name": "佛山站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "ZHUHAI",
+      "name": "珠海站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "NANNING",
+      "name": "南宁站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "HAIKOU",
+      "name": "海口站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "SANYA",
+      "name": "三亚站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "CHENGDU",
+      "name": "成都站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "CHONGQING",
+      "name": "重庆站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "GUIYANG",
+      "name": "贵阳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "KUNMING",
+      "name": "昆明站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "LHASA",
+      "name": "拉萨站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "XIAN",
+      "name": "西安站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "LANZHOU",
+      "name": "兰州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "YINCHUAN",
+      "name": "银川站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "XINING",
+      "name": "西宁站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "code": "URUMQI",
+      "name": "乌鲁木齐站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    }
+  ],
+  "routes": [
+    {
+      "code": "BEIJING_SHIJIAZHUANG",
+      "origin_station_code": "BEIJING",
+      "destination_station_code": "SHIJIAZHUANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHIJIAZHUANG_BEIJING",
+      "origin_station_code": "SHIJIAZHUANG",
+      "destination_station_code": "BEIJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHIJIAZHUANG_ZHENGZHOU",
+      "origin_station_code": "SHIJIAZHUANG",
+      "destination_station_code": "ZHENGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "ZHENGZHOU_SHIJIAZHUANG",
+      "origin_station_code": "ZHENGZHOU",
+      "destination_station_code": "SHIJIAZHUANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "ZHENGZHOU_WUHAN",
+      "origin_station_code": "ZHENGZHOU",
+      "destination_station_code": "WUHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUHAN_ZHENGZHOU",
+      "origin_station_code": "WUHAN",
+      "destination_station_code": "ZHENGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUHAN_CHANGSHA",
+      "origin_station_code": "WUHAN",
+      "destination_station_code": "CHANGSHA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGSHA_WUHAN",
+      "origin_station_code": "CHANGSHA",
+      "destination_station_code": "WUHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGSHA_GUANGZHOU",
+      "origin_station_code": "CHANGSHA",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_CHANGSHA",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "CHANGSHA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_SHENZHEN",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "SHENZHEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENZHEN_GUANGZHOU",
+      "origin_station_code": "SHENZHEN",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BEIJING_TIANJIN",
+      "origin_station_code": "BEIJING",
+      "destination_station_code": "TIANJIN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "TIANJIN_BEIJING",
+      "origin_station_code": "TIANJIN",
+      "destination_station_code": "BEIJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "TIANJIN_JINAN",
+      "origin_station_code": "TIANJIN",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_TIANJIN",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "TIANJIN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_NANJING",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "NANJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANJING_JINAN",
+      "origin_station_code": "NANJING",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANJING_SHANGHAI",
+      "origin_station_code": "NANJING",
+      "destination_station_code": "SHANGHAI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHANGHAI_NANJING",
+      "origin_station_code": "SHANGHAI",
+      "destination_station_code": "NANJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BEIJING_SHENYANG",
+      "origin_station_code": "BEIJING",
+      "destination_station_code": "SHENYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENYANG_BEIJING",
+      "origin_station_code": "SHENYANG",
+      "destination_station_code": "BEIJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENYANG_CHANGCHUN",
+      "origin_station_code": "SHENYANG",
+      "destination_station_code": "CHANGCHUN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGCHUN_SHENYANG",
+      "origin_station_code": "CHANGCHUN",
+      "destination_station_code": "SHENYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGCHUN_HARBIN",
+      "origin_station_code": "CHANGCHUN",
+      "destination_station_code": "HARBIN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HARBIN_CHANGCHUN",
+      "origin_station_code": "HARBIN",
+      "destination_station_code": "CHANGCHUN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHIJIAZHUANG_TAIYUAN",
+      "origin_station_code": "SHIJIAZHUANG",
+      "destination_station_code": "TAIYUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "TAIYUAN_SHIJIAZHUANG",
+      "origin_station_code": "TAIYUAN",
+      "destination_station_code": "SHIJIAZHUANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "TAIYUAN_XIAN",
+      "origin_station_code": "TAIYUAN",
+      "destination_station_code": "XIAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAN_TAIYUAN",
+      "origin_station_code": "XIAN",
+      "destination_station_code": "TAIYUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAN_LANZHOU",
+      "origin_station_code": "XIAN",
+      "destination_station_code": "LANZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "LANZHOU_XIAN",
+      "origin_station_code": "LANZHOU",
+      "destination_station_code": "XIAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "LANZHOU_URUMQI",
+      "origin_station_code": "LANZHOU",
+      "destination_station_code": "URUMQI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "URUMQI_LANZHOU",
+      "origin_station_code": "URUMQI",
+      "destination_station_code": "LANZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BEIJING_HOHHOT",
+      "origin_station_code": "BEIJING",
+      "destination_station_code": "HOHHOT",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HOHHOT_BEIJING",
+      "origin_station_code": "HOHHOT",
+      "destination_station_code": "BEIJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HOHHOT_BAOTOU",
+      "origin_station_code": "HOHHOT",
+      "destination_station_code": "BAOTOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BAOTOU_HOHHOT",
+      "origin_station_code": "BAOTOU",
+      "destination_station_code": "HOHHOT",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BAOTOU_YINCHUAN",
+      "origin_station_code": "BAOTOU",
+      "destination_station_code": "YINCHUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "YINCHUAN_BAOTOU",
+      "origin_station_code": "YINCHUAN",
+      "destination_station_code": "BAOTOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "YINCHUAN_LANZHOU",
+      "origin_station_code": "YINCHUAN",
+      "destination_station_code": "LANZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "LANZHOU_YINCHUAN",
+      "origin_station_code": "LANZHOU",
+      "destination_station_code": "YINCHUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANJING_HEFEI",
+      "origin_station_code": "NANJING",
+      "destination_station_code": "HEFEI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HEFEI_NANJING",
+      "origin_station_code": "HEFEI",
+      "destination_station_code": "NANJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HEFEI_WUHAN",
+      "origin_station_code": "HEFEI",
+      "destination_station_code": "WUHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUHAN_HEFEI",
+      "origin_station_code": "WUHAN",
+      "destination_station_code": "HEFEI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUHAN_CHONGQING",
+      "origin_station_code": "WUHAN",
+      "destination_station_code": "CHONGQING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHONGQING_WUHAN",
+      "origin_station_code": "CHONGQING",
+      "destination_station_code": "WUHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHONGQING_CHENGDU",
+      "origin_station_code": "CHONGQING",
+      "destination_station_code": "CHENGDU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHENGDU_CHONGQING",
+      "origin_station_code": "CHENGDU",
+      "destination_station_code": "CHONGQING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HANGZHOU_NANCHANG",
+      "origin_station_code": "HANGZHOU",
+      "destination_station_code": "NANCHANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANCHANG_HANGZHOU",
+      "origin_station_code": "NANCHANG",
+      "destination_station_code": "HANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANCHANG_CHANGSHA",
+      "origin_station_code": "NANCHANG",
+      "destination_station_code": "CHANGSHA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGSHA_NANCHANG",
+      "origin_station_code": "CHANGSHA",
+      "destination_station_code": "NANCHANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHANGSHA_GUIYANG",
+      "origin_station_code": "CHANGSHA",
+      "destination_station_code": "GUIYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUIYANG_CHANGSHA",
+      "origin_station_code": "GUIYANG",
+      "destination_station_code": "CHANGSHA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUIYANG_KUNMING",
+      "origin_station_code": "GUIYANG",
+      "destination_station_code": "KUNMING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "KUNMING_GUIYANG",
+      "origin_station_code": "KUNMING",
+      "destination_station_code": "GUIYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHANGHAI_HANGZHOU",
+      "origin_station_code": "SHANGHAI",
+      "destination_station_code": "HANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HANGZHOU_SHANGHAI",
+      "origin_station_code": "HANGZHOU",
+      "destination_station_code": "SHANGHAI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HANGZHOU_WENZHOU",
+      "origin_station_code": "HANGZHOU",
+      "destination_station_code": "WENZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WENZHOU_HANGZHOU",
+      "origin_station_code": "WENZHOU",
+      "destination_station_code": "HANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WENZHOU_FUZHOU",
+      "origin_station_code": "WENZHOU",
+      "destination_station_code": "FUZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "FUZHOU_WENZHOU",
+      "origin_station_code": "FUZHOU",
+      "destination_station_code": "WENZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "FUZHOU_XIAMEN",
+      "origin_station_code": "FUZHOU",
+      "destination_station_code": "XIAMEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAMEN_FUZHOU",
+      "origin_station_code": "XIAMEN",
+      "destination_station_code": "FUZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAMEN_SHENZHEN",
+      "origin_station_code": "XIAMEN",
+      "destination_station_code": "SHENZHEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENZHEN_XIAMEN",
+      "origin_station_code": "SHENZHEN",
+      "destination_station_code": "XIAMEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "ZHENGZHOU_XIAN",
+      "origin_station_code": "ZHENGZHOU",
+      "destination_station_code": "XIAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAN_ZHENGZHOU",
+      "origin_station_code": "XIAN",
+      "destination_station_code": "ZHENGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XIAN_CHENGDU",
+      "origin_station_code": "XIAN",
+      "destination_station_code": "CHENGDU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHENGDU_XIAN",
+      "origin_station_code": "CHENGDU",
+      "destination_station_code": "XIAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "CHENGDU_GUIYANG",
+      "origin_station_code": "CHENGDU",
+      "destination_station_code": "GUIYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUIYANG_CHENGDU",
+      "origin_station_code": "GUIYANG",
+      "destination_station_code": "CHENGDU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUIYANG_NANNING",
+      "origin_station_code": "GUIYANG",
+      "destination_station_code": "NANNING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANNING_GUIYANG",
+      "origin_station_code": "NANNING",
+      "destination_station_code": "GUIYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANNING_GUANGZHOU",
+      "origin_station_code": "NANNING",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_NANNING",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "NANNING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "KUNMING_NANNING",
+      "origin_station_code": "KUNMING",
+      "destination_station_code": "NANNING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANNING_KUNMING",
+      "origin_station_code": "NANNING",
+      "destination_station_code": "KUNMING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "LANZHOU_XINING",
+      "origin_station_code": "LANZHOU",
+      "destination_station_code": "XINING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XINING_LANZHOU",
+      "origin_station_code": "XINING",
+      "destination_station_code": "LANZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "XINING_LHASA",
+      "origin_station_code": "XINING",
+      "destination_station_code": "LHASA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "LHASA_XINING",
+      "origin_station_code": "LHASA",
+      "destination_station_code": "XINING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_HAIKOU",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "HAIKOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HAIKOU_GUANGZHOU",
+      "origin_station_code": "HAIKOU",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HAIKOU_SANYA",
+      "origin_station_code": "HAIKOU",
+      "destination_station_code": "SANYA",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SANYA_HAIKOU",
+      "origin_station_code": "SANYA",
+      "destination_station_code": "HAIKOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_QINGDAO",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "QINGDAO",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "QINGDAO_JINAN",
+      "origin_station_code": "QINGDAO",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENYANG_DALIAN",
+      "origin_station_code": "SHENYANG",
+      "destination_station_code": "DALIAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "DALIAN_SHENYANG",
+      "origin_station_code": "DALIAN",
+      "destination_station_code": "SHENYANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANJING_WUXI",
+      "origin_station_code": "NANJING",
+      "destination_station_code": "WUXI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUXI_NANJING",
+      "origin_station_code": "WUXI",
+      "destination_station_code": "NANJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUXI_SUZHOU",
+      "origin_station_code": "WUXI",
+      "destination_station_code": "SUZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SUZHOU_WUXI",
+      "origin_station_code": "SUZHOU",
+      "destination_station_code": "WUXI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SUZHOU_SHANGHAI",
+      "origin_station_code": "SUZHOU",
+      "destination_station_code": "SHANGHAI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHANGHAI_SUZHOU",
+      "origin_station_code": "SHANGHAI",
+      "destination_station_code": "SUZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HANGZHOU_NINGBO",
+      "origin_station_code": "HANGZHOU",
+      "destination_station_code": "NINGBO",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NINGBO_HANGZHOU",
+      "origin_station_code": "NINGBO",
+      "destination_station_code": "HANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_ZHENGZHOU",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "ZHENGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "ZHENGZHOU_JINAN",
+      "origin_station_code": "ZHENGZHOU",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_HEFEI",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "HEFEI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HEFEI_JINAN",
+      "origin_station_code": "HEFEI",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HEFEI_NANCHANG",
+      "origin_station_code": "HEFEI",
+      "destination_station_code": "NANCHANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANCHANG_HEFEI",
+      "origin_station_code": "NANCHANG",
+      "destination_station_code": "HEFEI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "WUHAN_NANCHANG",
+      "origin_station_code": "WUHAN",
+      "destination_station_code": "NANCHANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANCHANG_WUHAN",
+      "origin_station_code": "NANCHANG",
+      "destination_station_code": "WUHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "NANCHANG_GUANGZHOU",
+      "origin_station_code": "NANCHANG",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_NANCHANG",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "NANCHANG",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "HANGZHOU_SHENZHEN",
+      "origin_station_code": "HANGZHOU",
+      "destination_station_code": "SHENZHEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENZHEN_HANGZHOU",
+      "origin_station_code": "SHENZHEN",
+      "destination_station_code": "HANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_FOSHAN",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "FOSHAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "FOSHAN_GUANGZHOU",
+      "origin_station_code": "FOSHAN",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_DONGGUAN",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "DONGGUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "DONGGUAN_GUANGZHOU",
+      "origin_station_code": "DONGGUAN",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "DONGGUAN_SHENZHEN",
+      "origin_station_code": "DONGGUAN",
+      "destination_station_code": "SHENZHEN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "SHENZHEN_DONGGUAN",
+      "origin_station_code": "SHENZHEN",
+      "destination_station_code": "DONGGUAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "GUANGZHOU_ZHUHAI",
+      "origin_station_code": "GUANGZHOU",
+      "destination_station_code": "ZHUHAI",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "ZHUHAI_GUANGZHOU",
+      "origin_station_code": "ZHUHAI",
+      "destination_station_code": "GUANGZHOU",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "BEIJING_JINAN",
+      "origin_station_code": "BEIJING",
+      "destination_station_code": "JINAN",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "code": "JINAN_BEIJING",
+      "origin_station_code": "JINAN",
+      "destination_station_code": "BEIJING",
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    }
+  ]
+}

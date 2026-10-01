@@ -1,6 +1,6 @@
 # JINGPO V6 · BE 开发规格
 
-> 2026-09-30 · BE 已实现并通过隔离库验收，开发库尚未升级。依据 [PRD](../../../prd/v6/JINGPO-logistics-system-v6.md)。仅 BE。
+> 2026-09-30 · BE 已实现并通过隔离库验收；开发库已于 2026-10-01 升级到 e61a7c93b204。依据 [PRD](../../../prd/v6/JINGPO-logistics-system-v6.md)。仅 BE。
 
 ## 1. 怎么解决
 

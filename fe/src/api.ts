@@ -73,7 +73,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-function query(values: Record<string, string | number | undefined>) {
+function query(values: Record<string, string | number | boolean | undefined>) {
   const params = new URLSearchParams()
   Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== '') params.set(key, String(value)) })
   return params.size ? `?${params}` : ''
