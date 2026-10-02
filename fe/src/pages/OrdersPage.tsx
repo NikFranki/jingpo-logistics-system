@@ -1,9 +1,10 @@
+import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space, Spin, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type Order, type OrderDetail, type OrderInput } from '../api'
+import { api, type DestinationMatch, type Order, type OrderDetail, type OrderInput } from '../api'
 import { apiError, stageLabel, stageText, stages, StatusTag, type Shared, useNetwork } from '../shared'
 import { AddressRegionFields } from '../AddressRegionFields'
 
@@ -22,7 +23,11 @@ type OrderFormValues = Omit<OrderInput, 'sender_address' | 'recipient_address' |
 }
 
 function regionPath(provinceId?: string | null, cityId?: string | null, districtId?: string | null) {
-  return [provinceId, cityId, districtId].filter((id): id is string => Boolean(id))
+  return [
+    provinceId ? `PROVINCE:${provinceId}` : undefined,
+    cityId ? `CITY:${cityId}` : undefined,
+    districtId ? `DISTRICT:${districtId}` : undefined,
+  ].filter((id): id is string => Boolean(id))
 }
 
 function fullAddress(address: Order, side: 'sender' | 'recipient') {
@@ -73,7 +78,7 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
     { title: '运单号', dataIndex: 'shipment_no', hideInTable: true, hideInSearch: false },
     { title: '商品', dataIndex: 'product_name', search: false, render: (_, row) => `${row.product_name} × ${row.quantity}` },
     { title: '订单状态', dataIndex: 'status', search: false, valueEnum: { PENDING_SHIPMENT: { text: '待创建运单' }, SHIPMENT_CREATED: { text: '运单已创建' }, COMPLETED: { text: '已完成' } } },
-    { title: '运单 / 运输阶段', dataIndex: 'stage', valueType: 'select', valueEnum: stages, fieldProps: { placeholder: '全部运输阶段' }, render: (_, row) => <OrderShipment orderId={row.id} orderStatus={row.status} revision={revision} /> },
+    { title: '运单 / 运输阶段', dataIndex: 'stage', valueType: 'select', valueEnum: stages, fieldProps: { showSearch: true, filterOption: fuzzySelectFilter, placeholder: '全部运输阶段' }, render: (_, row) => <OrderShipment orderId={row.id} orderStatus={row.status} revision={revision} /> },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', search: false },
     { title: '操作', valueType: 'option', render: (_, row) => <Link to={`/orders/${row.id}`}>查看详情</Link> },
   ]
@@ -112,7 +117,24 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
   const [retry, setRetry] = useState(0)
   const [editOrderOpen, setEditOrderOpen] = useState(false)
   const [shipmentOpen, setShipmentOpen] = useState(false)
+  const [destinationMatch, setDestinationMatch] = useState<DestinationMatch>()
+  const [destinationMatchLoading, setDestinationMatchLoading] = useState(false)
+  const [destinationMatchError, setDestinationMatchError] = useState<string>()
   const network = useNetwork(revision)
+  const matchOrderId = detail?.id
+
+  useEffect(() => {
+    if (!shipmentOpen || !matchOrderId) return
+    let active = true
+    setDestinationMatch(undefined)
+    setDestinationMatchError(undefined)
+    setDestinationMatchLoading(true)
+    api.destinationMatch(matchOrderId)
+      .then(result => { if (active) setDestinationMatch(result) })
+      .catch(error => { if (active) setDestinationMatchError(apiError(error)) })
+      .finally(() => { if (active) setDestinationMatchLoading(false) })
+    return () => { active = false }
+  }, [shipmentOpen, matchOrderId, revision])
 
   useEffect(() => {
     let active = true
@@ -138,14 +160,22 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
       </Descriptions>
       <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>订单配送区域固定为 Z；运单创建后，履约操作和物流轨迹在运单详情中查看。</Text>
     </>}
-    <ModalForm<{ destination_station_id: string }> title="创建运单" open={shipmentOpen} onOpenChange={setShipmentOpen} modalProps={{ destroyOnHidden: true }} onFinish={async values => {
+    <ModalForm<{ destination_station_id?: string }> title="创建运单" open={shipmentOpen} onOpenChange={setShipmentOpen} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '确认创建' }, submitButtonProps: { disabled: destinationMatchLoading || Boolean(destinationMatchError) || (destinationMatch?.status !== 'MATCHED' && destinationMatch?.status !== 'ADDRESS_REQUIRED') } }} onFinish={async values => {
       if (!detail) return false
-      const destination = Number(values.destination_station_id)
-      return Boolean(await mutate(`create-shipment:${detail.id}:${destination}`, key => api.createShipment(detail.id, destination, key), '运单已创建'))
+      const destination = values.destination_station_id ? Number(values.destination_station_id) : undefined
+      return Boolean(await mutate(`create-shipment:${detail.id}:${destination ?? 'AUTO'}`, key => api.createShipment(detail.id, destination, key), '运单已创建'))
     }}>
-      {network.error && <Alert type="error" message={network.error} />}
-      <ProFormSelect name="destination_station_id" label="目的站" options={network.stations.filter(s => s.enabled && s.allows_delivery).map(s => ({ value: s.id, label: `${s.code} · ${s.name}` }))} rules={[{ required: true }]} fieldProps={{ placeholder: '选择负责最终派送的站点', notFoundContent: '暂无可派送站点，请先在网络配置中创建' }} />
-      <Text type="secondary">目的站创建后不可变更；运单到达该站后才能开始派送。</Text>
+      {detail && <Alert type="info" showIcon message="收件地址会自动从订单同步到运单" description={<span className="jp-wrap-anywhere">{detail.recipient_name} · {fullAddress(detail, 'recipient')}</span>} style={{ marginBottom: 20 }} />}
+      {destinationMatchLoading && <Spin tip="正在按收件区域匹配目的站…" />}
+      {destinationMatchError && <Alert type="error" showIcon message="目的站匹配失败" description={destinationMatchError} action={<Button size="small" onClick={() => setShipmentOpen(false)}>关闭后重试</Button>} />}
+      {destinationMatch?.status === 'MATCHED' && destinationMatch.destination_station && <Alert type="success" showIcon message={`目的站：${destinationMatch.destination_station.name}（${destinationMatch.destination_station.code}）`} description={`按收件地址的${destinationMatch.matched_level === 'DISTRICT' ? '区县' : destinationMatch.matched_level === 'CITY' ? '城市' : '省级'}服务范围自动匹配。创建时后端会再次核对。`} />}
+      {destinationMatch && destinationMatch.status !== 'MATCHED' && destinationMatch.status !== 'ADDRESS_REQUIRED' && <Alert type="error" showIcon message={destinationMatch.status === 'NOT_FOUND' ? '收件区域暂未配置派送站' : destinationMatch.status === 'CONFLICT' ? '收件区域匹配到多个派送站' : destinationMatch.status === 'INVALID_ADDRESS' ? '订单收件区域无效或已停用' : '订单已有运单'} description={destinationMatch.reason ?? '请先在网络配置中修正站点服务范围或订单地址，再重试。'} />}
+      {destinationMatch?.status === 'ADDRESS_REQUIRED' && <>
+        <Alert type="warning" showIcon message="该历史订单没有结构化收件区域" description={destinationMatch.reason ?? '请选择负责派送的站点；新订单可按省、市、区自动匹配目的站。'} style={{ marginBottom: 16 }} />
+        {network.error && <Alert type="error" message={network.error} />}
+        <ProFormSelect name="destination_station_id" label="负责末端派送的站点" options={network.stations.filter(s => s.enabled && s.allows_delivery).map(s => ({ value: s.id, label: `${s.code} · ${s.name}` }))} rules={[{ required: true }]} fieldProps={{ showSearch: true, filterOption: fuzzySelectFilter, placeholder: '选择负责派送的站点', notFoundContent: '暂无可派送站点，请先在网络配置中创建' }} />
+      </>}
+      <Text type="secondary">收件地址会同步到运单。目的站在创建时由后端按服务范围确认，创建后不可变更；运单到达该站后才能开始派送。</Text>
     </ModalForm>
     <ModalForm<OrderFormValues> title={`编辑订单 ${detail?.order_no ?? ''}`} open={editOrderOpen} onOpenChange={setEditOrderOpen} initialValues={detail ? { product_name: detail.product_name, quantity: detail.quantity, sender_name: detail.sender_name, sender_region_ids: regionPath(detail.sender_province_id, detail.sender_city_id, detail.sender_district_id), sender_province_id: detail.sender_province_id ?? undefined, sender_city_id: detail.sender_city_id ?? undefined, sender_district_id: detail.sender_district_id ?? undefined, sender_detail_address: detail.sender_address, recipient_name: detail.recipient_name, recipient_region_ids: regionPath(detail.recipient_province_id, detail.recipient_city_id, detail.recipient_district_id), recipient_province_id: detail.recipient_province_id ?? undefined, recipient_city_id: detail.recipient_city_id ?? undefined, recipient_district_id: detail.recipient_district_id ?? undefined, recipient_detail_address: detail.recipient_address } : blankOrderForm} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '保存修改' } }} onFinish={async values => {
       if (!detail) return false

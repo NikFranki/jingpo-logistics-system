@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Alert, Cascader, Form, Input, Spin, type CascaderProps } from 'antd'
 import type { DefaultOptionType } from 'antd/es/cascader'
+import { fuzzyMatch } from './fuzzySearch'
 import { api, type AdministrativeRegion } from './api'
 import { apiError } from './shared'
 
 type RegionOption = DefaultOptionType & {
   value: string
   label: string
+  id: string
   level: AdministrativeRegion['level']
   province_id: string | null
   city_id: string | null
@@ -19,8 +21,9 @@ type RegionOption = DefaultOptionType & {
 type Props = { prefix: 'sender' | 'recipient'; label: string; regionRequired?: boolean }
 
 const optionsFromRegions = (regions: AdministrativeRegion[]): RegionOption[] => regions.map(region => ({
-  value: region.id,
+  value: `${region.level}:${region.id}`,
   label: region.name,
+  id: region.id,
   level: region.level,
   province_id: region.province_id,
   city_id: region.city_id,
@@ -30,10 +33,20 @@ const optionsFromRegions = (regions: AdministrativeRegion[]): RegionOption[] => 
     || (region.level === 'PROVINCE' && !region.has_cities && !region.has_districts),
 }))
 
-function attachChildren(tree: RegionOption[], value: string, children: RegionOption[]): RegionOption[] {
-  return tree.map(option => option.value === value
-    ? { ...option, children, isLeaf: children.length === 0 }
-    : option.children ? { ...option, children: attachChildren(option.children, value, children) } : option)
+function attachChildrenAtPath(tree: RegionOption[], path: string[], children: RegionOption[], depth = 0): RegionOption[] {
+  return tree.map(option => {
+    if (option.value !== path[depth]) return option
+    if (depth === path.length - 1) return { ...option, children, isLeaf: children.length === 0 }
+    return { ...option, children: attachChildrenAtPath(option.children ?? [], path, children, depth + 1) }
+  })
+}
+
+async function provinceChildren(province: RegionOption) {
+  const [cities, directDistricts] = await Promise.all([
+    province.has_cities ? api.cities(province.id) : Promise.resolve([]),
+    province.has_districts ? api.districts(province.id) : Promise.resolve([]),
+  ])
+  return optionsFromRegions([...cities, ...directDistricts])
 }
 
 export function AddressRegionFields({ prefix, label, regionRequired = true }: Props) {
@@ -52,16 +65,12 @@ export function AddressRegionFields({ prefix, label, regionRequired = true }: Pr
       if (selectedIds.length > 1) {
         const province = tree.find(option => option.value === selectedIds[0])
         if (province) {
-          let children = province.has_cities ? optionsFromRegions(await api.cities(province.value)) : []
-          let city = children.find(option => option.value === selectedIds[1])
-          if (!city) {
-            children = optionsFromRegions(await api.districts(province.value))
-            city = children.find(option => option.value === selectedIds[1])
-          }
-          tree = attachChildren(tree, province.value, children)
-          if (city && selectedIds.length > 2) {
-            const districts = optionsFromRegions(await api.districts(province.value, city.value))
-            tree = attachChildren(tree, city.value, districts)
+          const children = await provinceChildren(province)
+          const selectedChild = children.find(option => option.value === selectedIds[1])
+          tree = attachChildrenAtPath(tree, selectedIds.slice(0, 1), children)
+          if (selectedChild?.level === 'CITY' && selectedIds.length > 2) {
+            const districts = optionsFromRegions(await api.districts(province.id, selectedChild.id))
+            tree = attachChildrenAtPath(tree, selectedIds.slice(0, 2), districts)
           }
         }
       }
@@ -79,18 +88,10 @@ export function AddressRegionFields({ prefix, label, regionRequired = true }: Pr
     setLoadingChildren(true)
     setError(undefined)
     try {
-      let regions: AdministrativeRegion[]
-      if (current.level === 'PROVINCE') {
-        regions = current.has_cities
-          ? await api.cities(current.value)
-          : await api.districts(current.value)
-      } else {
-        regions = await api.districts(current.province_id!, current.value)
-      }
-      const children = optionsFromRegions(regions)
-      current.children = children
-      current.isLeaf = children.length === 0
-      setOptions(previous => attachChildren(previous, current.value, children))
+      const children = current.level === 'PROVINCE'
+        ? await provinceChildren(current)
+        : optionsFromRegions(await api.districts(current.province_id!, current.id))
+      setOptions(previous => attachChildrenAtPath(previous, selectedOptions.map(option => String(option.value)), children))
     } catch (reason) {
       setError(apiError(reason))
     } finally {
@@ -103,6 +104,7 @@ export function AddressRegionFields({ prefix, label, regionRequired = true }: Pr
     <Form.Item name={regionField} label={`${label}所在地区`} rules={regionRequired ? [{ required: true, type: 'array', min: 1, message: `请选择${label}所在地区` }] : undefined}>
       <Cascader<RegionOption>
         options={options}
+        showSearch={{ filter: (input, path) => fuzzyMatch(input, path.map(option => option.label).join(' ')) }}
         loadData={loadData}
         changeOnSelect={false}
         allowClear
@@ -113,7 +115,7 @@ export function AddressRegionFields({ prefix, label, regionRequired = true }: Pr
           const levels = ['PROVINCE', 'CITY', 'DISTRICT']
           levels.forEach(level => {
             const selected = selectedOptions.find(option => (option as RegionOption).level === level) as RegionOption | undefined
-            form.setFieldValue(`${prefix}_${level.toLowerCase()}_id`, selected?.value)
+            form.setFieldValue(`${prefix}_${level.toLowerCase()}_id`, selected?.id)
           })
         }}
         suffixIcon={loading || loadingChildren ? <Spin size="small" /> : undefined}

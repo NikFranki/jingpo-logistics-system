@@ -1,3 +1,4 @@
+import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Form, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
@@ -88,9 +89,9 @@ function TasksPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
   }
   const columns: ProColumns<TaskItem>[] = [
     { title: '任务号', dataIndex: 'task_no', copyable: true },
-    { title: '线路', dataIndex: 'route_code', valueEnum: Object.fromEntries(network.routes.map(r => [r.code, { text: `${r.code} · ${r.origin.code} → ${r.destination.code}${r.enabled ? '' : '（停用）'}` }])) },
+    { title: '线路', dataIndex: 'route_code', fieldProps: { showSearch: true, filterOption: fuzzySelectFilter }, valueEnum: Object.fromEntries(network.routes.map(r => [r.code, { text: `${r.code} · ${r.origin.code} → ${r.destination.code}${r.enabled ? '' : '（停用）'}` }])) },
     { title: '计划来源', dataIndex: 'scheduling_source', search: false, render: value => value === 'PLAN' ? '全程计划' : '旧版单段任务' },
-    { title: '任务状态', dataIndex: 'status', valueEnum: Object.fromEntries(Object.entries(taskStatusText).map(([key, text]) => [key, { text }])) },
+    { title: '任务状态', dataIndex: 'status', fieldProps: { showSearch: true, filterOption: fuzzySelectFilter }, valueEnum: Object.fromEntries(Object.entries(taskStatusText).map(([key, text]) => [key, { text }])) },
     { title: '计划发车', dataIndex: 'planned_departure_at', valueType: 'dateTime', search: false, render: (_, row) => row.planned_departure_at ? formatTime(row.planned_departure_at) : '—' },
     { title: '预计到达', dataIndex: 'expected_arrival_at', valueType: 'dateTime', search: false },
     { title: '最新预测', dataIndex: 'forecast_arrival_at', valueType: 'dateTime', search: false, render: (_, row) => <>{formatTime(row.forecast_arrival_at)}{row.forecast_stale && <Text type="warning"> · 预测已过期</Text>}</> },
@@ -125,9 +126,9 @@ function TasksPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
       if (result) { setCreateOpen(false); actionRef.current?.reload(); navigate(`/tasks/${result.id}`) }
       return Boolean(result)
     }}>
-      <ProFormSelect name="route_code" label="下一段线路分组" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled).map(r => ({ label: `${r.code} · ${r.origin.code} → ${r.destination.code}`, value: r.code }))} fieldProps={{ notFoundContent: '暂无可用线路，请先配置站点、线路和运单路径' }} rules={[{ required: true }]} />
+      <ProFormSelect name="route_code" label="下一段线路分组" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled).map(r => ({ label: `${r.code} · ${r.origin.code} → ${r.destination.code}`, value: r.code }))} fieldProps={{ showSearch: true, filterOption: fuzzySelectFilter, notFoundContent: '暂无可用线路，请先配置站点、线路和运单路径' }} rules={[{ required: true }]} />
       <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true }} />
-      <ProFormSelect name="shipment_ids" label="下一段为该线路的运单" mode="multiple" dependencies={['route_code']} options={candidateOptions.map(item => ({ label: `${item.shipment_no} · ${stageText[item.stage]}`, value: item.id }))} rules={[{ required: true, message: '至少选择一张运单' }]} fieldProps={{ loading: candidateLoading || candidateVersionLoading, showSearch: true, optionFilterProp: 'label', placeholder: '系统只列出下一段匹配该线路的运单', maxCount: 100, maxTagCount: 'responsive', onPopupScroll: loadMoreCandidates, onChange: (ids: string[]) => void loadCandidatePathVersions(ids), notFoundContent: candidateLoading ? '正在加载运单…' : '当前线路暂无可选运单' }} />
+      <ProFormSelect name="shipment_ids" label="下一段为该线路的运单" mode="multiple" dependencies={['route_code']} options={candidateOptions.map(item => ({ label: `${item.shipment_no} · ${stageText[item.stage]}`, value: item.id }))} rules={[{ required: true, message: '至少选择一张运单' }]} fieldProps={{ loading: candidateLoading || candidateVersionLoading, showSearch: true, filterOption: fuzzySelectFilter, placeholder: '系统只列出下一段匹配该线路的运单', maxCount: 100, maxTagCount: 'responsive', onPopupScroll: loadMoreCandidates, onChange: (ids: string[]) => void loadCandidatePathVersions(ids), notFoundContent: candidateLoading ? '正在加载运单…' : '当前线路暂无可选运单' }} />
       <Text type="secondary">候选按路径的下一段线路分组；提交会带上每张运单当前看到的路径版本，后端冲突时整批不创建。若提示路径版本冲突，可刷新版本后核对并重试。预计到达时间需符合后端校验规则。</Text>
       <Button type="link" size="small" disabled={!selectedRoute || !taskForm.getFieldValue('shipment_ids')?.length || candidateVersionLoading} loading={candidateVersionLoading} onClick={() => void loadCandidatePathVersions(taskForm.getFieldValue('shipment_ids') ?? [])}>刷新已选运单路径版本</Button>
     </ModalForm>

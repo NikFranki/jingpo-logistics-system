@@ -58,6 +58,20 @@ class V7ScheduleTests(unittest.TestCase):
         return self.call(lambda session: tuple(session.scalar(select(func.count()).select_from(model))
             for model in (TransportTask, TaskShipment, ShipmentScheduleVersion, OperationLog)))
 
+    def test_time_passage_preserves_preview_but_rejects_past_departures(self):
+        shipment = self.shipment()
+        preview = self.preview(shipment, first_departure_at=self.clock+timedelta(hours=1))
+        self.server_clock.return_value += timedelta(seconds=1)
+        self.assertEqual(self.confirm(shipment, preview)['status'], 'CONFIRMED')
+        other = self.shipment()
+        preview = self.preview(other, first_departure_at=(self.server_clock.return_value+timedelta(minutes=1)).replace(second=0))
+        before = self.counts()
+        self.server_clock.return_value += timedelta(minutes=2)
+        with self.assertRaises(NetworkError) as result:
+            self.confirm(other, preview)
+        self.assertEqual(result.exception.code, 'PREVIEW_EXPIRED')
+        self.assertEqual(self.counts(), before)
+
     def test_preview_is_read_only_confirm_all_legs_and_arrival_activates_same_id(self):
         shipment = self.shipment(); before = self.counts()
         preview = self.preview(shipment); self.preview(shipment)

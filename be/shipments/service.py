@@ -30,6 +30,7 @@ from models import (
 )
 
 from planning.service import shipment_path_body, auto_bind_path, invalidate_destination_path
+from network.coverage import require_matched_destination
 
 from shipments.schemas import (
     ShipmentAddressUpdateRequest,
@@ -185,16 +186,16 @@ def build_destination_action(stage: str, occupied: bool) -> dict:
 
 def build_create_shipment_request_hash(
     order_id: int,
-    destination_station_id: int,
+    destination_station_id: int | None,
 ) -> str:
-    content = f"CREATE_SHIPMENT:{order_id}:{destination_station_id}"
+    content = f"CREATE_SHIPMENT:{order_id}:{destination_station_id if destination_station_id is not None else 'AUTO'}"
     return hashlib.sha256(content.encode()).hexdigest()
 
 def create_shipment(
     session: Session,
     order_id: int,
     idempotency_key: UUID,
-    destination_station_id: int,
+    destination_station_id: int | None = None,
     scheduling_mode: str = "LEGACY",
     scheduling_mode_explicit: bool = False,
 ) -> tuple[dict, int]:
@@ -236,7 +237,7 @@ def create_shipment(
         )
 
         if existing_shipment is not None:
-            if existing_shipment.destination_station_id != destination_station_id:
+            if destination_station_id is not None and existing_shipment.destination_station_id != destination_station_id:
                 raise NetworkError("INVALID_NETWORK_CONFIGURATION", "订单已有运单，目的站不能变更")
             result = get_shipment(
                 session=session,
@@ -268,6 +269,12 @@ def create_shipment(
 
         if order.status != "PENDING_SHIPMENT":
             raise OrderNotEditableError
+
+        if destination_station_id is None or order.recipient_province_id is not None:
+            matched_id = require_matched_destination(session, order)
+            if destination_station_id is not None and destination_station_id != matched_id:
+                raise NetworkError('DESTINATION_MISMATCH', '所选目的站与订单收件区域匹配的站点不一致，请刷新后重试')
+            destination_station_id = matched_id
 
         destination = session.get(Station, destination_station_id)
         if destination is None:

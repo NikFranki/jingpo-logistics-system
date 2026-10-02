@@ -23,7 +23,7 @@ from shipments.service import process_shipment_event
 
 
 V1 = "ccce65c68961"
-HEAD = "c84e2b19a607"
+HEAD = "e26b07f94c31"
 STAGES = ["PENDING_PICKUP", "PICKED_UP", "AT_A", "IN_TRANSIT_AB", "AT_B",
           "IN_TRANSIT_BC", "AT_C", "OUT_FOR_DELIVERY", "SIGNED"]
 EVENTS = ["SHIPMENT_CREATED", "PICKUP", "ENTER_A", "DEPART_AB", "ARRIVE_B",

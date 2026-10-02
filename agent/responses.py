@@ -89,7 +89,7 @@ class Task(Response):
 class TaskDetail(Task):
     origin_station_id: Identifier
     destination_station_id: Identifier
-    simulation_time: Timestamp
+    server_time: Timestamp
     shipments: list[ShipmentRef]
 
 
@@ -104,7 +104,7 @@ class Page(Response, Generic[T]):
 
 
 class TaskPage(Page[Task]):
-    simulation_time: Timestamp
+    server_time: Timestamp
 
 
 SCHEMAS = {

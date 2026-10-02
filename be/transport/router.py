@@ -155,7 +155,7 @@ def create_task(
 
 @router.post(
     "/{task_id}/depart",
-    response_model=TransportTaskResponse,
+    response_model=TransportTaskDetailResponse,
 )
 def depart_task(
     task_id: int,
@@ -165,7 +165,7 @@ def depart_task(
     ],
     session: Annotated[Session, Depends(get_db)],
     request: TransportTaskDepartRequest | None = Body(default=None),
-) -> TransportTaskResponse:
+) -> TransportTaskDetailResponse:
     try:
         response_body = depart_transport_task(
             session=session,
@@ -199,11 +199,11 @@ def depart_task(
             detail="Idempotency-Key was reused with different content",
         )
 
-    return TransportTaskResponse.model_validate(response_body)
+    return TransportTaskDetailResponse.model_validate(response_body)
 
 @router.post(
     "/{task_id}/arrive",
-    response_model=TransportTaskResponse,
+    response_model=TransportTaskDetailResponse,
 )
 def arrive_task(
     task_id: int,
@@ -212,7 +212,7 @@ def arrive_task(
         Header(alias="Idempotency-Key"),
     ],
     session: Annotated[Session, Depends(get_db)],
-) -> TransportTaskResponse:
+) -> TransportTaskDetailResponse:
     try:
         response_body = arrive_transport_task(
             session=session,
@@ -245,7 +245,7 @@ def arrive_task(
             detail="Idempotency-Key was reused with different content",
         )
 
-    return TransportTaskResponse.model_validate(response_body)
+    return TransportTaskDetailResponse.model_validate(response_body)
 
 @router.get(
     "/{task_id}",

@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -58,8 +59,8 @@ async def handle_network_error(request: Request, exc: NetworkError):
         "request_id": request_id,
     }, headers={"X-Request-ID": request_id})
 
-@app.exception_handler(HTTPException)
-async def handle_http_exception(request: Request, exc: HTTPException):
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(request: Request, exc: StarletteHTTPException):
     request_id = request.state.request_id
 
     return JSONResponse(

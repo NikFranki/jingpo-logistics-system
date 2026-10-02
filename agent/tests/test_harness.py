@@ -28,7 +28,7 @@ TIME = '2026-09-29T10:00:00+08:00'
 TASK = dict(delay_monitoring_enabled=True, id='7', task_no='TASK-7', route_code='AB', status='IN_TRANSIT',
             expected_arrival_at=TIME, departed_at=TIME, arrived_at=None,
             delay_status='OVERDUE', delay_minutes=10, origin_station_id='1',
-            destination_station_id='2', simulation_time=TIME, shipments=[])
+            destination_station_id='2', server_time=TIME, shipments=[])
 EVENT = dict(id='1', event_type='DEPART', occurred_at=TIME, station_id='1', task_id='7')
 SHIPMENT = dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT',
                 destination_station_id='1', last_scanned_station_id='1', tracking_events=[EVENT], sender_address='PRIVATE-ADDRESS',
@@ -38,7 +38,7 @@ ORDER = dict(id='3', order_no='ORDER-3', product_name='parcel', quantity=1,
 
 
 def page(items):
-    return dict(items=items, page=1, page_size=10, total=len(items), simulation_time=TIME)
+    return dict(items=items, page=1, page_size=10, total=len(items), server_time=TIME)
 
 
 def call(name, args=None, ident='call1'):
@@ -342,7 +342,7 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         for route, status, delay, minutes in [('AB', 'IN_TRANSIT', 'OVERDUE', 10), ('AB', 'ARRIVED', 'LATE_ARRIVAL', 8), ('BC', 'IN_TRANSIT', 'NOT_APPLICABLE', None), ('AB', 'IN_TRANSIT', 'NONE', 0)]:
             data = validate_response({**TASK, 'route_code': route, 'status': status, 'delay_status': delay, 'delay_minutes': minutes}, 'task')
             self.assertEqual(data['delay_status'], delay)
-        for field, value in [('id', 7), ('delay_minutes', True), ('shipments', None), ('simulation_time', 'no-date')]:
+        for field, value in [('id', 7), ('delay_minutes', True), ('shipments', None), ('server_time', 'no-date')]:
             with self.assertRaises(ValueError):
                 validate_response({**TASK, field: value}, 'task')
 

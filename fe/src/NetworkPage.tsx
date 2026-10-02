@@ -1,3 +1,4 @@
+import { fuzzySelectFilter } from './fuzzySearch'
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -189,8 +190,8 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   <Modal title={editingRoute ? `编辑运输线路 ${editingRoute.code}` : '新增运输线路'} open={routeModal} onCancel={() => { setRouteModal(false); setEditingRoute(undefined) }} onOk={() => routeForm.submit()} confirmLoading={busy} destroyOnHidden>
     <Form form={routeForm} layout="vertical" initialValues={{ enabled: true, delay_monitoring_enabled: false }} onFinish={values => void saveRoute(values)}>
       {!editingRoute && <><Form.Item name="code" label="线路编码" rules={[{ required: true, message: '请输入编码' }, { pattern: /^[A-Z0-9][A-Z0-9_-]{0,31}$/, message: '使用大写字母、数字、下划线或连字符，最多 32 位' }]}><Input maxLength={32} placeholder="例如 ROUTE_AB" /></Form.Item>
-        <Form.Item name="origin_station_id" label="起点站" rules={[{ required: true, message: '请选择起点站' }]}><Select options={stations.filter(item => item.enabled).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))} placeholder="选择启用站点" /></Form.Item>
-        <Form.Item name="destination_station_id" label="终点站" rules={[{ required: true, message: '请选择终点站' }]}><Select options={stations.filter(item => item.enabled).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))} placeholder="选择启用站点" /></Form.Item></>}
+        <Form.Item name="origin_station_id" label="起点站" rules={[{ required: true, message: '请选择起点站' }]}><Select showSearch filterOption={fuzzySelectFilter} options={stations.filter(item => item.enabled).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))} placeholder="选择启用站点" /></Form.Item>
+        <Form.Item name="destination_station_id" label="终点站" rules={[{ required: true, message: '请选择终点站' }]}><Select showSearch filterOption={fuzzySelectFilter} options={stations.filter(item => item.enabled).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))} placeholder="选择启用站点" /></Form.Item></>}
       <Form.Item name="travel_minutes" label="参考运输时长（分钟）" rules={editingRoute?.travel_minutes != null ? [{ required: true, message: '已设置的参考时长不能清空' }] : []}><InputNumber min={1} max={525600} precision={0} style={{ width: '100%' }} placeholder="可留空，后续计划由人工补全" /></Form.Item>
       <Form.Item name="enabled" label="启用线路" valuePropName="checked"><Switch /></Form.Item>
       <Form.Item name="delay_monitoring_enabled" label="启用延误监测" valuePropName="checked"><Switch /></Form.Item>

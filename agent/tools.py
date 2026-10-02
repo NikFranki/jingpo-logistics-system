@@ -318,7 +318,7 @@ def create_shipment_tracking_tool(base_url: str):
                 _record_request(result, response)
                 task = response["data"]
                 summary = _task_summary(task)
-                summary["simulation_time"] = task["simulation_time"]
+                summary["server_time"] = task["server_time"]
                 result["data"]["tasks"].append(summary)
         return result
 
@@ -369,7 +369,7 @@ def create_transport_task_search_tool(base_url: str):
         page: int = 1,
         page_size: int = 10,
     ) -> dict:
-        """按完整任务号、线路编码、任务状态筛选运输任务，返回分页、演示时间和 BE 延误结果。"""
+        """按完整任务号、线路编码、任务状态筛选运输任务，返回分页、服务器时间和 BE 延误结果。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
@@ -382,7 +382,7 @@ def create_transport_task_search_tool(base_url: str):
         data = response["data"]
         result["data"] = {
             "items": [_task_summary(item) for item in data["items"]],
-            "simulation_time": data["simulation_time"],
+            "server_time": data["server_time"],
         }
         result["meta"]["pagination"] = _pagination(data)
         if not data["items"]:
@@ -412,7 +412,7 @@ def create_transport_task_detail_tool(base_url: str):
                     result["status"] = "empty" if page["total"] == 0 else "ambiguous"
                     result["data"] = {
                         "candidates": [_task_summary(item) for item in page["items"]],
-                        "simulation_time": page["simulation_time"],
+                        "server_time": page["server_time"],
                     }
                     result["meta"]["pagination"] = _pagination(page)
                     result["warnings"].append("未确认唯一任务，请核对完整编号或通过列表翻页选择明确 ID。")
@@ -429,7 +429,7 @@ def create_transport_task_detail_tool(base_url: str):
         result["data"].update({
             "origin_station_id": task["origin_station_id"],
             "destination_station_id": task["destination_station_id"],
-            "simulation_time": task["simulation_time"],
+            "server_time": task["server_time"],
             "shipments": [
                 {key: item[key] for key in ("id", "shipment_no", "stage")}
                 for item in task["shipments"]

@@ -1,3 +1,4 @@
+import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Modal, Radio, Select, Space, Table, Typography } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -122,7 +123,7 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
         const pathLabel = stationPath.length ? [stationPath[0]!.origin.name, ...stationPath.map(route => route!.destination.name)].join(' → ') : item.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')
         return { value: item.id, label: <span><Text strong>{pathLabel}</Text><br /><Text type="secondary">{item.code} · {item.name} · {routeLabels.length} 段</Text></span> }
       })} /></Form.Item>}
-      {!options?.path.anchor_station_id && (mode === 'routes' || !options?.plans.length) && <Form.Item name="origin_station_id" label="计划起点" rules={[{ required: true, message: '请选择计划起点' }]}><Select placeholder="选择首次入站前的计划起点" options={routes.map(route => route.origin).concat(routes.map(route => route.destination)).filter((station, index, all) => all.findIndex(item => item.id === station.id) === index && station.enabled && station.allows_first_arrival).map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} /></Form.Item>}
+      {!options?.path.anchor_station_id && (mode === 'routes' || !options?.plans.length) && <Form.Item name="origin_station_id" label="计划起点" rules={[{ required: true, message: '请选择计划起点' }]}><Select showSearch filterOption={fuzzySelectFilter} placeholder="选择首次入站前的计划起点" options={routes.map(route => route.origin).concat(routes.map(route => route.destination)).filter((station, index, all) => all.findIndex(item => item.id === station.id) === index && station.enabled && station.allows_first_arrival).map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} /></Form.Item>}
       {(mode === 'routes' || !options?.plans.length) && <RouteSequenceEditor name="route_ids" routes={routes} title="完整运输路径" emptyText="从计划起点或接续站开始，逐段添加线路。" anchorStationId={options?.path.anchor_station_id ?? undefined} destinationStationId={shipment.destination_station_id} />}
       {!preview && !options?.path.anchor_station_id && <Form.Item name="planned_origin_arrival_at" label="计划起点入站时间（可选）"><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>}
       {!preview && <Form.Item name="first_departure_at" label="首段计划出发时间（可选；默认由后端建议）"><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>}

@@ -66,7 +66,8 @@ class V4MigrationTests(unittest.TestCase):
                 TransportTaskResponse.model_validate(body)
                 self.assertIsNone(body['cancelled_at'])
                 if 'allowed_actions' in body:
-                    TransportTaskDetailResponse.model_validate(body)
+                    from business_time import normalize_cached_response
+                    TransportTaskDetailResponse.model_validate(normalize_cached_response(body))
                     self.assertFalse(next(a for a in body['allowed_actions'] if a['action']=='CANCEL')['enabled'])
             else:
                 ShipmentDetailResponse.model_validate(body)

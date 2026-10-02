@@ -31,7 +31,7 @@ class TrackingEventResponse(BaseModel):
 class ShipmentCreateRequest(BaseModel):
     scheduling_mode: Literal["LEGACY", "REVIEWED"] = "REVIEWED"
     model_config = ConfigDict(extra="forbid")
-    destination_station_id: int = Field(gt=0, strict=True)
+    destination_station_id: int | None = Field(default=None, gt=0, strict=True)
 
 
 class ShipmentResponse(AddressResponse):

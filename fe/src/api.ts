@@ -6,6 +6,7 @@ export type Action = { action: string; enabled: boolean; reason_code: string | n
 export type AddressSnapshot = { sender_province_id?: string | null; sender_province_name?: string | null; sender_city_id?: string | null; sender_city_name?: string | null; sender_district_id?: string | null; sender_district_name?: string | null; recipient_province_id?: string | null; recipient_province_name?: string | null; recipient_city_id?: string | null; recipient_city_name?: string | null; recipient_district_id?: string | null; recipient_district_name?: string | null }
 export type Order = AddressSnapshot & { id: string; order_no: string; product_name: string; quantity: number; sender_name: string; sender_address: string; recipient_name: string; recipient_address: string; region_code: string; status: string; created_at: string; updated_at: string }
 export type OrderDetail = Order & { shipment: { id: string; shipment_no: string; stage: Stage } | null }
+export type DestinationMatch = { status: 'MATCHED' | 'NOT_FOUND' | 'CONFLICT' | 'ADDRESS_REQUIRED' | 'INVALID_ADDRESS' | 'EXISTING_SHIPMENT'; reason: string | null; destination_station: Station | null; matched_level: 'PROVINCE' | 'CITY' | 'DISTRICT' | null; service_area_id: string | null }
 export type AdministrativeRegion = { id: string; code: string; name: string; level: 'PROVINCE' | 'CITY' | 'DISTRICT'; province_id: string | null; city_id: string | null; kind: string | null; has_cities?: boolean; has_districts?: boolean }
 export type Shipment = AddressSnapshot & { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; destination_station_id: string; last_scanned_station_id: string | null; created_at: string; updated_at: string; scheduling_mode?: 'LEGACY' | 'REVIEWED'; schedule_status?: ScheduleStatus | null; schedule_version?: number }
 export type ScheduleStatus = 'NOT_CONFIRMED' | 'CONFIRMED' | 'NEEDS_RECONFIRMATION' | 'BLOCKED' | 'COMPLETED'
@@ -157,7 +158,8 @@ export const api = {
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
   updateOrder: (id: string, body: OrderInput, key?: string) => write<Order>(`/api/v1/orders/${id}`, 'PATCH', body, key),
-  createShipment: (orderId: string, destination_station_id: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { destination_station_id, scheduling_mode: 'REVIEWED' }, key),
+  destinationMatch: (orderId: string) => request<DestinationMatch>(`/api/v1/orders/${orderId}/destination-match`),
+  createShipment: (orderId: string, destination_station_id?: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { ...(destination_station_id ? { destination_station_id } : {}), scheduling_mode: 'REVIEWED' }, key),
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   shipmentPath: (id: string) => request<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`),

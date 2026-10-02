@@ -1,8 +1,20 @@
 # BE
 
+## 服务器时间（取代模拟时钟）
+
+揽收、收货入站、发车、到达、派送、签收及其他操作，均由后端在执行时记录服务器 UTC 时间。延误和预测使用服务器当前时间；计划时间仍由用户审核。前端已移除演示时钟与推进时间入口。
+
+新增迁移 `c84e2b19a607`（接 `30ec3dbeb8ac`）删除模拟时钟表，保留历史业务时间。部署需停止旧服务、备份、迁移并重启；开发库尚未执行本次迁移。`GET /api/v1/server-time` 及任务/计划响应的观察时间字段统一为 `server_time`。详细契约见 [服务器时间说明](../docs/技术方案/server-time.md)。
+
+## 站点服务范围与自动目的站
+
+新增 `station_service_areas`，配置站点负责的省、市或区县。创建运单时 `destination_station_id` 可省略，按订单收件区域自动匹配；`GET /api/v1/orders/{id}/destination-match` 可先预览。区县优先于城市和省级，没有匹配或配置冲突时明确报错，已有运单不随配置变化改站。
+
+开发库已备份并独立升级到 `d18a64b3902f`，44 条城市站演示范围已初始化；未执行待处理的模拟时钟删除迁移。前端配置与自动创建入口由其负责方接入。详细接口、部署命令与检查记录见 [站点服务范围说明](../docs/技术方案/v7/be/station-service-areas.md)。
+
 ## 国内地址库
 
-新增 `provinces`、`cities`、`districts` 三表与省市区只读查询，区县可直接归属省级。地址库迁移为 `77292ad0db58`（接 V7），随后订单/运单已接入寄收区域字段和名称快照，当前开发库为 `30ec3dbeb8ac`，已备份升级并恢复服务。全国区域数据已于 2026-10-02 初始化：34 个省级、355 个市级、3,241 个区县（含港澳台，首次导入后补齐乌苏市、沙湾市）。可用 `python -m regions.seed --dry-run` 检查，`python -m regions.seed` 初始化其他环境；先配置 DATABASE_URL 并备份。站点服务范围尚未接入。结构、接口、特殊层级及发布状态见 [地址库说明](../docs/技术方案/v7/be/address-library.md)。
+新增 `provinces`、`cities`、`districts` 三表与省市区只读查询，区县可直接归属省级。地址库迁移为 `77292ad0db58`（接 V7），随后订单/运单已接入寄收区域字段和名称快照，地址字段迁移为 `30ec3dbeb8ac`，已备份升级并恢复服务。全国区域数据已于 2026-10-02 初始化：34 个省级、355 个市级、3,241 个区县（含港澳台，首次导入后补齐乌苏市、沙湾市）。可用 `python -m regions.seed --dry-run` 检查，`python -m regions.seed` 初始化其他环境；先配置 DATABASE_URL 并备份。站点服务范围与自动匹配已接入，见下节。结构、接口、特殊层级及发布状态见 [地址库说明](../docs/技术方案/v7/be/address-library.md)。
 
 订单与运单新地址字段和提交示例见 [结构化地址契约](../docs/技术方案/v7/be/structured-addresses.md)。本轮没有新增或运行功能测试。
 
@@ -72,7 +84,7 @@ DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" \
   ./.venv/bin/python -m alembic check
 ```
 
-48 项联合测试通过，结构检查无差异。测试库需先升级 head，原 V2 回归需要后文 A/B/C 网络与时钟；测试样本自行配置完整方案。迁移演练需 CREATE DATABASE 权限，自动清理自己创建的临时库；不启用 RUN_V2_MIGRATION_TESTS 时 8 项迁移测试跳过。客户端适配和页面/Agent 验收由其负责方完成。
+48 项联合测试通过，结构检查无差异。测试库需先升级 head，原 V2 回归需要后文 A/B/C 网络；测试样本自行配置完整方案。迁移演练需 CREATE DATABASE 权限，自动清理自己创建的临时库；不启用 RUN_V2_MIGRATION_TESTS 时 8 项迁移测试跳过。客户端适配和页面/Agent 验收由其负责方完成。
 
 ## V5 运单目的站更正（后端已实现）
 
@@ -87,7 +99,7 @@ DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" \
 两个 ID 必须为正整数，原因去首尾空白后为 1～500 字符。原目的站与当前不一致，或新站未变化，返回 409。相同 key 同内容重试返回首次缓存；不同内容返回 409。更正为当前所在站后允许开始派送，不自动派送。
 
 - 运单详情 `allowed_actions` 新增 `UPDATE_DESTINATION`，不可用时区分阶段限制与任务占用。
-- `GET /api/v1/shipments/{id}/destination-changes?page=1&page_size=20` 返回原站、新站、原因、演示时间；不是物流轨迹。
+- `GET /api/v1/shipments/{id}/destination-changes?page=1&page_size=20` 返回原站、新站、原因、服务器时间；不是物流轨迹。
 
 **本版没有数据库迁移**，结构版本仍为 `d92f4b76e301`。历史幂等缓存不回写，客户端操作成功后重新 GET 详情取得当前资格。现有本地后端使用 reload，可自动加载代码；其他环境需重启进程。没有自动更正开发库中的运单。
 
@@ -130,7 +142,7 @@ DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v4_test" \
   ./.venv/bin/python -m alembic check
 ```
 
-测试库需升级到 head 并初始化演示网络与时钟（见后文）。迁移演练自动创建和清理临时库，需要 CREATE DATABASE 权限；HTTP 测试自动管理测试服务。未启用迁移演练时 6 项迁移测试跳过。禁止用开发库执行测试。
+测试库需升级到 head 并初始化演示网络（见后文）。迁移演练自动创建和清理临时库，需要 CREATE DATABASE 权限；HTTP 测试自动管理测试服务。未启用迁移演练时 6 项迁移测试跳过。禁止用开发库执行测试。
 
 ## V3 可配置网络
 
@@ -165,7 +177,7 @@ export DATABASE_URL="postgresql+psycopg:///jingpo_logistics"
 
 ### 验证
 
-隔离的 `*_test` PostgreSQL 库须先升级到 head 并初始化演示时钟。原有 V2 回归测试还需要 A/B/C、AB/BC（初始化 SQL 见后文）：
+隔离的 `*_test` PostgreSQL 库须先升级到 head 。原有 V2 回归测试还需要 A/B/C、AB/BC（初始化 SQL 见后文）：
 
 ```bash
 DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v3_test" RUN_V2_MIGRATION_TESTS=1 \
@@ -228,7 +240,7 @@ python -m alembic init migrations
 python -m alembic current
 
 # 根据模型（models.py）生成迁移文件
-python -m alembic revision --autogenerate -m "create simulation settings"
+python -m alembic revision --autogenerate -m "describe model change"
 
 # 预览迁移 SQL
 python -m alembic upgrade head --sql
@@ -240,11 +252,7 @@ python -m alembic upgrade head
 psql -d jingpo_logistics
 
 # 查看表结构
-psql -d jingpo_logistics -c '\d simulation_settings'
-
-# 初始化时钟
-psql -d jingpo_logistics -c \
-"INSERT INTO simulation_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;"
+psql -d jingpo_logistics -c '\d shipments'
 
 # 设置 cors origin
 export CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
@@ -295,7 +303,7 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-### 初始化固定演示网络与时钟
+### 初始化固定演示网络
 
 新库迁移只创建结构。首次运行时在当前 `DATABASE_URL` 所指数据库执行以下 SQL；已有网络不用重复初始化：
 
@@ -309,7 +317,6 @@ FROM (VALUES ('AB', 'A', 'B'), ('BC', 'B', 'C')) AS route(code, source, target)
 JOIN stations origin ON origin.code = route.source
 JOIN stations destination ON destination.code = route.target
 ON CONFLICT (code) DO NOTHING;
-INSERT INTO simulation_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 ```
 
 测试库也需要此初始化；迁移测试自身会准备独立样本。

@@ -27,4 +27,4 @@ class V7MigrationTests(unittest.TestCase):
             indexes = {row.indexname: row.indexdef for row in conn.execute(text("SELECT indexname,indexdef FROM pg_indexes WHERE tablename='task_shipments'"))}
             self.assertIn('association_state', indexes['uq_task_shipments_active'])
             self.assertIn('PLANNED', indexes['uq_task_shipments_active_leg'])
-            self.assertEqual(conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one(), 'c84e2b19a607')
+            self.assertEqual(conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one(), helpers.HEAD)

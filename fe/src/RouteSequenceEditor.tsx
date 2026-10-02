@@ -1,3 +1,4 @@
+import { fuzzySelectFilter } from './fuzzySearch'
 import { Button, Form, Select, Space, Typography } from 'antd'
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TransportRoute } from './api'
@@ -50,7 +51,7 @@ export function RouteSequenceEditor({ name, routes, title, emptyText = '添加�
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                 <Text type="secondary" style={{ width: 48, flexShrink: 0 }}>第 {index + 1} 段</Text>
                 <Form.Item name={field.name} rules={[{ required: true, message: '请选择这段线路' }]} style={{ margin: 0, flex: 1, minWidth: 0 }}>
-                  <Select showSearch optionFilterProp="label" placeholder="选择线路" options={routes.map(route => ({ value: String(route.id), disabled: !allowDisabled && !route.enabled, label: `${route.code} · ${route.origin.code} → ${route.destination.code}${route.enabled ? '' : '（停用）'}` }))} />
+                  <Select showSearch filterOption={fuzzySelectFilter} placeholder="选择线路" options={routes.map(route => ({ value: String(route.id), disabled: !allowDisabled && !route.enabled, label: `${route.code} · ${route.origin.code} → ${route.destination.code}${route.enabled ? '' : '（停用）'}` }))} />
                 </Form.Item>
               </div>
               <Space size={0}>

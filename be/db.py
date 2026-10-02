@@ -13,7 +13,7 @@ class Base(DeclarativeBase):
     pass
 
 # 管理数据库连接
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, connect_args={"options": "-c timezone=UTC"})
 
 # 一次请求操作数据库的工作区
 SessionLocal = sessionmaker(bind=engine)

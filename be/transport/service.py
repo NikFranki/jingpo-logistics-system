@@ -580,12 +580,13 @@ def depart_transport_task(
 
         session.flush()
 
-        response_body = build_task_response(
+        response_body = build_task_detail_response(
             task=task,
             route=route,
             origin=origin_station,
             destination=destination_station,
             shipments=shipments,
+            server_time=clock,
         )
 
         operation_log.after_data = {
@@ -778,12 +779,13 @@ def arrive_transport_task(
                 activate_next(session, shipment, clock, operation_log)
             else:
                 auto_bind_path(session, shipment, clock)
-        response_body = build_task_response(
+        response_body = build_task_detail_response(
             task=task,
             route=route,
             origin=origin_station,
             destination=destination_station,
             shipments=shipments,
+            server_time=clock,
         )
 
         operation_log.after_data = {

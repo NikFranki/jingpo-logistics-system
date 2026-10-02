@@ -61,7 +61,7 @@ class V6MigrationTests(unittest.TestCase):
         with Session(self.engine) as session:
             unplanned=self.shipments['AT_B']
             with self.assertRaises(InvalidTaskShipmentError):
-                create_transport_task(session,TransportTaskCreateRequest(route_code='BC',expected_arrival_at=clock+timedelta(days=1),shipment_ids=[unplanned]),uuid4())
+                create_transport_task(session,TransportTaskCreateRequest(route_code='BC',expected_arrival_at=__import__('business_time').server_now()+timedelta(days=1),shipment_ids=[unplanned]),uuid4())
         # Existing pending tasks continue without inventing a path retroactively.
         with Session(self.engine) as session: depart_transport_task(session,task_id,uuid4())
         with Session(self.engine) as session: arrive_transport_task(session,task_id,uuid4())
@@ -89,7 +89,7 @@ class V6MigrationTests(unittest.TestCase):
         # A legacy parcel already at B can adopt a whole remaining path before its next task.
         with Session(self.engine) as session:
             next_task=create_transport_task(session,TransportTaskCreateRequest(route_code='BC',
-                expected_arrival_at=clock+timedelta(days=1),shipment_ids=[unplanned]),uuid4())
+                expected_arrival_at=__import__('business_time').server_now()+timedelta(days=1),shipment_ids=[unplanned]),uuid4())
         self.assertEqual(next_task['route_code'],'BC')
 
     def test_empty_database_reaches_v6_without_fabricated_paths(self):

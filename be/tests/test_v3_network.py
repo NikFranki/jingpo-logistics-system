@@ -1,3 +1,4 @@
+import business_time
 """V3 network configuration and shipment invariants on an isolated *_test DB."""
 import os
 import unittest
@@ -44,7 +45,7 @@ class V3NetworkTests(unittest.TestCase):
             self.call(write_plan,PathPlanCreateRequest(code=self.prefix+'_'+suffix,name=suffix,
                 route_ids=route_ids),uuid4())
         with SessionLocal() as session:
-            self.clock = session.get(1).current_time
+            self.clock = business_time.server_now()
 
     def station(self, code, first=False, delivery=False):
         return self.call(write_network, 'STATION', StationCreateRequest(

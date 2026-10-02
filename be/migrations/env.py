@@ -7,7 +7,7 @@ from alembic import context
 
 from config import DATABASE_URL
 from db import Base
-# import models 的作用是让 SimulationSettings 注册到 Base
+# 导入模型以注册全部表结构，供 Alembic 检查和生成迁移。
 import models
 
 # this is the Alembic Config object, which provides

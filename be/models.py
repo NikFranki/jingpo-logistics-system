@@ -601,3 +601,23 @@ class District(RegionFields, Base):
     )
     province_id: Mapped[int] = mapped_column(ForeignKey('provinces.id', ondelete='RESTRICT'))
     city_id: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class StationServiceArea(Base):
+    __tablename__ = 'station_service_areas'
+    __table_args__ = (
+        ForeignKeyConstraint(['city_id', 'province_id'], ['cities.id', 'cities.province_id'],
+                             name='fk_service_areas_city_province', ondelete='RESTRICT'),
+        Index('ix_service_areas_station', 'station_id'),
+        Index('uq_service_areas_enabled_region', 'province_id',
+              text('COALESCE(city_id, 0)'), text('COALESCE(district_id, 0)'),
+              unique=True, postgresql_where=text('enabled')),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    station_id: Mapped[int] = mapped_column(ForeignKey('stations.id', ondelete='RESTRICT'))
+    province_id: Mapped[int] = mapped_column(ForeignKey('provinces.id', ondelete='RESTRICT'))
+    city_id: Mapped[int | None] = mapped_column(BigInteger)
+    district_id: Mapped[int | None] = mapped_column(ForeignKey('districts.id', ondelete='RESTRICT'))
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text('true'))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

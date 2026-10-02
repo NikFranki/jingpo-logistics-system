@@ -1,3 +1,4 @@
+import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Radio, Select, Space, Spin, Table, Tabs, Tag, Timeline, Typography } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
@@ -23,7 +24,7 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   useEffect(() => { actionRef.current?.reload() }, [revision])
   const columns: ProColumns<Shipment>[] = [
     { title: '运单号', dataIndex: 'shipment_no', copyable: true, width: 170 },
-    { title: '阶段', dataIndex: 'stage', valueEnum: Object.fromEntries(Object.entries(stageText).map(([key, text]) => [key, { text }])) },
+    { title: '阶段', dataIndex: 'stage', fieldProps: { showSearch: true, filterOption: fuzzySelectFilter }, valueEnum: Object.fromEntries(Object.entries(stageText).map(([key, text]) => [key, { text }])) },
     { title: '当前站点', dataIndex: 'last_scanned_station_id', search: false, render: (_, row) => row.last_scanned_station_id ? <StationName id={row.last_scanned_station_id} /> : '—' },
     { title: '目的站', dataIndex: 'destination_station_id', search: false, render: (_, row) => <StationName id={row.destination_station_id} /> },
     { title: '最近更新', dataIndex: 'updated_at', valueType: 'dateTime', search: false },
@@ -305,7 +306,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         </Space>
         {destinationAction && !destinationAction.enabled && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>{destinationAction.reason ?? '当前运单暂不可更正目的站。'}</Text>}
         {!destinationAction && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>后端未返回目的站更正资格，请刷新运单后重试。</Text>}
-        {detail.stage === 'PICKED_UP' && <><Form.Item label="首次入站站点" style={{ marginBottom: 12, maxWidth: 360 }}><Select value={firstStation} onChange={setFirstStation} options={network.stations.filter(s => s.enabled && s.allows_first_arrival).map(s => ({ value: s.id, label: s.code + ' · ' + s.name }))} placeholder="选择包裹实际进入的站点" /></Form.Item><Button type="primary" disabled={busy || !firstStation || !actionEnabled('ARRIVE')} onClick={() => runEvent('ARRIVE')}>确认入站</Button></>}
+        {detail.stage === 'PICKED_UP' && <><Form.Item label="首次入站站点" style={{ marginBottom: 12, maxWidth: 360 }}><Select showSearch filterOption={fuzzySelectFilter} value={firstStation} onChange={setFirstStation} options={network.stations.filter(s => s.enabled && s.allows_first_arrival).map(s => ({ value: s.id, label: s.code + ' · ' + s.name }))} placeholder="选择包裹实际进入的站点" /></Form.Item><Button type="primary" disabled={busy || !firstStation || !actionEnabled('ARRIVE')} onClick={() => runEvent('ARRIVE')}>确认入站</Button></>}
         {detail.stage === 'AT_STATION' && actionEnabled('START_DELIVERY') && <Space wrap><Button type="primary" disabled={busy} onClick={() => runEvent('START_DELIVERY')}>开始派送</Button><Text type="secondary">运单已到达目的站，可以交给末端配送。</Text></Space>}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && detail.active_transport_task && <Alert type="info" showIcon message="运单正在等待或进行站间运输" description={<Space wrap><span><StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></span><Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button></Space>} />}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && actionEnabled('CREATE_TRANSPORT_TASK') && <Alert type="info" showIcon message="运单已准备好进入下一段运输" description={<Space wrap><span>下一段线路：<Text strong>{currentPath?.next_route_code ?? '尚未确定'}</Text>；到达目的站后才能开始派送。</span><Button type="primary" onClick={openNextTask}>按下一段创建运输任务</Button></Space>} />}
@@ -351,7 +352,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         return Boolean(result)
       }}><ProFormText name="sender_address" label="发件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /><ProFormText name="recipient_address" label="收件地址" rules={[{ required: true }]} fieldProps={{ maxLength: 500 }} /></ModalForm>
       <ModalForm<{ route_code: string; expected_arrival_at: string }> title="创建运输任务" open={taskOpen} onOpenChange={setTaskOpen} form={taskForm} modalProps={{ destroyOnHidden: true }} onFinish={openTask}>
-        <ProFormSelect name="route_code" label="路径下一段线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled && r.code === currentPath?.next_route_code).map(r => ({ value: r.code, label: r.code + ' · ' + r.origin.code + ' → ' + r.destination.code }))} rules={[{ required: true }]} fieldProps={{ placeholder: '按完整路径自动确定', notFoundContent: '当前路径没有可创建的下一段' }} />
+        <ProFormSelect name="route_code" label="路径下一段线路" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled && r.code === currentPath?.next_route_code).map(r => ({ value: r.code, label: r.code + ' · ' + r.origin.code + ' → ' + r.destination.code }))} rules={[{ required: true }]} fieldProps={{ showSearch: true, filterOption: fuzzySelectFilter, placeholder: '按完整路径自动确定', notFoundContent: '当前路径没有可创建的下一段' }} />
         <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => date.isBefore(dayjs(), 'day') }} />
         <Text type="secondary">此任务只创建当前下一段。提交时会带上路径版本，后端会再次检查线路、运单位置和版本是否仍有效。</Text>
       </ModalForm>
@@ -372,7 +373,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           {pathOptions.plans.length === 0 && <Alert type="info" showIcon message="当前没有匹配的可用方案，可按顺序选择线路组成完整路径。" style={{ marginBottom: 16 }} />}
           <Form form={pathForm} layout="vertical">
             {pathOptions.plans.length > 0 && <Form.Item name="mode" label="路径来源"><Radio.Group options={[{ label: '使用完整路径方案', value: 'plan' }, { label: '手动选择线路', value: 'routes' }]} /></Form.Item>}
-            {pathMode === 'plan' && <Form.Item name="plan_id" label="完整路径方案" rules={[{ required: true, message: '请选择一个路径方案' }]}><Select options={pathOptions.plans.map(plan => ({ value: plan.id, label: `${plan.code} · ${plan.name} · ${plan.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')}` }))} placeholder="选择一次性采用的完整方案" /></Form.Item>}
+            {pathMode === 'plan' && <Form.Item name="plan_id" label="完整路径方案" rules={[{ required: true, message: '请选择一个路径方案' }]}><Select showSearch filterOption={fuzzySelectFilter} options={pathOptions.plans.map(plan => ({ value: plan.id, label: `${plan.code} · ${plan.name} · ${plan.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')}` }))} placeholder="选择一次性采用的完整方案" /></Form.Item>}
             {(pathMode === 'routes' || pathOptions.plans.length === 0) && <RouteSequenceEditor name="route_ids" routes={network.routes} title="逐段配置未来路径" emptyText="从接续站开始添加线路，直到运单目的站。" anchorStationId={pathOptions.path.anchor_station_id ?? undefined} destinationStationId={detail.destination_station_id} />}
             <Form.Item name="reason" label="调整原因" rules={[{ required: true, whitespace: true, message: '请填写安排原因' }, { max: 500, message: '最多 500 个字符' }]}><Input.TextArea maxLength={500} showCount rows={3} placeholder="说明为什么采用或调整这条路径" /></Form.Item>
           </Form>
@@ -414,7 +415,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
               <Text><StationName id={detail.destination_station_id} /></Text>
             </Form.Item>
             <Form.Item name="destination_station_id" label="新的目的站" rules={[{ required: true, message: '请选择新的目的站' }]}>
-              <Select showSearch optionFilterProp="label" options={deliveryStations.map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} placeholder="选择启用且允许派送的站点" notFoundContent="没有可选择的其他派送站点" />
+              <Select showSearch filterOption={fuzzySelectFilter} options={deliveryStations.map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} placeholder="选择启用且允许派送的站点" notFoundContent="没有可选择的其他派送站点" />
             </Form.Item>
             <Form.Item name="reason" label="更正原因" rules={[{ required: true, whitespace: true, message: '请填写更正原因' }, { max: 500, message: '更正原因不能超过 500 个字符' }]}>
               <Input.TextArea maxLength={500} showCount rows={3} placeholder="说明为什么需要更正目的站" />

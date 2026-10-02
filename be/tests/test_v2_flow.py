@@ -1,3 +1,4 @@
+import business_time
 """PostgreSQL integration checks for the V2 shipment state machine.
 
 Run with DATABASE_URL pointing to an isolated, migrated *_test database.
@@ -72,7 +73,7 @@ class V2FlowTests(unittest.TestCase):
         shipment_id = int(shipment["id"])
         with SessionLocal() as session:
             station_a = session.scalar(select(Station.id).where(Station.code == "A"))
-            clock = session.get(1).current_time
+            clock = business_time.server_now()
         self.call(process_shipment_event, shipment_id, ShipmentEventRequest(event_type="PICKUP"), uuid4())
         self.call(process_shipment_event, shipment_id, ShipmentEventRequest(event_type="ARRIVE", station_id=str(station_a)), uuid4())
 
@@ -117,12 +118,12 @@ class V2FlowTests(unittest.TestCase):
     @staticmethod
     def _clock():
         with SessionLocal() as session:
-            return session.get(1).current_time
+            return business_time.server_now()
 
     def test_arrival_rolls_back_every_shipment_on_event_failure(self):
         with SessionLocal() as session:
             station_a = session.scalar(select(Station.id).where(Station.code == "A"))
-            clock = session.get(1).current_time
+            clock = business_time.server_now()
         shipment_ids = []
         for number in (1, 2):
             order = self.call(
@@ -214,7 +215,7 @@ class V2FlowTests(unittest.TestCase):
             station_ids = {
                 station.code: station.id for station in session.scalars(select(Station))
             }
-            clock = session.get(1).current_time
+            clock = business_time.server_now()
 
         with self.assertRaises(InvalidShipmentStateError):
             self.call(
