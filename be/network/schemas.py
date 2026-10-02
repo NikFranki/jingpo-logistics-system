@@ -11,6 +11,7 @@ class StationResponse(BaseModel):
     enabled: bool
     allows_first_arrival: bool
     allows_delivery: bool
+    transfer_minutes: int | None = None
 
 class TransportRouteResponse(BaseModel):
     id: str
@@ -19,8 +20,10 @@ class TransportRouteResponse(BaseModel):
     destination: StationResponse
     enabled: bool
     delay_monitoring_enabled: bool
+    travel_minutes: int | None = None
 
 class StationCreateRequest(BaseModel):
+    transfer_minutes: int | None = Field(default=None, ge=0, le=525600, strict=True)
     model_config = ConfigDict(extra="forbid")
     code: NetworkCode
     name: NetworkName
@@ -39,12 +42,14 @@ class PatchRequest(BaseModel):
         return self
 
 class StationUpdateRequest(PatchRequest):
+    transfer_minutes: int | None = Field(default=None, ge=0, le=525600, strict=True)
     name: NetworkName | None = None
     enabled: bool | None = Field(default=None, strict=True)
     allows_first_arrival: bool | None = Field(default=None, strict=True)
     allows_delivery: bool | None = Field(default=None, strict=True)
 
 class RouteCreateRequest(BaseModel):
+    travel_minutes: int | None = Field(default=None, gt=0, le=525600, strict=True)
     model_config = ConfigDict(extra="forbid")
     code: NetworkCode
     origin_station_id: int = Field(gt=0, strict=True)
@@ -53,5 +58,6 @@ class RouteCreateRequest(BaseModel):
     delay_monitoring_enabled: bool = Field(default=False, strict=True)
 
 class RouteUpdateRequest(PatchRequest):
+    travel_minutes: int | None = Field(default=None, gt=0, le=525600, strict=True)
     enabled: bool | None = Field(default=None, strict=True)
     delay_monitoring_enabled: bool | None = Field(default=None, strict=True)

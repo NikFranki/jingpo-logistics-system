@@ -27,6 +27,11 @@ flowchart LR
     BE --> DB[(PostgreSQL\n业务数据、轨迹与操作日志)]
     BE --> P[planning 模块\n完整路径、冻结前缀与版本]
     P --> DB
+    BE --> S[scheduling 模块\n审核时间、任务链与预测]
+    P --> S
+    S --> T[transport 模块\n真实执行与已有后段激活]
+    BE --> T
+    T --> DB
 ```
 
 模型不直接访问数据库。前端负责展示，业务状态、可执行操作和延误结果以 BE 为准。
@@ -54,7 +59,7 @@ flowchart LR
 | V4 发车前取消与业务操作归属（BE 已实现） | [V4 PRD](docs/prd/v4/JINGPO-logistics-system-v4.md)、[BE 规格](docs/技术方案/v4/be/spec.md)、[实施计划](docs/技术方案/v4/be/plan.md) |
 | V5 运单目的站更正（BE 已实现，FE 已适配） | [V5 PRD](docs/prd/v5/JINGPO-logistics-system-v5.md)、[BE 规格](docs/技术方案/v5/be/spec.md)、[BE 验收记录](docs/技术方案/v5/be/plan.md)、[FE 适配记录](docs/技术方案/v5/fe/plan.md) |
 | V6 完整运输路径与未来段调整（BE 已实现，FE 已接入） | [V6 PRD](docs/prd/v6/JINGPO-logistics-system-v6.md)、[BE 规格](docs/技术方案/v6/be/spec.md)、[BE 验收记录](docs/技术方案/v6/be/plan.md)、[FE 适配记录](docs/技术方案/v6/fe/plan.md) |
-| V7 运输计划审核与全段任务生成（方案草案） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[实施计划](docs/技术方案/v7/be/plan.md) |
+| V7 运输计划审核与全段任务生成（BE 已实现，FE 已接入待页面验收） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[BE 实施与验证](docs/技术方案/v7/be/plan.md)、[FE 适配与验证](docs/技术方案/v7/fe/plan.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
 
@@ -66,7 +71,7 @@ V5 BE 已实现目的站更正、原站前提校验、幂等和更正历史查�
 
 V6 BE 已实现可复用路径方案、运单独立路径与版本、下一段批量任务及未来调整；48 项联合后端测试和迁移检查通过。新增 planning 模块与 e61a7c93b204 迁移。开发库已于 2026-10-01 备份并升级到该版本，本地后端已启动，存活与数据库就绪检查通过；备份位于 `be/backups/jingpo_logistics_before_v6_20261001_134940.dump`。旧任务可继续，后续新任务按完整剩余路径校验。FE 已接入方案管理、运单路径规划/调整/历史和带路径版本的下一段批量创建；lint、构建及只读接口契约检查通过，页面操作走查仍待验收。Agent 适配由其负责方推进。
 
-V7 方案已按会话 `01a0f630-e7e5-70c2-a0b4-60b08ff2f56b` 的讨论与用户截图修订：选择路线生成各站时间预览，人工修改并确认后一次生成全部分段任务。拟新增 `scheduling` 模块负责审核、时间版本及任务链，transport 负责真实执行；未来关联与当前执行占用分开，实际到站激活已有后段。详细架构见 V7 BE 规格；当前架构图表示 V6 已实现结构，V7 代码、迁移和验收尚未开展。
+V7 BE 已按会话 `01a0f630-e7e5-70c2-a0b4-60b08ff2f56b` 的流程实现：运单选择完整路线，逐站时间预览并人工确认后生成全部分段任务。新增 scheduling 模块负责审核、时间版本、任务链及预测；transport 负责真实执行。未来 PLANNED 关联与当前 ACTIVE 占用分开，实际到站只激活已有后段。67 项后端联合检查全部通过，迁移模型无差异。开发库已备份并升级到 `f72d8a94c105`，原 13 张表旧字段/记录对账一致，后端就绪。FE 已接入参考耗时配置、逐站时间审核、全段任务展示和取消影响审核；lint 与构建通过。开发库没有 REVIEWED 演示样本，V7 页面写流程仍待隔离样本验收，详见 [V7 FE 适配记录](docs/技术方案/v7/fe/plan.md)。客户端契约见 [V7 接入说明](docs/技术方案/v7/be/client-contract.md)，BE 验收证据见 [V7 plan](docs/技术方案/v7/be/plan.md)。
 
 ## 每次交付怎么收尾
 

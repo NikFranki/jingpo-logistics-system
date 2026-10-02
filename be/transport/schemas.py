@@ -74,6 +74,14 @@ class TaskShipmentResponse(BaseModel):
 
 
 class TransportTaskResponse(BaseModel):
+    scheduling_source: str = "LEGACY"
+    planned_departure_at: datetime | None = None
+    forecast_arrival_at: datetime | None = None
+    forecast_departure_at: datetime | None = None
+    forecast_stale: bool = False
+    schedule_revision: int = 1
+    waiting_members: list[dict] = Field(default_factory=list)
+    cancel_impact: list[dict] = Field(default_factory=list)
     delay_monitoring_enabled: bool
     id: str
     task_no: str
@@ -110,6 +118,11 @@ class TransportTaskDetailResponse(TransportTaskResponse):
 
 
 class TransportTaskListItemResponse(BaseModel):
+    scheduling_source: str = "LEGACY"
+    planned_departure_at: datetime | None = None
+    forecast_arrival_at: datetime | None = None
+    forecast_stale: bool = False
+    schedule_revision: int = 1
     delay_monitoring_enabled: bool
     id: str
     task_no: str
@@ -132,7 +145,13 @@ class TransportTaskListResponse(BaseModel):
     page_size: int
     simulation_time: datetime
 
+class TransportTaskDepartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_schedule_revision: int | None = Field(default=None, gt=0, strict=True)
+
 class TransportTaskCancelRequest(BaseModel):
+    expected_schedule_revision: int | None = Field(default=None, gt=0, strict=True)
+    cancel_token: str | None = Field(default=None, max_length=8000000)
     model_config = ConfigDict(extra="forbid")
     reason: StrictStr
 
@@ -146,6 +165,9 @@ class TransportTaskCancelRequest(BaseModel):
 
 
 class ShipmentTaskHistoryItem(BaseModel):
+    association_state: str = 'RELEASED'
+    schedule_version: int | None = None
+    release_reason: str | None = None
     id: str
     task_no: str
     route_code: str

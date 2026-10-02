@@ -42,7 +42,10 @@ class V3ApiTests(unittest.TestCase):
         except subprocess.TimeoutExpired:
             cls.server.kill(); cls.server.wait()
 
-    def request(self,path,method='GET',body=None,key=None):
+    def request(self,path,method='GET',body=None,key=None,legacy=True):
+        # V3–V6 exercise the retained legacy flow; V7 explicitly requests REVIEWED.
+        if legacy and method == 'POST' and path.startswith('/orders/') and path.endswith('/shipment') and isinstance(body, dict) and 'destination_station_id' in body:
+            body = {'scheduling_mode': 'LEGACY', **body}
         headers={'Content-Type':'application/json'}
         if method!='GET':
             headers['Idempotency-Key']=key or str(uuid4())

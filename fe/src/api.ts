@@ -1,37 +1,48 @@
 export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED'
-export type TaskStatus = 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED' | 'CANCELLED'
+export type TaskStatus = 'WAITING_CARGO' | 'WAITING_PREDECESSOR' | 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED' | 'CANCELLED'
 export type RouteCode = string
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
 export type Action = { action: string; enabled: boolean; reason_code: string | null; reason: string | null }
 export type Order = { id: string; order_no: string; product_name: string; quantity: number; sender_name: string; sender_address: string; recipient_name: string; recipient_address: string; region_code: string; status: string; created_at: string; updated_at: string }
 export type OrderDetail = Order & { shipment: { id: string; shipment_no: string; stage: Stage } | null }
-export type Shipment = { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; destination_station_id: string; last_scanned_station_id: string | null; created_at: string; updated_at: string }
+export type Shipment = { id: string; shipment_no: string; order_id: string; sender_address: string; recipient_address: string; region_code: string; stage: Stage; destination_station_id: string; last_scanned_station_id: string | null; created_at: string; updated_at: string; scheduling_mode?: 'LEGACY' | 'REVIEWED'; schedule_status?: ScheduleStatus | null; schedule_version?: number }
+export type ScheduleStatus = 'NOT_CONFIRMED' | 'CONFIRMED' | 'NEEDS_RECONFIRMATION' | 'BLOCKED' | 'COMPLETED'
+export type AssociationState = 'PLANNED' | 'ACTIVE' | 'RELEASED'
 export type PathLegState = 'PENDING' | 'RESERVED' | 'IN_TRANSIT' | 'ARRIVED'
 export type TransportPathStatus = 'WAITING_FIRST_ARRIVAL' | 'NEEDS_PLANNING' | 'READY' | 'RESERVED' | 'IN_TRANSIT' | 'COMPLETED' | 'BLOCKED'
 export type PathLeg = { id: string; position: number; route_id: string; route_code: string; origin_station_id: string; destination_station_id: string; state: PathLegState; task_id: string | null }
 export type ShipmentTransportPath = { version: number; status: TransportPathStatus; anchor_station_id: string | null; destination_station_id: string; next_route_id: string | null; next_route_code: string | null; reason_code: string | null; reason: string | null; legs: PathLeg[] }
-export type PathPlan = { id: string; code: string; name: string; enabled: boolean; version: number; origin_station_id: string; destination_station_id: string; usable: boolean; reason: string | null; route_ids: string[] }
+export type PathPlan = { id: string; code: string; name: string; enabled: boolean; version: number; origin_station_id: string; destination_station_id: string; usable: boolean; reason: string | null; route_ids: string[]; transfer_overrides?: TransferOverride[] }
 export type PathOptions = { path: ShipmentTransportPath; plans: PathPlan[] }
 export type PathVersionLeg = Pick<PathLeg, 'id' | 'position' | 'route_id' | 'route_code' | 'origin_station_id' | 'destination_station_id'>
 export type PathVersion = { version: number; destination_station_id: string; source_plan_id: string | null; source_plan_version: number | null; reason: string; occurred_at: string; legs: PathVersionLeg[] }
 export type PathHistoryPage = Page<PathVersion>
 export type TrackingEvent = { id: string; event_type: string; occurred_at: string; station_id: string | null; task_id: string | null }
 export type ActiveTransportTask = { id: string; route_code: RouteCode; origin_station_id: string; destination_station_id: string; status: TaskStatus }
-export type ShipmentDetail = Shipment & { active_transport_task: ActiveTransportTask | null; tracking_events: TrackingEvent[]; allowed_actions: Action[]; path_version?: number; transport_path?: ShipmentTransportPath | null }
-export type TaskItem = { delay_monitoring_enabled: boolean; id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; cancelled_at: string | null; cancel_reason: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
-export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[]; cancelled_at: string | null; cancel_reason: string | null }
+export type ScheduleLeg = { planned_travel_minutes: number | null; approved_transfer_minutes: number | null; planned_origin_arrival_at: string | null; path_leg_id: string; position: number; route_id: string; route_code: string; origin_station_id: string; destination_station_id: string; task_id: string | null; association_id: string | null; planned_departure_at: string | null; planned_arrival_at: string | null; travel_reference_minutes: number | null; transfer_reference_minutes: number | null; scheduling_source: string | null; schedule_revision: number | null; forecast_departure_at: string | null; forecast_arrival_at: string | null; forecast_stale: boolean; waiting_members: { shipment_id: string; shipment_no?: string; reason?: string; ready_at?: string | null }[]; task_no: string | null; task_status: string | null; actual_departure_at: string | null; actual_arrival_at: string | null; association_state: AssociationState | null; ready_at: string | null }
+export type ScheduleResponse = { configuration_risks: { code?: string; message?: string; [key: string]: unknown }[]; shipment_id: string; scheduling_mode: string; status: ScheduleStatus; reason: string | null; path_version: number; version: number; origin_station_id: string | null; destination_station_id: string; legs: ScheduleLeg[]; simulation_time: string }
+export type SchedulePreviewLeg = { position: number; route_id: string; route_code: string; origin_station_id: string; destination_station_id: string; planned_departure_at: string | null; planned_arrival_at: string | null; travel_reference_minutes: number | null; transfer_reference_minutes: number | null; approved_transfer_minutes: number; planned_travel_minutes: number | null; shared_task_id: string | null; shared_task_revision: number | null; shared_members: string[] }
+export type SchedulePreview = { shipment_id: string; path_version: number; schedule_version: number; destination_station_id: string; anchor_station_id: string; stage: string; frozen_task_id: string | null; frozen_task_revision: number | null; anchor_arrival_at: string | null; source_plan_id: string | null; source_plan_version: number | null; legs: SchedulePreviewLeg[]; warnings: { code: string; message: string }[]; missing: { code?: string; message?: string; [key: string]: unknown }[]; replacements: { id: string; task_id: string; task_no?: string; [key: string]: unknown }[]; planned_origin_arrival_at: string | null; can_confirm: boolean; preview_token: string }
+export type ScheduleHistoryItem = { version: number; path_version: number; reason: string; occurred_at: string; legs: ScheduleLeg[]; source_plan_id: string | null; source_plan_version: number | null }
+export type ScheduleHistoryPage = Page<ScheduleHistoryItem>
+export type ShipmentDetail = Shipment & { scheduling_mode?: 'LEGACY' | 'REVIEWED'; schedule?: ScheduleResponse | null; active_transport_task: ActiveTransportTask | null; tracking_events: TrackingEvent[]; allowed_actions: Action[]; path_version?: number; transport_path?: ShipmentTransportPath | null }
+export type TaskItem = { scheduling_source?: 'LEGACY' | 'PLAN'; planned_departure_at: string | null; forecast_departure_at?: string | null; forecast_arrival_at?: string | null; forecast_stale?: boolean; schedule_revision?: number; waiting_members?: { shipment_id: string; shipment_no?: string; reason?: string; reason_code?: string; ready_at?: string | null }[]; delay_monitoring_enabled: boolean; id: string; task_no: string; route_code: RouteCode; status: TaskStatus; expected_arrival_at: string; departed_at: string | null; arrived_at: string | null; cancelled_at: string | null; cancel_reason: string | null; created_at: string; delay_status: string; delay_minutes: number | null }
+export type TaskDetail = Omit<TaskItem, 'delay_status' | 'delay_minutes'> & { origin_station_id: string; destination_station_id: string; shipments: { id: string; shipment_no: string; stage: Stage }[]; simulation_time: string; delay_status: string; delay_minutes: number | null; allowed_actions: Action[]; cancel_impact?: { association_id: string; shipment_id: string; task_id: string; task_revision: number; task_status: string; association_state: AssociationState }[]; cancelled_at: string | null; cancel_reason: string | null }
 export type TaskPage = Page<TaskItem> & { simulation_time: string }
-export type ShipmentTaskHistory = { id: string; task_no: string; route_code: string; status: TaskStatus; origin_station_id: string; destination_station_id: string; cancelled_at: string | null; cancel_reason: string | null; released_at: string | null }
+export type ShipmentTaskHistory = { association_state?: AssociationState; schedule_version?: number | null; release_reason?: string | null; id: string; task_no: string; route_code: string; status: TaskStatus; origin_station_id: string; destination_station_id: string; cancelled_at: string | null; cancel_reason: string | null; released_at: string | null }
 export type ShipmentTaskHistoryPage = Page<ShipmentTaskHistory>
 export type DestinationChange = { id: string; previous_destination_station_id: string; destination_station_id: string; reason: string; occurred_at: string }
 export type DestinationChangePage = Page<DestinationChange>
-export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean }
-export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean }
-export type PathPlanInput = { code: string; name: string; route_ids: number[]; enabled: boolean }
-export type PathPlanUpdate = { expected_version: number; name?: string; route_ids?: number[]; enabled?: boolean }
+export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean; transfer_minutes?: number | null }
+export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean; travel_minutes?: number | null }
+export type TransferOverride = { station_id: number; minutes: number }
+export type PathPlanInput = { code: string; name: string; route_ids: number[]; enabled: boolean; transfer_overrides?: TransferOverride[] }
+export type PathPlanUpdate = { expected_version: number; name?: string; route_ids?: number[]; enabled?: boolean; transfer_overrides?: TransferOverride[] }
 export type ShipmentPathUpdate = { expected_version: number; expected_anchor_station_id: number; reason: string } & ({ plan_id: number; expected_plan_version: number } | { route_ids: number[] })
 export type StationInput = Omit<Station, 'id'>
-export type RouteInput = { code: string; origin_station_id: number; destination_station_id: number; enabled: boolean; delay_monitoring_enabled: boolean }
+export type RouteInput = { code: string; origin_station_id: number; destination_station_id: number; enabled: boolean; delay_monitoring_enabled: boolean; travel_minutes?: number }
+export type CancelPreview = { task_id: string; schedule_revision: number; reason: string; impact: { association_id: string; shipment_id: string; task_id: string; task_revision: number; task_status: string; association_state: AssociationState }[]; cancel_token: string }
+export type SchedulePreviewInput = { expected_path_version?: number; expected_schedule_version?: number; expected_destination_station_id?: number; origin_station_id?: number; plan_id?: number; expected_plan_version?: number; route_ids?: number[]; first_departure_at?: string; planned_origin_arrival_at?: string; legs?: { route_id: number; planned_departure_at?: string | null; planned_arrival_at?: string | null }[] }
 export type Candidate = Shipment & { last_scanned_station_id: string }
 export type OrderInput = Pick<Order, 'product_name' | 'quantity' | 'sender_name' | 'sender_address' | 'recipient_name' | 'recipient_address'>
 
@@ -143,7 +154,7 @@ export const api = {
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
   updateOrder: (id: string, body: OrderInput, key?: string) => write<Order>(`/api/v1/orders/${id}`, 'PATCH', body, key),
-  createShipment: (orderId: string, destination_station_id: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { destination_station_id }, key),
+  createShipment: (orderId: string, destination_station_id: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { destination_station_id, scheduling_mode: 'REVIEWED' }, key),
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   shipmentPath: (id: string) => request<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`),
@@ -153,12 +164,18 @@ export const api = {
   updateShipmentDestination: (id: string, body: { expected_destination_station_id: number; destination_station_id: number; reason: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/destination`, 'PATCH', body, key),
   shipmentDestinationChanges: (id: string, page = 1, page_size = 20) => request<DestinationChangePage>(`/api/v1/shipments/${id}/destination-changes${query({ page, page_size })}`),
   shipmentTasks: (id: string, page = 1, page_size = 20) => request<ShipmentTaskHistoryPage>(`/api/v1/shipments/${id}/transport-tasks${query({ page, page_size })}`),
+  shipmentSchedule: (id: string) => request<ScheduleResponse>(`/api/v1/shipments/${id}/schedule`),
+  shipmentScheduleHistory: (id: string, page = 1, page_size = 20) => request<ScheduleHistoryPage>(`/api/v1/shipments/${id}/schedule-history${query({ page, page_size })}`),
+  previewShipmentSchedule: (id: string, body: SchedulePreviewInput) => write<SchedulePreview>(`/api/v1/shipments/${id}/schedule/preview`, 'POST', body),
+  confirmShipmentSchedule: (id: string, body: { preview_token: string; reason: string; acknowledged_warning_codes: string[] }, key?: string) => write<ScheduleResponse>(`/api/v1/shipments/${id}/schedule/confirm`, 'POST', body, key),
   updateAddress: (id: string, body: { sender_address: string; recipient_address: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/address`, 'PATCH', body, key),
   shipmentEvent: (id: string, event_type: string, station_id?: string, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/events`, 'POST', { event_type, ...(station_id ? { station_id } : {}) }, key),
   tasks: (params: { page?: number; page_size?: number; task_no?: string; route_code?: string; status?: string } = {}) => request<TaskPage>(`/api/v1/transport-tasks${query(params)}`),
   task: (id: string) => request<TaskDetail>(`/api/v1/transport-tasks/${id}`),
   candidates: (route_code: RouteCode, page = 1, page_size = 100) => request<Page<Candidate>>(`/api/v1/transport-tasks/candidates${query({ route_code, page, page_size })}`),
   createTask: (body: { route_code?: RouteCode; expected_path_versions?: Record<string, number>; expected_arrival_at: string; shipment_ids: number[] }, key?: string) => write<TaskDetail>('/api/v1/transport-tasks/create', 'POST', body, key),
-  taskAction: (id: string, action: 'depart' | 'arrive', key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/${action}`, 'POST', undefined, key),
+  taskAction: (id: string, action: 'depart' | 'arrive', key?: string, expected_schedule_revision?: number) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/${action}`, 'POST', action === 'depart' && expected_schedule_revision ? { expected_schedule_revision } : undefined, key),
   cancelTask: (id: string, reason: string, key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/cancel`, 'POST', { reason }, key),
+  previewTaskCancel: (id: string, reason: string) => write<CancelPreview>(`/api/v1/transport-tasks/${id}/cancel-preview`, 'POST', { reason }),
+  confirmTaskCancel: (id: string, body: { reason: string; expected_schedule_revision: number; cancel_token: string }, key?: string) => write<TaskDetail>(`/api/v1/transport-tasks/${id}/cancel`, 'POST', body, key),
 }

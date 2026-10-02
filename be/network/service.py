@@ -11,12 +11,12 @@ from models import OperationLog, Shipment, SimulationSettings, Station, Transpor
 
 def station_body(station: Station) -> dict:
     return {"id": str(station.id), **{key: getattr(station, key) for key in
-            ("code", "name", "enabled", "allows_first_arrival", "allows_delivery")}}
+            ("code", "name", "enabled", "allows_first_arrival", "allows_delivery", "transfer_minutes")}}
 
 
 def route_body(session: Session, route: TransportRoute) -> dict:
     return {"id": str(route.id), "code": route.code, "enabled": route.enabled,
-            "delay_monitoring_enabled": route.delay_monitoring_enabled,
+            "delay_monitoring_enabled": route.delay_monitoring_enabled, "travel_minutes": route.travel_minutes,
             "origin": station_body(session.get(Station, route.origin_station_id)),
             "destination": station_body(session.get(Station, route.destination_station_id))}
 
@@ -53,7 +53,7 @@ def require_enabled_route(session: Session, route: TransportRoute):
 
 def _station_changes(session: Session, station: Station, changes: dict):
     disabling = changes.get("enabled") is False and station.enabled
-    removing_delivery = changes.get("allows_delivery") is False and station.allows_delivery
+    removing_delivery = changes.get("allows_delivery", "transfer_minutes") is False and station.allows_delivery
     if disabling or removing_delivery:
         has_destination = session.scalar(select(Shipment.id).where(
             Shipment.destination_station_id == station.id, Shipment.stage != "SIGNED").limit(1))
@@ -64,7 +64,7 @@ def _station_changes(session: Session, station: Station, changes: dict):
             Shipment.stage == "AT_STATION", Shipment.last_scanned_station_id == station.id).limit(1))
         endpoints = or_(TransportRoute.origin_station_id == station.id, TransportRoute.destination_station_id == station.id)
         tasks = session.scalar(select(TransportTask.id).join(TransportRoute).where(
-            endpoints, TransportTask.status.in_([TaskStatus.PENDING_DEPARTURE, TaskStatus.IN_TRANSIT])).limit(1))
+            endpoints, TransportTask.status.in_([TaskStatus.PENDING_DEPARTURE, TaskStatus.IN_TRANSIT, TaskStatus.WAITING_CARGO, TaskStatus.WAITING_PREDECESSOR])).limit(1))
         routes = session.scalar(select(TransportRoute.id).where(endpoints, TransportRoute.enabled.is_(True)).limit(1))
         completed = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id==TransportTask.id).where(
             TaskShipment.path_leg_id==ShipmentPathLeg.id,TransportTask.status==TaskStatus.ARRIVED).exists()
@@ -77,6 +77,9 @@ def _station_changes(session: Session, station: Station, changes: dict):
 
 def write_network(session: Session, kind: str, request, key: UUID, resource_id: int | None = None) -> dict:
     changes = request.model_dump(exclude_unset=resource_id is not None)
+    for timing_field in ("transfer_minutes", "travel_minutes"):
+        if changes.get(timing_field) is None:
+            changes.pop(timing_field, None)
     action = ("UPDATE_" if resource_id is not None else "CREATE_") + kind
     encoded = json.dumps({"action": action, "resource_id": resource_id, "body": changes},
                          sort_keys=True, ensure_ascii=False, separators=(",", ":"))

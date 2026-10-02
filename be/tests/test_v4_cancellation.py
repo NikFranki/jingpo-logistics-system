@@ -200,7 +200,7 @@ class V4CancellationTests(unittest.TestCase):
         self.event(shipment, 'PICKUP'); self.event(shipment, 'ARRIVE', self.source)
         task = self.task(self.first, shipment)
         with engine.begin() as conn:
-            conn.execute(text('UPDATE task_shipments SET released_at=now() WHERE task_id=:id'), {'id': int(task['id'])})
+            conn.execute(text("UPDATE task_shipments SET released_at=now(), association_state='RELEASED' WHERE task_id=:id"), {'id': int(task['id'])})
         with self.assertRaises(InvalidTaskShipmentError): self.cancel(task)
         for sql in ("status='CANCELLED'", "cancel_reason='oops'", "status='CANCELLED',cancelled_at=now(),cancel_reason=' '"):
             with self.assertRaises(IntegrityError):

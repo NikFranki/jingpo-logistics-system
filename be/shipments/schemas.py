@@ -28,6 +28,7 @@ class TrackingEventResponse(BaseModel):
 
 
 class ShipmentCreateRequest(BaseModel):
+    scheduling_mode: Literal["LEGACY", "REVIEWED"] = "REVIEWED"
     model_config = ConfigDict(extra="forbid")
     destination_station_id: int = Field(gt=0, strict=True)
 
@@ -47,6 +48,8 @@ class ShipmentResponse(BaseModel):
 
 
 class ShipmentDetailResponse(ShipmentResponse):
+    scheduling_mode: str = "LEGACY"
+    schedule: dict | None = None
     path_version: int = 0
     transport_path: ShipmentTransportPathResponse | None = None
     active_transport_task: "ActiveTransportTaskResponse | None"

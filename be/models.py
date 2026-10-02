@@ -79,6 +79,7 @@ class OperationLog(Base):
         ),
     )
 
+    parent_operation_id: Mapped[int | None] = mapped_column(ForeignKey("operation_logs.id"))
     id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(),
@@ -167,6 +168,7 @@ class Order(Base):
     )
 
 class Station(Base):
+    transfer_minutes: Mapped[int | None] = mapped_column(Integer)
     __tablename__ = "stations"
     __table_args__ = (
         CheckConstraint(
@@ -177,6 +179,7 @@ class Station(Base):
             "length(btrim(name)) > 0",
             name="ck_stations_name",
         ),
+        CheckConstraint("transfer_minutes BETWEEN 0 AND 525600", name="ck_stations_transfer"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -195,6 +198,7 @@ class Station(Base):
 
 
 class TransportRoute(Base):
+    travel_minutes: Mapped[int | None] = mapped_column(Integer)
     __tablename__ = "transport_routes"
     __table_args__ = (
         CheckConstraint(
@@ -205,6 +209,7 @@ class TransportRoute(Base):
             "origin_station_id <> destination_station_id",
             name="ck_routes_distinct_stations",
         ),
+        CheckConstraint("travel_minutes BETWEEN 1 AND 525600", name="ck_routes_travel"),
         UniqueConstraint(
             "origin_station_id",
             "destination_station_id",
@@ -231,9 +236,16 @@ class TransportRoute(Base):
     )
 
 class Shipment(Base):
+    scheduling_mode: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
+    schedule_version: Mapped[int] = mapped_column(Integer, server_default="0")
+    schedule_status: Mapped[str] = mapped_column(String(32), server_default="NOT_CONFIRMED")
+    schedule_reason: Mapped[str | None] = mapped_column(String(500))
     __tablename__ = "shipments"
     __table_args__ = (
         CheckConstraint("path_version >= 0", name="ck_shipments_path_version"),
+        CheckConstraint("schedule_version >= 0", name="ck_shipments_schedule_version"),
+        CheckConstraint("scheduling_mode IN ('LEGACY','REVIEWED')", name="ck_shipments_schedule_mode"),
+        CheckConstraint("schedule_status IN ('NOT_CONFIRMED','CONFIRMED','NEEDS_RECONFIRMATION','BLOCKED','COMPLETED')", name="ck_shipments_schedule_status"),
         CheckConstraint(
             "region_code = 'Z'",
             name="ck_shipments_region",
@@ -298,10 +310,14 @@ class Shipment(Base):
     )
 
 class TransportTask(Base):
+    scheduling_source: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
+    planned_departure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    planned_travel_minutes: Mapped[int | None] = mapped_column(Integer)
+    schedule_revision: Mapped[int] = mapped_column(Integer, server_default="1")
     __tablename__ = "transport_tasks"
     __table_args__ = (
         CheckConstraint(
-            "((status = 'PENDING_DEPARTURE' AND departed_at IS NULL AND arrived_at IS NULL) "
+            "((status IN ('PENDING_DEPARTURE','WAITING_CARGO','WAITING_PREDECESSOR') AND departed_at IS NULL AND arrived_at IS NULL) "
             "OR (status = 'IN_TRANSIT' AND departed_at IS NOT NULL AND arrived_at IS NULL) "
             "OR (status = 'ARRIVED' AND departed_at IS NOT NULL AND arrived_at IS NOT NULL "
             "AND arrived_at >= departed_at)) AND cancelled_at IS NULL AND cancel_reason IS NULL "
@@ -310,6 +326,10 @@ class TransportTask(Base):
             "AND length(btrim(cancel_reason)) BETWEEN 1 AND 500)",
             name="ck_tasks_status_times",
         ),
+        CheckConstraint("schedule_revision > 0", name="ck_tasks_schedule_revision"),
+        CheckConstraint("scheduling_source IN ('LEGACY','PLAN')", name="ck_tasks_schedule_source"),
+        CheckConstraint("planned_travel_minutes BETWEEN 1 AND 525600", name="ck_tasks_travel"),
+        CheckConstraint("scheduling_source = 'LEGACY' OR (planned_departure_at IS NOT NULL AND planned_travel_minutes IS NOT NULL AND expected_arrival_at > planned_departure_at)", name="ck_tasks_plan_times"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -349,20 +369,29 @@ class TransportTask(Base):
     )
 
 class TaskShipment(Base):
+    association_state: Mapped[str] = mapped_column(String(16), server_default="ACTIVE")
+    schedule_version: Mapped[int | None] = mapped_column(Integer)
+    predecessor_association_id: Mapped[int | None] = mapped_column(ForeignKey("task_shipments.id"))
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_transfer_minutes: Mapped[int] = mapped_column(Integer, server_default="0")
+    planned_origin_arrival_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    release_reason: Mapped[str | None] = mapped_column(String(500))
     __tablename__ = "task_shipments"
     __table_args__ = (
+        CheckConstraint("(association_state IN ('PLANNED','ACTIVE') AND released_at IS NULL) OR (association_state = 'RELEASED' AND released_at IS NOT NULL)", name="ck_task_shipments_state"),
+        CheckConstraint("approved_transfer_minutes BETWEEN 0 AND 525600", name="ck_task_shipments_transfer"),
         UniqueConstraint(
             "task_id",
             "shipment_id",
             name="uq_task_shipments",
         ),
         Index("uq_task_shipments_active_leg", "path_leg_id", unique=True,
-              postgresql_where=text("released_at IS NULL AND path_leg_id IS NOT NULL")),
+              postgresql_where=text("association_state IN ('PLANNED','ACTIVE') AND path_leg_id IS NOT NULL")),
         Index(
             "uq_task_shipments_active",
             "shipment_id",
             unique=True,
-            postgresql_where=text("released_at IS NULL"),
+            postgresql_where=text("association_state = 'ACTIVE'"),
         ),
         Index(
             "ix_task_shipments_shipment",
@@ -469,10 +498,12 @@ class PathPlan(Base):
 
 
 class PathPlanLeg(Base):
+    origin_transfer_override_minutes: Mapped[int | None] = mapped_column(Integer)
     __tablename__ = "path_plan_legs"
     __table_args__ = (
         UniqueConstraint("plan_id", "position", name="uq_path_plan_legs_position"),
         CheckConstraint("position >= 0", name="ck_path_plan_legs_position"),
+        CheckConstraint("origin_transfer_override_minutes BETWEEN 0 AND 525600", name="ck_path_plan_legs_transfer"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id"))
@@ -481,6 +512,8 @@ class PathPlanLeg(Base):
 
 
 class ShipmentPathLeg(Base):
+    travel_reference_minutes: Mapped[int | None] = mapped_column(Integer)
+    origin_transfer_reference_minutes: Mapped[int | None] = mapped_column(Integer)
     __tablename__ = "shipment_path_legs"
     __table_args__ = (
         CheckConstraint("position >= 0", name="ck_shipment_path_legs_position"),
@@ -510,4 +543,25 @@ class ShipmentPathVersion(Base):
     source_plan_version: Mapped[int | None] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(500))
     legs: Mapped[list] = mapped_column(JSONB)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ShipmentScheduleVersion(Base):
+    __tablename__ = "shipment_schedule_versions"
+    __table_args__ = (
+        UniqueConstraint("shipment_id", "version", name="uq_shipment_schedule_versions"),
+        CheckConstraint("version > 0", name="ck_shipment_schedule_version"),
+        CheckConstraint("jsonb_typeof(legs) = 'array'", name="ck_shipment_schedule_legs"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    path_version: Mapped[int] = mapped_column(Integer)
+    origin_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+    destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+    source_plan_id: Mapped[int | None] = mapped_column(ForeignKey("path_plans.id"))
+    source_plan_version: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(500))
+    legs: Mapped[list] = mapped_column(JSONB)
+    operation_id: Mapped[int] = mapped_column(ForeignKey("operation_logs.id"))
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

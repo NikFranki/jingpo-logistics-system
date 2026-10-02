@@ -1,0 +1,6522 @@
+{
+  "date": "2026-10-01",
+  "database": "jingpo_logistics",
+  "source_commit": "a4eb45d",
+  "before": {
+    "stations": [
+      {
+        "id": "1",
+        "code": "A",
+        "name": "始发站 / 分拣中心",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "2",
+        "code": "B",
+        "name": "目的分拣中心",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "3",
+        "code": "C",
+        "name": "末端配送站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "7",
+        "code": "D",
+        "name": "一个站点",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "6",
+        "code": "DONGGUAN_SOC",
+        "name": "东莞 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "5",
+        "code": "SH_SOC",
+        "name": "上海虹桥 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "4",
+        "code": "SZ_SOC",
+        "name": "深圳燕岗 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      }
+    ],
+    "routes": [
+      {
+        "id": "1",
+        "code": "AB",
+        "origin": {
+          "id": "1",
+          "code": "A",
+          "name": "始发站 / 分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "2",
+          "code": "B",
+          "name": "目的分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "2",
+        "code": "BC",
+        "origin": {
+          "id": "2",
+          "code": "B",
+          "name": "目的分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "3",
+          "code": "C",
+          "name": "末端配送站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "7",
+        "code": "ROUTE_C_D",
+        "origin": {
+          "id": "3",
+          "code": "C",
+          "name": "末端配送站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "7",
+          "code": "D",
+          "name": "一个站点",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "6",
+        "code": "ROUTE_DG_SH",
+        "origin": {
+          "id": "6",
+          "code": "DONGGUAN_SOC",
+          "name": "东莞 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "3",
+        "code": "ROUTE_SH_SZ",
+        "origin": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "4",
+        "code": "ROUTE_SZ_SH",
+        "origin": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "5",
+        "code": "ROUTE_SZ-DG",
+        "origin": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "6",
+          "code": "DONGGUAN_SOC",
+          "name": "东莞 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      }
+    ]
+  },
+  "created_stations": [
+    {
+      "id": "8",
+      "code": "BEIJING",
+      "name": "北京站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "9",
+      "code": "TIANJIN",
+      "name": "天津站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "10",
+      "code": "SHIJIAZHUANG",
+      "name": "石家庄站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "11",
+      "code": "TAIYUAN",
+      "name": "太原站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "12",
+      "code": "HOHHOT",
+      "name": "呼和浩特站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "13",
+      "code": "BAOTOU",
+      "name": "包头站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "14",
+      "code": "SHENYANG",
+      "name": "沈阳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "15",
+      "code": "DALIAN",
+      "name": "大连站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "16",
+      "code": "CHANGCHUN",
+      "name": "长春站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "17",
+      "code": "HARBIN",
+      "name": "哈尔滨站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "18",
+      "code": "SHANGHAI",
+      "name": "上海站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "19",
+      "code": "NANJING",
+      "name": "南京站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "20",
+      "code": "WUXI",
+      "name": "无锡站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "21",
+      "code": "SUZHOU",
+      "name": "苏州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "22",
+      "code": "HANGZHOU",
+      "name": "杭州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "23",
+      "code": "NINGBO",
+      "name": "宁波站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "24",
+      "code": "WENZHOU",
+      "name": "温州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "25",
+      "code": "HEFEI",
+      "name": "合肥站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "26",
+      "code": "JINAN",
+      "name": "济南站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "27",
+      "code": "QINGDAO",
+      "name": "青岛站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "28",
+      "code": "FUZHOU",
+      "name": "福州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "29",
+      "code": "XIAMEN",
+      "name": "厦门站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "30",
+      "code": "NANCHANG",
+      "name": "南昌站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "31",
+      "code": "ZHENGZHOU",
+      "name": "郑州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "32",
+      "code": "WUHAN",
+      "name": "武汉站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "33",
+      "code": "CHANGSHA",
+      "name": "长沙站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "34",
+      "code": "GUANGZHOU",
+      "name": "广州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "35",
+      "code": "SHENZHEN",
+      "name": "深圳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "36",
+      "code": "DONGGUAN",
+      "name": "东莞站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "37",
+      "code": "FOSHAN",
+      "name": "佛山站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "38",
+      "code": "ZHUHAI",
+      "name": "珠海站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "39",
+      "code": "NANNING",
+      "name": "南宁站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "40",
+      "code": "HAIKOU",
+      "name": "海口站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "41",
+      "code": "SANYA",
+      "name": "三亚站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "42",
+      "code": "CHENGDU",
+      "name": "成都站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "43",
+      "code": "CHONGQING",
+      "name": "重庆站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "44",
+      "code": "GUIYANG",
+      "name": "贵阳站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "45",
+      "code": "KUNMING",
+      "name": "昆明站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "46",
+      "code": "LHASA",
+      "name": "拉萨站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "47",
+      "code": "XIAN",
+      "name": "西安站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "48",
+      "code": "LANZHOU",
+      "name": "兰州站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "49",
+      "code": "YINCHUAN",
+      "name": "银川站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "50",
+      "code": "XINING",
+      "name": "西宁站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    },
+    {
+      "id": "51",
+      "code": "URUMQI",
+      "name": "乌鲁木齐站",
+      "enabled": true,
+      "allows_first_arrival": true,
+      "allows_delivery": true
+    }
+  ],
+  "created_routes": [
+    {
+      "id": "8",
+      "code": "BEIJING_SHIJIAZHUANG",
+      "origin": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "9",
+      "code": "SHIJIAZHUANG_BEIJING",
+      "origin": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "10",
+      "code": "SHIJIAZHUANG_ZHENGZHOU",
+      "origin": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "11",
+      "code": "ZHENGZHOU_SHIJIAZHUANG",
+      "origin": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "12",
+      "code": "ZHENGZHOU_WUHAN",
+      "origin": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "13",
+      "code": "WUHAN_ZHENGZHOU",
+      "origin": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "14",
+      "code": "WUHAN_CHANGSHA",
+      "origin": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "15",
+      "code": "CHANGSHA_WUHAN",
+      "origin": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "16",
+      "code": "CHANGSHA_GUANGZHOU",
+      "origin": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "17",
+      "code": "GUANGZHOU_CHANGSHA",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "18",
+      "code": "GUANGZHOU_SHENZHEN",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "19",
+      "code": "SHENZHEN_GUANGZHOU",
+      "origin": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "20",
+      "code": "BEIJING_TIANJIN",
+      "origin": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "9",
+        "code": "TIANJIN",
+        "name": "天津站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "21",
+      "code": "TIANJIN_BEIJING",
+      "origin": {
+        "id": "9",
+        "code": "TIANJIN",
+        "name": "天津站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "22",
+      "code": "TIANJIN_JINAN",
+      "origin": {
+        "id": "9",
+        "code": "TIANJIN",
+        "name": "天津站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "23",
+      "code": "JINAN_TIANJIN",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "9",
+        "code": "TIANJIN",
+        "name": "天津站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "24",
+      "code": "JINAN_NANJING",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "25",
+      "code": "NANJING_JINAN",
+      "origin": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "26",
+      "code": "NANJING_SHANGHAI",
+      "origin": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "27",
+      "code": "SHANGHAI_NANJING",
+      "origin": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "28",
+      "code": "BEIJING_SHENYANG",
+      "origin": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "29",
+      "code": "SHENYANG_BEIJING",
+      "origin": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "30",
+      "code": "SHENYANG_CHANGCHUN",
+      "origin": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "16",
+        "code": "CHANGCHUN",
+        "name": "长春站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "31",
+      "code": "CHANGCHUN_SHENYANG",
+      "origin": {
+        "id": "16",
+        "code": "CHANGCHUN",
+        "name": "长春站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "32",
+      "code": "CHANGCHUN_HARBIN",
+      "origin": {
+        "id": "16",
+        "code": "CHANGCHUN",
+        "name": "长春站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "17",
+        "code": "HARBIN",
+        "name": "哈尔滨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "33",
+      "code": "HARBIN_CHANGCHUN",
+      "origin": {
+        "id": "17",
+        "code": "HARBIN",
+        "name": "哈尔滨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "16",
+        "code": "CHANGCHUN",
+        "name": "长春站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "34",
+      "code": "SHIJIAZHUANG_TAIYUAN",
+      "origin": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "11",
+        "code": "TAIYUAN",
+        "name": "太原站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "35",
+      "code": "TAIYUAN_SHIJIAZHUANG",
+      "origin": {
+        "id": "11",
+        "code": "TAIYUAN",
+        "name": "太原站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "36",
+      "code": "TAIYUAN_XIAN",
+      "origin": {
+        "id": "11",
+        "code": "TAIYUAN",
+        "name": "太原站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "37",
+      "code": "XIAN_TAIYUAN",
+      "origin": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "11",
+        "code": "TAIYUAN",
+        "name": "太原站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "38",
+      "code": "XIAN_LANZHOU",
+      "origin": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "39",
+      "code": "LANZHOU_XIAN",
+      "origin": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "40",
+      "code": "LANZHOU_URUMQI",
+      "origin": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "51",
+        "code": "URUMQI",
+        "name": "乌鲁木齐站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "41",
+      "code": "URUMQI_LANZHOU",
+      "origin": {
+        "id": "51",
+        "code": "URUMQI",
+        "name": "乌鲁木齐站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "42",
+      "code": "BEIJING_HOHHOT",
+      "origin": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "12",
+        "code": "HOHHOT",
+        "name": "呼和浩特站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "43",
+      "code": "HOHHOT_BEIJING",
+      "origin": {
+        "id": "12",
+        "code": "HOHHOT",
+        "name": "呼和浩特站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "44",
+      "code": "HOHHOT_BAOTOU",
+      "origin": {
+        "id": "12",
+        "code": "HOHHOT",
+        "name": "呼和浩特站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "13",
+        "code": "BAOTOU",
+        "name": "包头站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "45",
+      "code": "BAOTOU_HOHHOT",
+      "origin": {
+        "id": "13",
+        "code": "BAOTOU",
+        "name": "包头站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "12",
+        "code": "HOHHOT",
+        "name": "呼和浩特站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "46",
+      "code": "BAOTOU_YINCHUAN",
+      "origin": {
+        "id": "13",
+        "code": "BAOTOU",
+        "name": "包头站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "49",
+        "code": "YINCHUAN",
+        "name": "银川站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "47",
+      "code": "YINCHUAN_BAOTOU",
+      "origin": {
+        "id": "49",
+        "code": "YINCHUAN",
+        "name": "银川站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "13",
+        "code": "BAOTOU",
+        "name": "包头站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "48",
+      "code": "YINCHUAN_LANZHOU",
+      "origin": {
+        "id": "49",
+        "code": "YINCHUAN",
+        "name": "银川站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "49",
+      "code": "LANZHOU_YINCHUAN",
+      "origin": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "49",
+        "code": "YINCHUAN",
+        "name": "银川站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "50",
+      "code": "NANJING_HEFEI",
+      "origin": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "51",
+      "code": "HEFEI_NANJING",
+      "origin": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "52",
+      "code": "HEFEI_WUHAN",
+      "origin": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "53",
+      "code": "WUHAN_HEFEI",
+      "origin": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "54",
+      "code": "WUHAN_CHONGQING",
+      "origin": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "43",
+        "code": "CHONGQING",
+        "name": "重庆站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "55",
+      "code": "CHONGQING_WUHAN",
+      "origin": {
+        "id": "43",
+        "code": "CHONGQING",
+        "name": "重庆站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "56",
+      "code": "CHONGQING_CHENGDU",
+      "origin": {
+        "id": "43",
+        "code": "CHONGQING",
+        "name": "重庆站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "57",
+      "code": "CHENGDU_CHONGQING",
+      "origin": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "43",
+        "code": "CHONGQING",
+        "name": "重庆站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "58",
+      "code": "HANGZHOU_NANCHANG",
+      "origin": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "59",
+      "code": "NANCHANG_HANGZHOU",
+      "origin": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "60",
+      "code": "NANCHANG_CHANGSHA",
+      "origin": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "61",
+      "code": "CHANGSHA_NANCHANG",
+      "origin": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "62",
+      "code": "CHANGSHA_GUIYANG",
+      "origin": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "63",
+      "code": "GUIYANG_CHANGSHA",
+      "origin": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "64",
+      "code": "GUIYANG_KUNMING",
+      "origin": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "45",
+        "code": "KUNMING",
+        "name": "昆明站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "65",
+      "code": "KUNMING_GUIYANG",
+      "origin": {
+        "id": "45",
+        "code": "KUNMING",
+        "name": "昆明站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "66",
+      "code": "SHANGHAI_HANGZHOU",
+      "origin": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "67",
+      "code": "HANGZHOU_SHANGHAI",
+      "origin": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "68",
+      "code": "HANGZHOU_WENZHOU",
+      "origin": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "24",
+        "code": "WENZHOU",
+        "name": "温州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "69",
+      "code": "WENZHOU_HANGZHOU",
+      "origin": {
+        "id": "24",
+        "code": "WENZHOU",
+        "name": "温州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "70",
+      "code": "WENZHOU_FUZHOU",
+      "origin": {
+        "id": "24",
+        "code": "WENZHOU",
+        "name": "温州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "28",
+        "code": "FUZHOU",
+        "name": "福州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "71",
+      "code": "FUZHOU_WENZHOU",
+      "origin": {
+        "id": "28",
+        "code": "FUZHOU",
+        "name": "福州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "24",
+        "code": "WENZHOU",
+        "name": "温州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "72",
+      "code": "FUZHOU_XIAMEN",
+      "origin": {
+        "id": "28",
+        "code": "FUZHOU",
+        "name": "福州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "29",
+        "code": "XIAMEN",
+        "name": "厦门站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "73",
+      "code": "XIAMEN_FUZHOU",
+      "origin": {
+        "id": "29",
+        "code": "XIAMEN",
+        "name": "厦门站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "28",
+        "code": "FUZHOU",
+        "name": "福州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "74",
+      "code": "XIAMEN_SHENZHEN",
+      "origin": {
+        "id": "29",
+        "code": "XIAMEN",
+        "name": "厦门站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "75",
+      "code": "SHENZHEN_XIAMEN",
+      "origin": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "29",
+        "code": "XIAMEN",
+        "name": "厦门站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "76",
+      "code": "ZHENGZHOU_XIAN",
+      "origin": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "77",
+      "code": "XIAN_ZHENGZHOU",
+      "origin": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "78",
+      "code": "XIAN_CHENGDU",
+      "origin": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "79",
+      "code": "CHENGDU_XIAN",
+      "origin": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "80",
+      "code": "CHENGDU_GUIYANG",
+      "origin": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "81",
+      "code": "GUIYANG_CHENGDU",
+      "origin": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "82",
+      "code": "GUIYANG_NANNING",
+      "origin": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "83",
+      "code": "NANNING_GUIYANG",
+      "origin": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "84",
+      "code": "NANNING_GUANGZHOU",
+      "origin": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "85",
+      "code": "GUANGZHOU_NANNING",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "86",
+      "code": "KUNMING_NANNING",
+      "origin": {
+        "id": "45",
+        "code": "KUNMING",
+        "name": "昆明站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "87",
+      "code": "NANNING_KUNMING",
+      "origin": {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "45",
+        "code": "KUNMING",
+        "name": "昆明站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "88",
+      "code": "LANZHOU_XINING",
+      "origin": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "50",
+        "code": "XINING",
+        "name": "西宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "89",
+      "code": "XINING_LANZHOU",
+      "origin": {
+        "id": "50",
+        "code": "XINING",
+        "name": "西宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "90",
+      "code": "XINING_LHASA",
+      "origin": {
+        "id": "50",
+        "code": "XINING",
+        "name": "西宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "46",
+        "code": "LHASA",
+        "name": "拉萨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "91",
+      "code": "LHASA_XINING",
+      "origin": {
+        "id": "46",
+        "code": "LHASA",
+        "name": "拉萨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "50",
+        "code": "XINING",
+        "name": "西宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "92",
+      "code": "GUANGZHOU_HAIKOU",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "40",
+        "code": "HAIKOU",
+        "name": "海口站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "93",
+      "code": "HAIKOU_GUANGZHOU",
+      "origin": {
+        "id": "40",
+        "code": "HAIKOU",
+        "name": "海口站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "94",
+      "code": "HAIKOU_SANYA",
+      "origin": {
+        "id": "40",
+        "code": "HAIKOU",
+        "name": "海口站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "41",
+        "code": "SANYA",
+        "name": "三亚站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "95",
+      "code": "SANYA_HAIKOU",
+      "origin": {
+        "id": "41",
+        "code": "SANYA",
+        "name": "三亚站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "40",
+        "code": "HAIKOU",
+        "name": "海口站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "96",
+      "code": "JINAN_QINGDAO",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "27",
+        "code": "QINGDAO",
+        "name": "青岛站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "97",
+      "code": "QINGDAO_JINAN",
+      "origin": {
+        "id": "27",
+        "code": "QINGDAO",
+        "name": "青岛站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "98",
+      "code": "SHENYANG_DALIAN",
+      "origin": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "15",
+        "code": "DALIAN",
+        "name": "大连站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "99",
+      "code": "DALIAN_SHENYANG",
+      "origin": {
+        "id": "15",
+        "code": "DALIAN",
+        "name": "大连站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "100",
+      "code": "NANJING_WUXI",
+      "origin": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "20",
+        "code": "WUXI",
+        "name": "无锡站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "101",
+      "code": "WUXI_NANJING",
+      "origin": {
+        "id": "20",
+        "code": "WUXI",
+        "name": "无锡站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "102",
+      "code": "WUXI_SUZHOU",
+      "origin": {
+        "id": "20",
+        "code": "WUXI",
+        "name": "无锡站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "21",
+        "code": "SUZHOU",
+        "name": "苏州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "103",
+      "code": "SUZHOU_WUXI",
+      "origin": {
+        "id": "21",
+        "code": "SUZHOU",
+        "name": "苏州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "20",
+        "code": "WUXI",
+        "name": "无锡站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "104",
+      "code": "SUZHOU_SHANGHAI",
+      "origin": {
+        "id": "21",
+        "code": "SUZHOU",
+        "name": "苏州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "105",
+      "code": "SHANGHAI_SUZHOU",
+      "origin": {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "21",
+        "code": "SUZHOU",
+        "name": "苏州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "106",
+      "code": "HANGZHOU_NINGBO",
+      "origin": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "23",
+        "code": "NINGBO",
+        "name": "宁波站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "107",
+      "code": "NINGBO_HANGZHOU",
+      "origin": {
+        "id": "23",
+        "code": "NINGBO",
+        "name": "宁波站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "108",
+      "code": "JINAN_ZHENGZHOU",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "109",
+      "code": "ZHENGZHOU_JINAN",
+      "origin": {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "110",
+      "code": "JINAN_HEFEI",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "111",
+      "code": "HEFEI_JINAN",
+      "origin": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "112",
+      "code": "HEFEI_NANCHANG",
+      "origin": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "113",
+      "code": "NANCHANG_HEFEI",
+      "origin": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "114",
+      "code": "WUHAN_NANCHANG",
+      "origin": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "115",
+      "code": "NANCHANG_WUHAN",
+      "origin": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "116",
+      "code": "NANCHANG_GUANGZHOU",
+      "origin": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "117",
+      "code": "GUANGZHOU_NANCHANG",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "118",
+      "code": "HANGZHOU_SHENZHEN",
+      "origin": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "119",
+      "code": "SHENZHEN_HANGZHOU",
+      "origin": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "120",
+      "code": "GUANGZHOU_FOSHAN",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "37",
+        "code": "FOSHAN",
+        "name": "佛山站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "121",
+      "code": "FOSHAN_GUANGZHOU",
+      "origin": {
+        "id": "37",
+        "code": "FOSHAN",
+        "name": "佛山站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "122",
+      "code": "GUANGZHOU_DONGGUAN",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "36",
+        "code": "DONGGUAN",
+        "name": "东莞站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "123",
+      "code": "DONGGUAN_GUANGZHOU",
+      "origin": {
+        "id": "36",
+        "code": "DONGGUAN",
+        "name": "东莞站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "124",
+      "code": "DONGGUAN_SHENZHEN",
+      "origin": {
+        "id": "36",
+        "code": "DONGGUAN",
+        "name": "东莞站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "125",
+      "code": "SHENZHEN_DONGGUAN",
+      "origin": {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "36",
+        "code": "DONGGUAN",
+        "name": "东莞站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "126",
+      "code": "GUANGZHOU_ZHUHAI",
+      "origin": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "38",
+        "code": "ZHUHAI",
+        "name": "珠海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "127",
+      "code": "ZHUHAI_GUANGZHOU",
+      "origin": {
+        "id": "38",
+        "code": "ZHUHAI",
+        "name": "珠海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "128",
+      "code": "BEIJING_JINAN",
+      "origin": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    },
+    {
+      "id": "129",
+      "code": "JINAN_BEIJING",
+      "origin": {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "destination": {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      "enabled": true,
+      "delay_monitoring_enabled": false
+    }
+  ],
+  "reused_stations": [],
+  "reused_routes": [],
+  "after": {
+    "stations": [
+      {
+        "id": "1",
+        "code": "A",
+        "name": "始发站 / 分拣中心",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "2",
+        "code": "B",
+        "name": "目的分拣中心",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "13",
+        "code": "BAOTOU",
+        "name": "包头站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "8",
+        "code": "BEIJING",
+        "name": "北京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "3",
+        "code": "C",
+        "name": "末端配送站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "16",
+        "code": "CHANGCHUN",
+        "name": "长春站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "33",
+        "code": "CHANGSHA",
+        "name": "长沙站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "42",
+        "code": "CHENGDU",
+        "name": "成都站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "43",
+        "code": "CHONGQING",
+        "name": "重庆站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "7",
+        "code": "D",
+        "name": "一个站点",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "15",
+        "code": "DALIAN",
+        "name": "大连站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "36",
+        "code": "DONGGUAN",
+        "name": "东莞站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "6",
+        "code": "DONGGUAN_SOC",
+        "name": "东莞 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "37",
+        "code": "FOSHAN",
+        "name": "佛山站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "28",
+        "code": "FUZHOU",
+        "name": "福州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "34",
+        "code": "GUANGZHOU",
+        "name": "广州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "44",
+        "code": "GUIYANG",
+        "name": "贵阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "40",
+        "code": "HAIKOU",
+        "name": "海口站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "22",
+        "code": "HANGZHOU",
+        "name": "杭州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "17",
+        "code": "HARBIN",
+        "name": "哈尔滨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "25",
+        "code": "HEFEI",
+        "name": "合肥站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "12",
+        "code": "HOHHOT",
+        "name": "呼和浩特站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "26",
+        "code": "JINAN",
+        "name": "济南站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "45",
+        "code": "KUNMING",
+        "name": "昆明站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "48",
+        "code": "LANZHOU",
+        "name": "兰州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "46",
+        "code": "LHASA",
+        "name": "拉萨站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "30",
+        "code": "NANCHANG",
+        "name": "南昌站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "19",
+        "code": "NANJING",
+        "name": "南京站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "39",
+        "code": "NANNING",
+        "name": "南宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "23",
+        "code": "NINGBO",
+        "name": "宁波站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "27",
+        "code": "QINGDAO",
+        "name": "青岛站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "41",
+        "code": "SANYA",
+        "name": "三亚站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "5",
+        "code": "SH_SOC",
+        "name": "上海虹桥 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "18",
+        "code": "SHANGHAI",
+        "name": "上海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "14",
+        "code": "SHENYANG",
+        "name": "沈阳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "35",
+        "code": "SHENZHEN",
+        "name": "深圳站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "10",
+        "code": "SHIJIAZHUANG",
+        "name": "石家庄站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "21",
+        "code": "SUZHOU",
+        "name": "苏州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "4",
+        "code": "SZ_SOC",
+        "name": "深圳燕岗 SOC",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "11",
+        "code": "TAIYUAN",
+        "name": "太原站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "9",
+        "code": "TIANJIN",
+        "name": "天津站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "51",
+        "code": "URUMQI",
+        "name": "乌鲁木齐站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "24",
+        "code": "WENZHOU",
+        "name": "温州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "32",
+        "code": "WUHAN",
+        "name": "武汉站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "20",
+        "code": "WUXI",
+        "name": "无锡站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "29",
+        "code": "XIAMEN",
+        "name": "厦门站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "47",
+        "code": "XIAN",
+        "name": "西安站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "50",
+        "code": "XINING",
+        "name": "西宁站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "49",
+        "code": "YINCHUAN",
+        "name": "银川站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "31",
+        "code": "ZHENGZHOU",
+        "name": "郑州站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      },
+      {
+        "id": "38",
+        "code": "ZHUHAI",
+        "name": "珠海站",
+        "enabled": true,
+        "allows_first_arrival": true,
+        "allows_delivery": true
+      }
+    ],
+    "routes": [
+      {
+        "id": "1",
+        "code": "AB",
+        "origin": {
+          "id": "1",
+          "code": "A",
+          "name": "始发站 / 分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "2",
+          "code": "B",
+          "name": "目的分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "45",
+        "code": "BAOTOU_HOHHOT",
+        "origin": {
+          "id": "13",
+          "code": "BAOTOU",
+          "name": "包头站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "12",
+          "code": "HOHHOT",
+          "name": "呼和浩特站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "46",
+        "code": "BAOTOU_YINCHUAN",
+        "origin": {
+          "id": "13",
+          "code": "BAOTOU",
+          "name": "包头站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "49",
+          "code": "YINCHUAN",
+          "name": "银川站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "2",
+        "code": "BC",
+        "origin": {
+          "id": "2",
+          "code": "B",
+          "name": "目的分拣中心",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "3",
+          "code": "C",
+          "name": "末端配送站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "42",
+        "code": "BEIJING_HOHHOT",
+        "origin": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "12",
+          "code": "HOHHOT",
+          "name": "呼和浩特站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "128",
+        "code": "BEIJING_JINAN",
+        "origin": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "28",
+        "code": "BEIJING_SHENYANG",
+        "origin": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "8",
+        "code": "BEIJING_SHIJIAZHUANG",
+        "origin": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "20",
+        "code": "BEIJING_TIANJIN",
+        "origin": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "9",
+          "code": "TIANJIN",
+          "name": "天津站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "32",
+        "code": "CHANGCHUN_HARBIN",
+        "origin": {
+          "id": "16",
+          "code": "CHANGCHUN",
+          "name": "长春站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "17",
+          "code": "HARBIN",
+          "name": "哈尔滨站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "31",
+        "code": "CHANGCHUN_SHENYANG",
+        "origin": {
+          "id": "16",
+          "code": "CHANGCHUN",
+          "name": "长春站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "16",
+        "code": "CHANGSHA_GUANGZHOU",
+        "origin": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "62",
+        "code": "CHANGSHA_GUIYANG",
+        "origin": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "61",
+        "code": "CHANGSHA_NANCHANG",
+        "origin": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "15",
+        "code": "CHANGSHA_WUHAN",
+        "origin": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "57",
+        "code": "CHENGDU_CHONGQING",
+        "origin": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "43",
+          "code": "CHONGQING",
+          "name": "重庆站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "80",
+        "code": "CHENGDU_GUIYANG",
+        "origin": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "79",
+        "code": "CHENGDU_XIAN",
+        "origin": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "56",
+        "code": "CHONGQING_CHENGDU",
+        "origin": {
+          "id": "43",
+          "code": "CHONGQING",
+          "name": "重庆站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "55",
+        "code": "CHONGQING_WUHAN",
+        "origin": {
+          "id": "43",
+          "code": "CHONGQING",
+          "name": "重庆站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "99",
+        "code": "DALIAN_SHENYANG",
+        "origin": {
+          "id": "15",
+          "code": "DALIAN",
+          "name": "大连站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "123",
+        "code": "DONGGUAN_GUANGZHOU",
+        "origin": {
+          "id": "36",
+          "code": "DONGGUAN",
+          "name": "东莞站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "124",
+        "code": "DONGGUAN_SHENZHEN",
+        "origin": {
+          "id": "36",
+          "code": "DONGGUAN",
+          "name": "东莞站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "121",
+        "code": "FOSHAN_GUANGZHOU",
+        "origin": {
+          "id": "37",
+          "code": "FOSHAN",
+          "name": "佛山站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "71",
+        "code": "FUZHOU_WENZHOU",
+        "origin": {
+          "id": "28",
+          "code": "FUZHOU",
+          "name": "福州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "24",
+          "code": "WENZHOU",
+          "name": "温州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "72",
+        "code": "FUZHOU_XIAMEN",
+        "origin": {
+          "id": "28",
+          "code": "FUZHOU",
+          "name": "福州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "29",
+          "code": "XIAMEN",
+          "name": "厦门站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "17",
+        "code": "GUANGZHOU_CHANGSHA",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "122",
+        "code": "GUANGZHOU_DONGGUAN",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "36",
+          "code": "DONGGUAN",
+          "name": "东莞站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "120",
+        "code": "GUANGZHOU_FOSHAN",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "37",
+          "code": "FOSHAN",
+          "name": "佛山站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "92",
+        "code": "GUANGZHOU_HAIKOU",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "40",
+          "code": "HAIKOU",
+          "name": "海口站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "117",
+        "code": "GUANGZHOU_NANCHANG",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "85",
+        "code": "GUANGZHOU_NANNING",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "18",
+        "code": "GUANGZHOU_SHENZHEN",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "126",
+        "code": "GUANGZHOU_ZHUHAI",
+        "origin": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "38",
+          "code": "ZHUHAI",
+          "name": "珠海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "63",
+        "code": "GUIYANG_CHANGSHA",
+        "origin": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "81",
+        "code": "GUIYANG_CHENGDU",
+        "origin": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "64",
+        "code": "GUIYANG_KUNMING",
+        "origin": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "45",
+          "code": "KUNMING",
+          "name": "昆明站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "82",
+        "code": "GUIYANG_NANNING",
+        "origin": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "93",
+        "code": "HAIKOU_GUANGZHOU",
+        "origin": {
+          "id": "40",
+          "code": "HAIKOU",
+          "name": "海口站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "94",
+        "code": "HAIKOU_SANYA",
+        "origin": {
+          "id": "40",
+          "code": "HAIKOU",
+          "name": "海口站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "41",
+          "code": "SANYA",
+          "name": "三亚站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "58",
+        "code": "HANGZHOU_NANCHANG",
+        "origin": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "106",
+        "code": "HANGZHOU_NINGBO",
+        "origin": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "23",
+          "code": "NINGBO",
+          "name": "宁波站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "67",
+        "code": "HANGZHOU_SHANGHAI",
+        "origin": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "118",
+        "code": "HANGZHOU_SHENZHEN",
+        "origin": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "68",
+        "code": "HANGZHOU_WENZHOU",
+        "origin": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "24",
+          "code": "WENZHOU",
+          "name": "温州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "33",
+        "code": "HARBIN_CHANGCHUN",
+        "origin": {
+          "id": "17",
+          "code": "HARBIN",
+          "name": "哈尔滨站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "16",
+          "code": "CHANGCHUN",
+          "name": "长春站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "111",
+        "code": "HEFEI_JINAN",
+        "origin": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "112",
+        "code": "HEFEI_NANCHANG",
+        "origin": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "51",
+        "code": "HEFEI_NANJING",
+        "origin": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "52",
+        "code": "HEFEI_WUHAN",
+        "origin": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "44",
+        "code": "HOHHOT_BAOTOU",
+        "origin": {
+          "id": "12",
+          "code": "HOHHOT",
+          "name": "呼和浩特站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "13",
+          "code": "BAOTOU",
+          "name": "包头站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "43",
+        "code": "HOHHOT_BEIJING",
+        "origin": {
+          "id": "12",
+          "code": "HOHHOT",
+          "name": "呼和浩特站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "129",
+        "code": "JINAN_BEIJING",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "110",
+        "code": "JINAN_HEFEI",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "24",
+        "code": "JINAN_NANJING",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "96",
+        "code": "JINAN_QINGDAO",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "27",
+          "code": "QINGDAO",
+          "name": "青岛站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "23",
+        "code": "JINAN_TIANJIN",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "9",
+          "code": "TIANJIN",
+          "name": "天津站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "108",
+        "code": "JINAN_ZHENGZHOU",
+        "origin": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "65",
+        "code": "KUNMING_GUIYANG",
+        "origin": {
+          "id": "45",
+          "code": "KUNMING",
+          "name": "昆明站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "86",
+        "code": "KUNMING_NANNING",
+        "origin": {
+          "id": "45",
+          "code": "KUNMING",
+          "name": "昆明站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "40",
+        "code": "LANZHOU_URUMQI",
+        "origin": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "51",
+          "code": "URUMQI",
+          "name": "乌鲁木齐站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "39",
+        "code": "LANZHOU_XIAN",
+        "origin": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "88",
+        "code": "LANZHOU_XINING",
+        "origin": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "50",
+          "code": "XINING",
+          "name": "西宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "49",
+        "code": "LANZHOU_YINCHUAN",
+        "origin": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "49",
+          "code": "YINCHUAN",
+          "name": "银川站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "91",
+        "code": "LHASA_XINING",
+        "origin": {
+          "id": "46",
+          "code": "LHASA",
+          "name": "拉萨站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "50",
+          "code": "XINING",
+          "name": "西宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "60",
+        "code": "NANCHANG_CHANGSHA",
+        "origin": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "116",
+        "code": "NANCHANG_GUANGZHOU",
+        "origin": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "59",
+        "code": "NANCHANG_HANGZHOU",
+        "origin": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "113",
+        "code": "NANCHANG_HEFEI",
+        "origin": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "115",
+        "code": "NANCHANG_WUHAN",
+        "origin": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "50",
+        "code": "NANJING_HEFEI",
+        "origin": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "25",
+        "code": "NANJING_JINAN",
+        "origin": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "26",
+        "code": "NANJING_SHANGHAI",
+        "origin": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "100",
+        "code": "NANJING_WUXI",
+        "origin": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "20",
+          "code": "WUXI",
+          "name": "无锡站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "84",
+        "code": "NANNING_GUANGZHOU",
+        "origin": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "83",
+        "code": "NANNING_GUIYANG",
+        "origin": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "44",
+          "code": "GUIYANG",
+          "name": "贵阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "87",
+        "code": "NANNING_KUNMING",
+        "origin": {
+          "id": "39",
+          "code": "NANNING",
+          "name": "南宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "45",
+          "code": "KUNMING",
+          "name": "昆明站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "107",
+        "code": "NINGBO_HANGZHOU",
+        "origin": {
+          "id": "23",
+          "code": "NINGBO",
+          "name": "宁波站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "97",
+        "code": "QINGDAO_JINAN",
+        "origin": {
+          "id": "27",
+          "code": "QINGDAO",
+          "name": "青岛站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "7",
+        "code": "ROUTE_C_D",
+        "origin": {
+          "id": "3",
+          "code": "C",
+          "name": "末端配送站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "7",
+          "code": "D",
+          "name": "一个站点",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "6",
+        "code": "ROUTE_DG_SH",
+        "origin": {
+          "id": "6",
+          "code": "DONGGUAN_SOC",
+          "name": "东莞 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "3",
+        "code": "ROUTE_SH_SZ",
+        "origin": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "4",
+        "code": "ROUTE_SZ_SH",
+        "origin": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "5",
+          "code": "SH_SOC",
+          "name": "上海虹桥 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": true
+      },
+      {
+        "id": "5",
+        "code": "ROUTE_SZ-DG",
+        "origin": {
+          "id": "4",
+          "code": "SZ_SOC",
+          "name": "深圳燕岗 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "6",
+          "code": "DONGGUAN_SOC",
+          "name": "东莞 SOC",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "95",
+        "code": "SANYA_HAIKOU",
+        "origin": {
+          "id": "41",
+          "code": "SANYA",
+          "name": "三亚站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "40",
+          "code": "HAIKOU",
+          "name": "海口站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "66",
+        "code": "SHANGHAI_HANGZHOU",
+        "origin": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "27",
+        "code": "SHANGHAI_NANJING",
+        "origin": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "105",
+        "code": "SHANGHAI_SUZHOU",
+        "origin": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "21",
+          "code": "SUZHOU",
+          "name": "苏州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "29",
+        "code": "SHENYANG_BEIJING",
+        "origin": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "30",
+        "code": "SHENYANG_CHANGCHUN",
+        "origin": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "16",
+          "code": "CHANGCHUN",
+          "name": "长春站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "98",
+        "code": "SHENYANG_DALIAN",
+        "origin": {
+          "id": "14",
+          "code": "SHENYANG",
+          "name": "沈阳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "15",
+          "code": "DALIAN",
+          "name": "大连站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "125",
+        "code": "SHENZHEN_DONGGUAN",
+        "origin": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "36",
+          "code": "DONGGUAN",
+          "name": "东莞站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "19",
+        "code": "SHENZHEN_GUANGZHOU",
+        "origin": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "119",
+        "code": "SHENZHEN_HANGZHOU",
+        "origin": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "75",
+        "code": "SHENZHEN_XIAMEN",
+        "origin": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "29",
+          "code": "XIAMEN",
+          "name": "厦门站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "9",
+        "code": "SHIJIAZHUANG_BEIJING",
+        "origin": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "34",
+        "code": "SHIJIAZHUANG_TAIYUAN",
+        "origin": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "11",
+          "code": "TAIYUAN",
+          "name": "太原站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "10",
+        "code": "SHIJIAZHUANG_ZHENGZHOU",
+        "origin": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "104",
+        "code": "SUZHOU_SHANGHAI",
+        "origin": {
+          "id": "21",
+          "code": "SUZHOU",
+          "name": "苏州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "18",
+          "code": "SHANGHAI",
+          "name": "上海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "103",
+        "code": "SUZHOU_WUXI",
+        "origin": {
+          "id": "21",
+          "code": "SUZHOU",
+          "name": "苏州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "20",
+          "code": "WUXI",
+          "name": "无锡站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "35",
+        "code": "TAIYUAN_SHIJIAZHUANG",
+        "origin": {
+          "id": "11",
+          "code": "TAIYUAN",
+          "name": "太原站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "36",
+        "code": "TAIYUAN_XIAN",
+        "origin": {
+          "id": "11",
+          "code": "TAIYUAN",
+          "name": "太原站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "21",
+        "code": "TIANJIN_BEIJING",
+        "origin": {
+          "id": "9",
+          "code": "TIANJIN",
+          "name": "天津站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "8",
+          "code": "BEIJING",
+          "name": "北京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "22",
+        "code": "TIANJIN_JINAN",
+        "origin": {
+          "id": "9",
+          "code": "TIANJIN",
+          "name": "天津站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "41",
+        "code": "URUMQI_LANZHOU",
+        "origin": {
+          "id": "51",
+          "code": "URUMQI",
+          "name": "乌鲁木齐站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "70",
+        "code": "WENZHOU_FUZHOU",
+        "origin": {
+          "id": "24",
+          "code": "WENZHOU",
+          "name": "温州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "28",
+          "code": "FUZHOU",
+          "name": "福州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "69",
+        "code": "WENZHOU_HANGZHOU",
+        "origin": {
+          "id": "24",
+          "code": "WENZHOU",
+          "name": "温州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "22",
+          "code": "HANGZHOU",
+          "name": "杭州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "14",
+        "code": "WUHAN_CHANGSHA",
+        "origin": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "33",
+          "code": "CHANGSHA",
+          "name": "长沙站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "54",
+        "code": "WUHAN_CHONGQING",
+        "origin": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "43",
+          "code": "CHONGQING",
+          "name": "重庆站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "53",
+        "code": "WUHAN_HEFEI",
+        "origin": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "25",
+          "code": "HEFEI",
+          "name": "合肥站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "114",
+        "code": "WUHAN_NANCHANG",
+        "origin": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "30",
+          "code": "NANCHANG",
+          "name": "南昌站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "13",
+        "code": "WUHAN_ZHENGZHOU",
+        "origin": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "101",
+        "code": "WUXI_NANJING",
+        "origin": {
+          "id": "20",
+          "code": "WUXI",
+          "name": "无锡站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "19",
+          "code": "NANJING",
+          "name": "南京站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "102",
+        "code": "WUXI_SUZHOU",
+        "origin": {
+          "id": "20",
+          "code": "WUXI",
+          "name": "无锡站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "21",
+          "code": "SUZHOU",
+          "name": "苏州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "73",
+        "code": "XIAMEN_FUZHOU",
+        "origin": {
+          "id": "29",
+          "code": "XIAMEN",
+          "name": "厦门站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "28",
+          "code": "FUZHOU",
+          "name": "福州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "74",
+        "code": "XIAMEN_SHENZHEN",
+        "origin": {
+          "id": "29",
+          "code": "XIAMEN",
+          "name": "厦门站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "35",
+          "code": "SHENZHEN",
+          "name": "深圳站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "78",
+        "code": "XIAN_CHENGDU",
+        "origin": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "42",
+          "code": "CHENGDU",
+          "name": "成都站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "38",
+        "code": "XIAN_LANZHOU",
+        "origin": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "37",
+        "code": "XIAN_TAIYUAN",
+        "origin": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "11",
+          "code": "TAIYUAN",
+          "name": "太原站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "77",
+        "code": "XIAN_ZHENGZHOU",
+        "origin": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "89",
+        "code": "XINING_LANZHOU",
+        "origin": {
+          "id": "50",
+          "code": "XINING",
+          "name": "西宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "90",
+        "code": "XINING_LHASA",
+        "origin": {
+          "id": "50",
+          "code": "XINING",
+          "name": "西宁站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "46",
+          "code": "LHASA",
+          "name": "拉萨站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "47",
+        "code": "YINCHUAN_BAOTOU",
+        "origin": {
+          "id": "49",
+          "code": "YINCHUAN",
+          "name": "银川站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "13",
+          "code": "BAOTOU",
+          "name": "包头站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "48",
+        "code": "YINCHUAN_LANZHOU",
+        "origin": {
+          "id": "49",
+          "code": "YINCHUAN",
+          "name": "银川站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "48",
+          "code": "LANZHOU",
+          "name": "兰州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "109",
+        "code": "ZHENGZHOU_JINAN",
+        "origin": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "26",
+          "code": "JINAN",
+          "name": "济南站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "11",
+        "code": "ZHENGZHOU_SHIJIAZHUANG",
+        "origin": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "10",
+          "code": "SHIJIAZHUANG",
+          "name": "石家庄站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "12",
+        "code": "ZHENGZHOU_WUHAN",
+        "origin": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "32",
+          "code": "WUHAN",
+          "name": "武汉站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "76",
+        "code": "ZHENGZHOU_XIAN",
+        "origin": {
+          "id": "31",
+          "code": "ZHENGZHOU",
+          "name": "郑州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "47",
+          "code": "XIAN",
+          "name": "西安站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      },
+      {
+        "id": "127",
+        "code": "ZHUHAI_GUANGZHOU",
+        "origin": {
+          "id": "38",
+          "code": "ZHUHAI",
+          "name": "珠海站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "destination": {
+          "id": "34",
+          "code": "GUANGZHOU",
+          "name": "广州站",
+          "enabled": true,
+          "allows_first_arrival": true,
+          "allows_delivery": true
+        },
+        "enabled": true,
+        "delay_monitoring_enabled": false
+      }
+    ]
+  },
+  "validation": {
+    "all_requested_stations_present": true,
+    "all_requested_routes_present": true,
+    "existing_config_unchanged": true,
+    "station_total": 51,
+    "route_total": 129
+  }
+}

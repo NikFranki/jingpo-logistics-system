@@ -25,6 +25,8 @@ class TrackingEventType(StrEnum):
 
 
 class TaskStatus(StrEnum):
+    WAITING_CARGO = "WAITING_CARGO"
+    WAITING_PREDECESSOR = "WAITING_PREDECESSOR"
     PENDING_DEPARTURE = "PENDING_DEPARTURE"
     IN_TRANSIT = "IN_TRANSIT"
     ARRIVED = "ARRIVED"
@@ -37,6 +39,7 @@ def sql_enum_values(enum_type: type[StrEnum]) -> str:
 
 
 class PathLegState(StrEnum):
+    PLANNED = "PLANNED"
     PENDING = "PENDING"
     RESERVED = "RESERVED"
     IN_TRANSIT = "IN_TRANSIT"

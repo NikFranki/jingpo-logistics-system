@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Radio, Select, Space, Spin, Table, Tabs, Timeline, Typography } from 'antd'
+import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Radio, Select, Space, Spin, Table, Tabs, Tag, Timeline, Typography } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type DestinationChange, type PathLeg, type PathOptions, type PathVersion, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
+import { api, type DestinationChange, type PathLeg, type PathOptions, type PathVersion, type ScheduleHistoryItem, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
 import { RouteSequenceEditor } from '../RouteSequenceEditor'
+import { SchedulePlanner } from './SchedulePlanner'
 import { actionText, allowed, apiError, eventText, formatTime, stageText, StatusTag, taskStatusText, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
@@ -13,6 +14,8 @@ type ShipmentEvent = 'PICKUP' | 'ARRIVE' | 'START_DELIVERY' | 'SIGN'
 type PathForm = { mode: 'plan' | 'routes'; plan_id?: string; route_ids?: string[]; reason: string }
 const pathStatusText: Record<string, string> = { WAITING_FIRST_ARRIVAL: '等待首次入站', NEEDS_PLANNING: '待规划', READY: '可按下一段运输', RESERVED: '等待任务发车', IN_TRANSIT: '当前段运输中', COMPLETED: '路径已完成', BLOCKED: '未来路径受阻' }
 const pathLegStateText: Record<string, string> = { PENDING: '待运输', RESERVED: '待发车', IN_TRANSIT: '运输中', ARRIVED: '已到达' }
+const scheduleStatusText: Record<string, string> = { NOT_CONFIRMED: '待审核', CONFIRMED: '已确认', NEEDS_RECONFIRMATION: '需要重新审核', BLOCKED: '计划受阻', COMPLETED: '运输计划已完成' }
+const associationStateText: Record<string, string> = { PLANNED: '未来待执行', ACTIVE: '当前执行段', RELEASED: '已解除' }
 
 function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -35,7 +38,7 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   </PageContainer>
 }
 
-function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: string }) {
+function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?: string }) {
   const { shipmentId = '' } = useParams()
   const navigate = useNavigate()
   const network = useNetwork(revision)
@@ -49,6 +52,10 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   const [pathHistory, setPathHistory] = useState<PathVersion[]>([])
   const [pathHistoryTotal, setPathHistoryTotal] = useState(0)
   const [pathHistoryPage, setPathHistoryPage] = useState(1)
+  const [scheduleHistory, setScheduleHistory] = useState<ScheduleHistoryItem[]>([])
+  const [scheduleHistoryTotal, setScheduleHistoryTotal] = useState(0)
+  const [scheduleHistoryPage, setScheduleHistoryPage] = useState(1)
+  const [scheduleHistoryError, setScheduleHistoryError] = useState<string>()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string>()
   const [historyError, setHistoryError] = useState<string>()
@@ -60,6 +67,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
   const [eventSaving, setEventSaving] = useState(false)
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
@@ -95,6 +103,14 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
     }).catch(error => { if (active) setLoadError(apiError(error)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [shipmentId, revision, retry, historyPage, destinationChangesPage, pathHistoryPage])
+
+  useEffect(() => {
+    let active = true
+    api.shipmentScheduleHistory(shipmentId, scheduleHistoryPage).then(result => {
+      if (active) { setScheduleHistory(result.items); setScheduleHistoryTotal(result.total); setScheduleHistoryError(undefined) }
+    }).catch(error => { if (active) setScheduleHistoryError(apiError(error)) })
+    return () => { active = false }
+  }, [shipmentId, revision, retry, scheduleHistoryPage])
 
   const runEvent = (event: ShipmentEvent) => {
     if (!detail) return
@@ -234,7 +250,30 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
         <Descriptions.Item label="运单目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item><Descriptions.Item label="当前配送地址"><span className="jp-wrap-anywhere">{detail.recipient_address}</span></Descriptions.Item>
         <Descriptions.Item label="发件地址"><span className="jp-wrap-anywhere">{detail.sender_address}</span></Descriptions.Item><Descriptions.Item label="创建时间">{formatTime(detail.created_at)}</Descriptions.Item>
       </Descriptions>
-      <section style={{ marginTop: 24 }}>
+      {detail.scheduling_mode === 'REVIEWED' ? <section style={{ marginTop: 24 }}>
+        <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
+          <Text strong>全程运输计划</Text>
+          <Button type="primary" disabled={busy || ['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) || detail.schedule?.status === 'COMPLETED'} onClick={() => setScheduleOpen(true)}>{detail.schedule?.version ? '调整未来安排' : '预览并审核计划'}</Button>
+        </Space>
+        {detail.schedule ? <>
+          <Alert type={detail.schedule.status === 'BLOCKED' || detail.schedule.status === 'NEEDS_RECONFIRMATION' ? 'warning' : detail.schedule.status === 'COMPLETED' ? 'success' : 'info'} showIcon message={`${scheduleStatusText[detail.schedule.status] ?? detail.schedule.status} · 计划版本 v${detail.schedule.version}`} description={<>
+            {detail.schedule.origin_station_id && <>计划起点：<StationName id={detail.schedule.origin_station_id} />。 </>}
+            {detail.schedule.reason && <>{detail.schedule.reason} </>}
+            <Text type="secondary">计划时间是审核基准；最新预测会随演示时间变化，实际发车和到达仍由操作记录。</Text>
+          </>} style={{ marginBottom: 12 }} />
+          {detail.schedule.configuration_risks.map((risk, index) => <Alert key={index} type="warning" showIcon message={risk.message ?? '计划中的线路或站点配置已停用'} style={{ marginBottom: 8 }} />)}
+          {detail.schedule.legs.length ? <Table rowKey="path_leg_id" size="small" pagination={false} dataSource={detail.schedule.legs} scroll={{ x: 1050 }} columns={[
+            { title: '段', width: 56, render: (_, leg) => leg.position + 1 },
+            { title: '线路', width: 180, render: (_, leg) => <>{leg.route_code}<br /><Text type="secondary"><StationName id={leg.origin_station_id} /> → <StationName id={leg.destination_station_id} /></Text></> },
+            { title: '执行状态', width: 130, render: (_, leg) => <>{leg.task_status ? taskStatusText[leg.task_status] : '尚无任务'}<br /><Text type="secondary">{associationStateText[leg.association_state ?? ''] ?? ''}</Text></> },
+            { title: '确认计划', width: 170, render: (_, leg) => <>出发 {formatTime(leg.planned_departure_at)}<br />到达 {formatTime(leg.planned_arrival_at)}</> },
+            { title: '最新预计', width: 190, render: (_, leg) => <>出发 {formatTime(leg.forecast_departure_at)}<br />到达 {formatTime(leg.forecast_arrival_at)}{leg.forecast_stale && <><br /><Tag color="orange">预测已过期</Tag></>}</> },
+            { title: '实际时间', width: 170, render: (_, leg) => <>发车 {formatTime(leg.actual_departure_at)}<br />到达 {formatTime(leg.actual_arrival_at)}</> },
+            { title: '任务', width: 150, render: (_, leg) => leg.task_id ? <Link to={`/tasks/${leg.task_id}`}>{leg.task_no ?? `任务 ${leg.task_id}`}</Link> : '—' },
+            { title: '等待条件', width: 200, render: (_, leg) => <>{leg.ready_at ? `就绪时间 ${formatTime(leg.ready_at)}` : ''}{leg.waiting_members.length > 0 && <Text type="secondary" style={{ display: 'block' }}>等待运单：{leg.waiting_members.map(member => member.shipment_no ?? member.shipment_id).join('、')}</Text>}</> },
+          ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未确认运输计划；先预览路线和逐站时间。" />}
+        </> : <Alert type="warning" showIcon message="后端没有返回运输计划状态" description="请确认服务已升级至 V7，然后刷新运单。" />}
+      </section> : <section style={{ marginTop: 24 }}>
         <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
           <Text strong>完整路径与当前进度</Text>
           <Button disabled={busy || !pathAction?.enabled} onClick={() => void openPathPlanner()}>{currentPath?.version ? '调整未来路径' : '规划完整路径'}</Button>
@@ -256,7 +295,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
           ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={currentPath.status === 'WAITING_FIRST_ARRIVAL' ? '首次入站后才确定完整路径' : '当前没有已绑定路径段'} />}
         </>}
         {pathAction && !pathAction.enabled && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>{pathAction.reason ?? '当前阶段暂不能调整路径。'}</Text>}
-      </section>
+      </section>}
       <div style={{ margin: '20px 0 28px' }}>
         <Text strong style={{ display: 'block', marginBottom: 12 }}>下一步操作</Text>
         <Space wrap>
@@ -285,6 +324,13 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
           { title: '调整原因', dataIndex: 'reason' },
           { title: '记录时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
         ]} /> : <Empty description="尚无路径安排历史；未绑定前的旧任务和轨迹仍见各自历史记录。" /> },
+        ...(detail.scheduling_mode === 'REVIEWED' ? [{ key: 'schedule-history', label: '运输计划历史', children: scheduleHistoryError ? <Alert type="warning" showIcon message="计划历史暂不可用" description={scheduleHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : scheduleHistory.length ? <Table<ScheduleHistoryItem> rowKey="version" dataSource={scheduleHistory} pagination={{ current: scheduleHistoryPage, pageSize: 20, total: scheduleHistoryTotal, onChange: setScheduleHistoryPage }} columns={[
+          { title: '版本', dataIndex: 'version', width: 80, render: value => `v${value}` },
+          { title: '全程路线', render: (_, row) => row.legs.map(leg => leg.route_code).join(' → ') || '无后续段' },
+          { title: '计划时间', render: (_, row) => row.legs.map(leg => `${leg.route_code} ${formatTime(leg.planned_departure_at)} → ${formatTime(leg.planned_arrival_at)}`).join('；') },
+          { title: '审核原因', dataIndex: 'reason' },
+          { title: '确认时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
+        ]} /> : <Empty description="尚无已确认计划版本" /> }] : []),
         { key: 'destinations', label: '目的站更正记录', children: destinationChangesError ? <Alert type="warning" showIcon message="更正记录暂不可用" description={destinationChangesError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : <Table<DestinationChange> rowKey="id" dataSource={destinationChanges} pagination={{ current: destinationChangesPage, pageSize: 20, total: destinationChangesTotal, onChange: setDestinationChangesPage }} locale={{ emptyText: <Empty description="暂无目的站更正记录" /> }} columns={[
           { title: '原目的站', dataIndex: 'previous_destination_station_id', render: value => <StationName id={value} /> },
           { title: '新目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
@@ -383,6 +429,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared & { clock?: strin
           <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
         </>}
       </Modal>
+      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} clock={clock} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}

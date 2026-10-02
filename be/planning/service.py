@@ -25,8 +25,11 @@ def clock_and_replay(session, key, digest):
 
 
 def digest_request(action, resource_id, request):
+    body = request.model_dump(exclude_unset=action == "UPDATE_PATH_PLAN")
+    if 'transfer_overrides' not in request.model_fields_set:
+        body.pop('transfer_overrides', None)
     content = json.dumps({"action": action, "resource_id": resource_id,
-                          "body": request.model_dump(exclude_unset=action == "UPDATE_PATH_PLAN")},
+                          "body": body},
                          sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(content.encode()).hexdigest()
 
@@ -78,7 +81,8 @@ def plan_body(session, plan):
     return {"id":str(plan.id), "code":plan.code, "name":plan.name, "enabled":plan.enabled,
         "version":plan.version, "origin_station_id":str(plan.origin_station_id),
         "destination_station_id":str(plan.destination_station_id), "usable":reason is None,
-        "reason":reason, "route_ids":[str(r.id) for r in routes]}
+        "reason":reason, "route_ids":[str(r.id) for r in routes],
+        "transfer_overrides":[{"station_id":routes[l.position].origin_station_id,"minutes":l.origin_transfer_override_minutes} for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id==plan.id).order_by(PathPlanLeg.position)) if l.origin_transfer_override_minutes is not None]}
 
 
 def list_plans(session, enabled=None, origin_station_id=None, destination_station_id=None):
@@ -98,6 +102,7 @@ def write_plan(session, request, key, plan_id=None):
         if replay is not None:
             return replay.response_body
         before = None
+        overrides = request.transfer_overrides
         if plan_id is None:
             if session.scalar(select(PathPlan.id).where(PathPlan.code == request.code)):
                 conflict("路径方案编码已存在", "NETWORK_CODE_CONFLICT")
@@ -114,6 +119,8 @@ def write_plan(session, request, key, plan_id=None):
                 conflict("方案版本已变化，请刷新后重新确认", "PATH_VERSION_CONFLICT")
             before = plan_body(session,plan)
             changes = request.model_dump(exclude_unset=True)
+            if overrides is None:
+                overrides = [dict(station_id=entry.origin_station_id, minutes=leg.origin_transfer_override_minutes) for leg,entry in session.execute(select(PathPlanLeg,TransportRoute).join(TransportRoute,PathPlanLeg.route_id==TransportRoute.id).where(PathPlanLeg.plan_id==plan.id)) if leg.origin_transfer_override_minutes is not None]
             routes = routes_for_ids(session,request.route_ids) if request.route_ids is not None else plan_routes(session,plan)
             validate_routes(session,routes,plan.origin_station_id,plan.destination_station_id,
                             require_enabled=changes.get('enabled',plan.enabled))
@@ -121,7 +128,13 @@ def write_plan(session, request, key, plan_id=None):
             if request.enabled is not None: plan.enabled = request.enabled
             plan.version += 1
             session.execute(delete(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))
-        session.add_all([PathPlanLeg(plan_id=plan.id,position=i,route_id=r.id) for i,r in enumerate(routes)])
+        values = [v.model_dump() if hasattr(v, 'model_dump') else v for v in (overrides or [])]
+        middle_ids = {r.origin_station_id for r in routes[1:]}
+        if len({v['station_id'] for v in values}) != len(values) or any(v['station_id'] not in middle_ids for v in values):
+            conflict("中转覆盖必须是方案中不重复的中间站")
+        mapping = {v['station_id']:v['minutes'] for v in values}
+        session.add_all([PathPlanLeg(plan_id=plan.id,position=i,route_id=r.id,
+            origin_transfer_override_minutes=mapping.get(r.origin_station_id)) for i,r in enumerate(routes)])
         session.flush()
         body = plan_body(session,plan)
         session.add(OperationLog(idempotency_key=key,request_hash=digest,action=action,
@@ -147,13 +160,14 @@ def leg_state(session, leg):
     pair = leg_task(session,leg)
     if pair is None: return "PENDING", None
     task = pair[1]
-    return {TaskStatus.PENDING_DEPARTURE:"RESERVED",TaskStatus.IN_TRANSIT:"IN_TRANSIT",
+    if pair[0].association_state == "PLANNED": return "PLANNED", task
+    return {TaskStatus.WAITING_PREDECESSOR:"RESERVED",TaskStatus.WAITING_CARGO:"RESERVED",TaskStatus.PENDING_DEPARTURE:"RESERVED",TaskStatus.IN_TRANSIT:"IN_TRANSIT",
             TaskStatus.ARRIVED:"ARRIVED"}.get(task.status,"PENDING"), task
 
 
 def active_task(session, shipment):
     return session.execute(select(TaskShipment,TransportTask).join(TransportTask,TaskShipment.task_id==TransportTask.id)
-        .where(TaskShipment.shipment_id==shipment.id,TaskShipment.released_at.is_(None))).one_or_none()
+        .where(TaskShipment.shipment_id==shipment.id,TaskShipment.association_state=="ACTIVE")).one_or_none()
 
 
 def anchor_station(session, shipment):
@@ -175,7 +189,7 @@ def shipment_path_body(session, shipment):
         items.append({"id":str(leg.id),"position":leg.position,"route_id":str(route.id),"route_code":route.code,
             "origin_station_id":str(route.origin_station_id),"destination_station_id":str(route.destination_station_id),
             "state":state,"task_id":str(task.id) if task else None})
-        if state == "PENDING" and next_leg is None: next_leg = leg
+        if state in ('PENDING','PLANNED') and next_leg is None: next_leg = leg
     anchor = anchor_station(session,shipment)
     active = active_task(session,shipment)
     status, code, reason = "READY", None, None
@@ -192,13 +206,13 @@ def shipment_path_body(session, shipment):
             code, reason = "PATH_NOT_BOUND", "当前任务可继续，后续新任务前需确定完整路径"
         elif status == "IN_TRANSIT":
             try:
-                remaining = [session.get(TransportRoute,int(i['route_id'])) for i in items if i['state']=='PENDING']
+                remaining = [session.get(TransportRoute,int(i['route_id'])) for i in items if i['state'] in ('PENDING','PLANNED')]
                 validate_routes(session,remaining,anchor,shipment.destination_station_id)
             except NetworkError as error:
                 code, reason = "PATH_FUTURE_BLOCKED", "后续路径不可用：" + error.message
     else:
         try:
-            remaining = [session.get(TransportRoute,int(i['route_id'])) for i in items if i['state']=='PENDING']
+            remaining = [session.get(TransportRoute,int(i['route_id'])) for i in items if i['state'] in ('PENDING','PLANNED')]
             validate_routes(session,remaining,shipment.last_scanned_station_id,shipment.destination_station_id)
         except NetworkError as error:
             status = "BLOCKED" if remaining else "NEEDS_PLANNING"
@@ -263,7 +277,7 @@ def auto_bind_path(session, shipment, clock_time):
     if shipment.last_scanned_station_id == shipment.destination_station_id:
         return
     legs = current_legs(session,shipment.id)
-    if any(leg_state(session,l)[0] == 'PENDING' for l in legs): return
+    if any(leg_state(session,l)[0] in ('PENDING','PLANNED','RESERVED') for l in legs): return
     matches = matching_plans(session,shipment)
     if len(matches) == 1:
         plan = session.get(PathPlan,int(matches[0]['id']))
@@ -279,6 +293,8 @@ def write_shipment_path(session, shipment_id, request, key):
         if shipment is None: raise ShipmentNotFoundError
         if shipment.stage not in (ShipmentStage.AT_STATION,ShipmentStage.IN_TRANSIT):
             conflict("仅在站或运输中的运单可安排未来路径")
+        if shipment.scheduling_mode == 'REVIEWED' and shipment.schedule_version:
+            conflict("已审核计划的未来路径请通过运输计划预览和确认调整", "SCHEDULE_CONFIRM_REQUIRED")
         if request.expected_version != shipment.path_version:
             conflict("运单路径版本已变化，请刷新后重新确认", "PATH_VERSION_CONFLICT")
         anchor = anchor_station(session,shipment)

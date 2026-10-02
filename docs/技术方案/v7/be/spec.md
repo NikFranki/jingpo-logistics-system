@@ -1,6 +1,6 @@
 # JINGPO V7 · BE 开发规格
 
-> 2026-10-01 · 按会话 `01a0f630-e7e5-70c2-a0b4-60b08ff2f56b` 的讨论与用户截图修订。方案草案，尚未实现或验收。依据 [PRD](../../../prd/v7/JINGPO-logistics-system-v7.md)。
+> 2026-10-01 · 按会话 `01a0f630-e7e5-70c2-a0b4-60b08ff2f56b` 的讨论与用户截图修订。后端代码与迁移已实现，客户端独立接入；验证记录见 plan。依据 [PRD](../../../prd/v7/JINGPO-logistics-system-v7.md)。
 
 ## 1. 怎么解决
 
@@ -17,11 +17,11 @@ flowchart LR
     C[simulation 演示时钟] -->|只参与预测与执行校验| S
 ```
 
-`scheduling` 负责预览、确认和未来调整；`transport` 负责一段运输的实际执行及成员依赖。提取可共用 Session 的内部函数，外层统一开启事务，不嵌套 begin、不提交后补建下一段。下文所有新增结构、接口与枚举均未实现。
+`scheduling` 负责预览、确认和未来调整；`transport` 负责一段运输的实际执行及成员依赖。提取可共用 Session 的内部函数，外层统一开启事务，不嵌套 begin、不提交后补建下一段。下文结构、接口与枚举已在 BE 实现。
 
 ## 2. 数据模型与约束
 
-| 对象 | 拟新增内容 | 规则 |
+| 对象 | 新增内容 | 规则 |
 | --- | --- | --- |
 | Station | transfer_minutes | 可空表示无参考；非负整数 |
 | TransportRoute | travel_minutes | 可空表示无参考；正整数 |
@@ -124,9 +124,9 @@ stateDiagram-v2
 
 取消预览签名包含各层关联和任务 revision；共享成员或下游链变化返回409要求重新核对。所有被替代安排保留 task、association、released_at、release_reason 和操作来源，不能删除历史来满足唯一索引。
 
-## 7. 拟定 API 契约
+## 7. API 契约
 
-接口前缀 `/api/v1`；实际写操作要求 UUID Idempotency-Key，严格字段/正整数 ID/版本和 Request-ID 沿用 V6。预览 POST 为只读计算，无幂等写日志。下表均为拟定接口。
+接口前缀 `/api/v1`；实际写操作要求 UUID Idempotency-Key，严格字段/正整数 ID/版本和 Request-ID 沿用 V6。预览 POST 为只读计算，无幂等写日志。客户端操作顺序与示例见 [接入说明](client-contract.md)。
 
 | 接口 | 内容 |
 | --- | --- |
@@ -152,11 +152,11 @@ preview 的候选未来段使用 `legs=[{route_id,planned_departure_at,planned_a
 
 ## 8. 事务、迁移与客户端交接
 
-所有写入先锁演示时钟，再查幂等日志，再按固定 ID 次序锁相关任务、运单、段及依赖关联。确认时在锁内检查签名和前提，保存路径、时间版本、全段任务/关联、共享 revision 及子日志，整体提交。取消和到达激活同样原子；内层复用函数不重复开事务。
+所有写入先锁演示时钟，再查幂等日志。当前所有相关业务写操作共用时钟行锁，确认、取消、入站与发到因此按事务串行执行；预览不锁时钟，确认在锁内重新验证全部前提。确认时在锁内检查签名和前提，保存路径、时间版本、全段任务/关联、共享 revision 及子日志，整体提交。取消和到达激活同样原子；内层复用函数不重复开事务。
 
 实际到达必须同时释放本段 ACTIVE 并激活下一段已有 PLANNED；旧无确认计划运单只更新物流事实。依赖故障/触发器错误回滚到达、轨迹、释放和激活；已完成业务防重与幂等重放不重复激活。子动作用来源操作、动作、运单和段派生稳定 key，并记录 parent_operation_id。
 
-新迁移接 V6 e61a7c93b204，编号实施时生成。旧关联 released_at 为空映射 ACTIVE，非空映射 RELEASED；旧任务来源 LEGACY，新增计划/耗时字段为空，旧运单 LEGACY、schedule_version=0。更换两类部分唯一索引、补关联状态/依赖及任务等待状态约束；升级不改变旧物流事实、expected_arrival_at 或历史 key/hash/缓存，也不生成任务。
+迁移 f72d8a94c105 接 V6 e61a7c93b204。旧关联 released_at 为空映射 ACTIVE，非空映射 RELEASED；旧任务来源 LEGACY，新增计划/耗时字段为空，旧运单 LEGACY、schedule_version=0。更换两类部分唯一索引、补关联状态/依赖及任务等待状态约束；升级不改变旧物流事实、expected_arrival_at 或历史 key/hash/缓存，也不生成任务。
 
 迁移前在 V6 副本/空库演练；开发库发布需停服务、备份、升级并重启。旧任务可继续，旧接口响应新增字段提供缓存兼容默认值。FE/Agent 要适配等待状态、多未来关联、当前执行占用以及时间计划；BE 通过不等于客户端验收。
 

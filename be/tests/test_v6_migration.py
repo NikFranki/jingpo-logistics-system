@@ -96,7 +96,7 @@ class V6MigrationTests(unittest.TestCase):
         self.assertEqual(next_task['route_code'],'BC')
 
     def test_empty_database_reaches_v6_without_fabricated_paths(self):
-        self.run_migration('head')
+        self.run_migration(V6)
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),V6)
             for table in ('path_plans','path_plan_legs','shipment_path_legs','shipment_path_versions'):

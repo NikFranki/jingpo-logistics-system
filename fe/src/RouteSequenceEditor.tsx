@@ -12,9 +12,10 @@ type Props = {
   max?: number
   anchorStationId?: string
   destinationStationId?: string
+  allowDisabled?: boolean
 }
 
-export function RouteSequenceEditor({ name, routes, title, emptyText = '添加第一段线路，逐段组成完整路径。', max = 100, anchorStationId, destinationStationId }: Props) {
+export function RouteSequenceEditor({ name, routes, title, emptyText = '添加第一段线路，逐段组成完整路径。', max = 100, anchorStationId, destinationStationId, allowDisabled = false }: Props) {
   const form = Form.useFormInstance()
   const values: string[] = Form.useWatch(name, form) ?? []
   const routeById = new Map(routes.map(route => [String(route.id), route]))
@@ -49,7 +50,7 @@ export function RouteSequenceEditor({ name, routes, title, emptyText = '添加�
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                 <Text type="secondary" style={{ width: 48, flexShrink: 0 }}>第 {index + 1} 段</Text>
                 <Form.Item name={field.name} rules={[{ required: true, message: '请选择这段线路' }]} style={{ margin: 0, flex: 1, minWidth: 0 }}>
-                  <Select showSearch optionFilterProp="label" placeholder="选择线路" options={routes.map(route => ({ value: String(route.id), label: `${route.code} · ${route.origin.code} → ${route.destination.code}${route.enabled ? '' : '（停用）'}` }))} />
+                  <Select showSearch optionFilterProp="label" placeholder="选择线路" options={routes.map(route => ({ value: String(route.id), disabled: !allowDisabled && !route.enabled, label: `${route.code} · ${route.origin.code} → ${route.destination.code}${route.enabled ? '' : '（停用）'}` }))} />
                 </Form.Item>
               </div>
               <Space size={0}>

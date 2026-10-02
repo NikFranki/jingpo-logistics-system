@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 from errors import (
+    NetworkError,
     IdempotencyKeyReusedError,
     InvalidExpectedArrivalError,
     InvalidTaskShipmentError,
@@ -30,7 +31,6 @@ from models import (
 from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
 from planning.service import auto_bind_path, next_path_leg
 from network.service import require_enabled_route
-from errors import NetworkError
 
 def list_candidate_shipments(
     session: Session,
@@ -60,7 +60,7 @@ def list_candidate_shipments(
         select(TaskShipment.id)
         .where(
             TaskShipment.shipment_id == Shipment.id,
-            TaskShipment.released_at.is_(None),
+            TaskShipment.association_state == "ACTIVE",
         )
         .exists()
     )
@@ -82,6 +82,7 @@ def list_candidate_shipments(
         future_leg.shipment_id == Shipment.id, future_leg.superseded_at.is_(None), ~completed_future,
         or_(future_route.enabled.is_(False),future_origin.enabled.is_(False),future_destination.enabled.is_(False))).exists()
     filters = (
+        Shipment.scheduling_mode == 'LEGACY',
         Shipment.stage == required_stage,
         Shipment.last_scanned_station_id == origin_station.id,
         Shipment.destination_station_id != origin_station.id,
@@ -156,9 +157,12 @@ def build_task_response(
     destination: Station,
     shipments: list[Shipment],
 ) -> dict:
-    return {
+    body = {
         "id": str(task.id),
         "task_no": task.task_no,
+        "scheduling_source": task.scheduling_source,
+        "planned_departure_at": task.planned_departure_at.isoformat() if task.planned_departure_at else None,
+        "schedule_revision": task.schedule_revision,
         "delay_monitoring_enabled": task.delay_monitoring_enabled,
         "route_code": route.code,
         "origin_station_id": str(origin.id),
@@ -187,6 +191,11 @@ def build_task_response(
             for shipment in shipments
         ],
     }
+    if task.scheduling_source == 'PLAN':
+        from sqlalchemy.orm import object_session
+        from scheduling.service import task_extra
+        body.update(task_extra(object_session(task), task))
+    return body
 
 def create_transport_task(
     session: Session,
@@ -225,6 +234,8 @@ def create_transport_task(
         if len(shipments) != len(request.shipment_ids):
             raise InvalidTaskShipmentError
         for shipment in shipments:
+            if shipment.scheduling_mode != 'LEGACY':
+                raise NetworkError('SCHEDULE_CONFIRM_REQUIRED', '请通过运输计划预览并人工确认创建任务')
             auto_bind_path(session, shipment, clock.current_time)
         if request.expected_path_versions is not None and any(
             request.expected_path_versions[str(s.id)] != s.path_version for s in shipments):
@@ -276,7 +287,7 @@ def create_transport_task(
                 TaskShipment.shipment_id.in_(
                     request.shipment_ids
                 ),
-                TaskShipment.released_at.is_(None),
+                TaskShipment.association_state == "ACTIVE",
             )
         )
 
@@ -390,7 +401,7 @@ def get_transport_task(
         )
     )
 
-    return build_task_detail_response(
+    body = build_task_detail_response(
         task=task,
         route=route,
         origin=origin_station,
@@ -398,6 +409,14 @@ def get_transport_task(
         shipments=shipments,
         simulation_time=simulation_time,
     )
+    from scheduling.service import task_extra, departure_problem
+    body.update(task_extra(session, task, simulation_time))
+    problem = departure_problem(session, task, simulation_time)
+    if problem:
+        for action in body['allowed_actions']:
+            if action['action'] == 'DEPART':
+                action.update(enabled=False, reason_code=problem[0], reason=problem[1])
+    return body
 
 def build_depart_task_request_hash(task_id: int) -> str:
     content = f"DEPART_TRANSPORT_TASK:{task_id}"
@@ -407,8 +426,11 @@ def depart_transport_task(
     session: Session,
     task_id: int,
     idempotency_key: UUID,
+    expected_schedule_revision: int | None = None,
 ) -> dict:
     request_hash = build_depart_task_request_hash(task_id)
+    if expected_schedule_revision is not None:
+        request_hash = hashlib.sha256((request_hash + ':' + str(expected_schedule_revision)).encode()).hexdigest()
 
     with session.begin():
         clock = session.scalar(
@@ -464,6 +486,13 @@ def depart_transport_task(
 
             return response_body
 
+        if task.scheduling_source == 'PLAN':
+            from scheduling.service import departure_problem
+            if expected_schedule_revision != task.schedule_revision:
+                raise NetworkError('TASK_MEMBERSHIP_CONFLICT', '任务成员已变化，请重新确认发车名单')
+            problem = departure_problem(session, task, clock.current_time)
+            if problem:
+                raise NetworkError(*problem)
         if task.status != TaskStatus.PENDING_DEPARTURE:
             raise InvalidTransportTaskStateError
 
@@ -494,7 +523,7 @@ def depart_transport_task(
                 select(TaskShipment)
                 .where(
                     TaskShipment.task_id == task.id,
-                    TaskShipment.released_at.is_(None),
+                    TaskShipment.association_state == "ACTIVE",
                 )
                 .order_by(TaskShipment.shipment_id)
                 .with_for_update()
@@ -686,7 +715,7 @@ def arrive_transport_task(
                 select(TaskShipment)
                 .where(
                     TaskShipment.task_id == task.id,
-                    TaskShipment.released_at.is_(None),
+                    TaskShipment.association_state == "ACTIVE",
                 )
                 .order_by(TaskShipment.shipment_id)
                 .with_for_update()
@@ -749,6 +778,7 @@ def arrive_transport_task(
 
         for association in associations:
             association.released_at = clock.current_time
+            association.association_state = "RELEASED"
 
         for shipment in shipments:
             shipment.stage = ShipmentStage.AT_STATION
@@ -771,7 +801,11 @@ def arrive_transport_task(
         session.flush()
 
         for shipment in shipments:
-            auto_bind_path(session, shipment, clock.current_time)
+            if shipment.scheduling_mode == 'REVIEWED':
+                from scheduling.service import activate_next
+                activate_next(session, shipment, clock.current_time, operation_log)
+            else:
+                auto_bind_path(session, shipment, clock.current_time)
         response_body = build_task_response(
             task=task,
             route=route,
@@ -861,7 +895,7 @@ def build_task_detail_response(
 
 def build_task_allowed_actions(status: str) -> list[dict]:
     rules = [
-        ("CANCEL", status == TaskStatus.PENDING_DEPARTURE,
+        ("CANCEL", status in (TaskStatus.PENDING_DEPARTURE,TaskStatus.WAITING_CARGO,TaskStatus.WAITING_PREDECESSOR),
          "Cancellation requires PENDING_DEPARTURE status"),
         (
             "DEPART",
@@ -960,6 +994,10 @@ def list_transport_tasks(
             }
         )
 
+    from scheduling.service import task_extra
+    cache = {}
+    for item, (task, _) in zip(items, rows):
+        item.update(task_extra(session, task, simulation_time, cache))
     return items, total, simulation_time
 
 
@@ -971,6 +1009,9 @@ def cancel_transport_task(
 ) -> dict:
     content = json.dumps({"action": "CANCEL_TRANSPORT_TASK", "task_id": task_id,
                           "reason": request.reason}, sort_keys=True, separators=(",", ":"))
+    if request.expected_schedule_revision is not None or request.cancel_token is not None:
+        content = json.dumps({'legacy_content':content, 'expected_schedule_revision':request.expected_schedule_revision,
+                             'cancel_token':request.cancel_token}, sort_keys=True)
     request_hash = hashlib.sha256(content.encode()).hexdigest()
     with session.begin():
         clock = session.scalar(select(SimulationSettings).where(
@@ -987,6 +1028,9 @@ def cancel_transport_task(
             TransportTask.id == task_id).with_for_update())
         if task is None:
             raise TransportTaskNotFoundError
+        if task.scheduling_source == 'PLAN':
+            from scheduling.service import cancel_planned
+            return cancel_planned(session, task, request, clock, idempotency_key, request_hash)
         before = {"status": task.status}
         released_ids = []
         if task.status == TaskStatus.CANCELLED:
@@ -1015,6 +1059,7 @@ def cancel_transport_task(
             task.cancel_reason = request.reason
             for association in associations:
                 association.released_at = clock.current_time
+                association.association_state = "RELEASED"
                 released_ids.append(str(association.id))
             session.flush()
         else:

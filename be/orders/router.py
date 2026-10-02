@@ -177,6 +177,8 @@ def create_order_shipment(
             order_id=order_id,
             idempotency_key=idempotency_key,
             destination_station_id=request.destination_station_id,
+            scheduling_mode=request.scheduling_mode,
+            scheduling_mode_explicit='scheduling_mode' in request.model_fields_set,
         )
     except OrderNotFoundError:
         raise HTTPException(

@@ -7,6 +7,7 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Body,
 )
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from transport.schemas import (
     CandidateShipmentListResponse,
     TransportTaskCreateRequest,
     TransportTaskCancelRequest,
+    TransportTaskDepartRequest,
     TransportTaskResponse,
     TransportTaskDetailResponse,
     TransportTaskListResponse,
@@ -174,12 +176,14 @@ def depart_task(
         Header(alias="Idempotency-Key"),
     ],
     session: Annotated[Session, Depends(get_db)],
+    request: TransportTaskDepartRequest | None = Body(default=None),
 ) -> TransportTaskResponse:
     try:
         response_body = depart_transport_task(
             session=session,
             task_id=task_id,
             idempotency_key=idempotency_key,
+            expected_schedule_revision=request.expected_schedule_revision if request else None,
         )
     except TransportTaskNotFoundError:
         raise HTTPException(

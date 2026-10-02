@@ -7,7 +7,13 @@ from logistics_types import PathLegState, TransportPathStatus
 PositiveId = Annotated[int, Field(gt=0, strict=True)]
 Reason = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=500)]
 
+class TransferOverride(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    station_id: PositiveId
+    minutes: int = Field(ge=0, le=525600, strict=True)
+
 class PathPlanCreateRequest(BaseModel):
+    transfer_overrides: list[TransferOverride] = Field(default_factory=list, max_length=99)
     model_config = ConfigDict(extra="forbid")
     code: NetworkCode
     name: NetworkName
@@ -15,6 +21,7 @@ class PathPlanCreateRequest(BaseModel):
     enabled: bool = Field(default=True, strict=True)
 
 class PathPlanUpdateRequest(BaseModel):
+    transfer_overrides: list[TransferOverride] | None = Field(default=None, max_length=99)
     model_config = ConfigDict(extra="forbid")
     expected_version: int = Field(gt=0, strict=True)
     name: NetworkName | None = None
@@ -68,6 +75,7 @@ class ShipmentTransportPathResponse(BaseModel):
     legs: list[PathLegResponse]
 
 class PathPlanResponse(BaseModel):
+    transfer_overrides: list[TransferOverride] = Field(default_factory=list)
     id: str
     code: str
     name: str
