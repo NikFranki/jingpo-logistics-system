@@ -1,10 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Spin, message } from 'antd'
-import { AppstoreOutlined, ClockCircleOutlined, ControlOutlined, SwapOutlined, TruckOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, SwapOutlined, TruckOutlined } from '@ant-design/icons'
 import { ProLayout } from '@ant-design/pro-components'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { api } from './api'
-import { apiError, formatTime, StatusTag, type Mutate } from './shared'
+import { apiError, type Mutate } from './shared'
 
 const OrdersPage = lazy(() => import('./pages/OrdersPage'))
 const OrderDetailPage = lazy(() => import('./pages/OrdersPage').then(module => ({ default: module.OrderDetailPage })))
@@ -12,12 +11,10 @@ const ShipmentsPage = lazy(() => import('./pages/ShipmentsPage'))
 const ShipmentDetailPage = lazy(() => import('./pages/ShipmentsPage').then(module => ({ default: module.ShipmentDetailPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage'))
 const TaskDetailPage = lazy(() => import('./pages/TasksPage').then(module => ({ default: module.TaskDetailPage })))
-const SimulationPage = lazy(() => import('./pages/SimulationPage'))
 const NetworkPage = lazy(() => import('./NetworkPage'))
 
 export default function App() {
   const location = useLocation()
-  const [clock, setClock] = useState<string>()
   const [messageApi, contextHolder] = message.useMessage()
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
@@ -25,7 +22,6 @@ export default function App() {
   const retryKeys = useRef(new Map<string, string>())
   const reloadCurrent = useCallback(() => setRevision(value => value + 1), [])
 
-  useEffect(() => { api.clock().then(result => setClock(result.current_time)).catch(error => messageApi.error(apiError(error))) }, [revision, messageApi])
   const mutate: Mutate = useCallback(async <T,>(identity: string, action: (key: string) => Promise<T>, success: string): Promise<T | undefined> => {
     if (busyRef.current) return
     busyRef.current = true
@@ -48,10 +44,13 @@ export default function App() {
     { path: '/orders', name: '订单', icon: <AppstoreOutlined /> },
     { path: '/shipments', name: '运单', icon: <TruckOutlined /> },
     { path: '/tasks', name: '运输任务', icon: <SwapOutlined /> },
-    { path: '/network', name: '网络配置', icon: <AppstoreOutlined /> },
-    { path: '/simulation', name: '演示控制', icon: <ControlOutlined /> },
+    { path: '/network', name: '网络配置', icon: <AppstoreOutlined />, children: [
+      { path: '/network/stations', name: '站点管理' },
+      { path: '/network/routes', name: '线路管理' },
+      { path: '/network/path-plans', name: '路径方案' },
+    ] },
   ]
-  const activePath = location.pathname.startsWith('/network') ? '/network' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : location.pathname.startsWith('/simulation') ? '/simulation' : '/orders'
+  const activePath = location.pathname.startsWith('/network/stations') ? '/network/stations' : location.pathname.startsWith('/network/routes') ? '/network/routes' : location.pathname.startsWith('/network/path-plans') ? '/network/path-plans' : location.pathname.startsWith('/network') ? '/network/path-plans' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : '/orders'
   return <>{contextHolder}<ProLayout
     title="JINGPO 鲸破"
     logo={<TruckOutlined />}
@@ -60,7 +59,6 @@ export default function App() {
     location={{ pathname: activePath }}
     route={{ routes: menuData }}
     menuItemRender={(item, dom) => item.path ? <Link to={item.path}>{dom}</Link> : dom}
-    actionsRender={() => [<StatusTag key="clock" icon={<ClockCircleOutlined />} tone="info">演示时间 · {formatTime(clock)}</StatusTag>]}
     avatarProps={{ title: '演示操作员', size: 'small' }}
     contentStyle={{ minHeight: 'calc(100vh - 56px)' }}
   >
@@ -70,11 +68,13 @@ export default function App() {
         <Route path="/orders" element={<OrdersPage revision={revision} mutate={mutate} />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/shipments" element={<ShipmentsPage revision={revision} />} />
-        <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage revision={revision} busy={busy} mutate={mutate} clock={clock} />} />
-        <Route path="/tasks" element={<TasksPage revision={revision} mutate={mutate} clock={clock} />} />
+        <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage revision={revision} busy={busy} mutate={mutate} />} />
+        <Route path="/tasks" element={<TasksPage revision={revision} mutate={mutate} />} />
         <Route path="/tasks/:taskId" element={<TaskDetailPage revision={revision} busy={busy} mutate={mutate} />} />
-        <Route path="/network" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} />} />
-        <Route path="/simulation" element={<SimulationPage revision={revision} busy={busy} mutate={mutate} clock={clock} />} />
+        <Route path="/network" element={<Navigate to="/network/path-plans" replace />} />
+        <Route path="/network/path-plans" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="paths" />} />
+        <Route path="/network/stations" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="stations" />} />
+        <Route path="/network/routes" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="routes" />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Routes>
     </Suspense>

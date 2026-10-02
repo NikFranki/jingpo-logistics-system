@@ -104,7 +104,7 @@ class TaskAllowedActionResponse(BaseModel):
     reason: str | None = None
 
 class TransportTaskDetailResponse(TransportTaskResponse):
-    simulation_time: datetime
+    server_time: datetime
     delay_status: Literal[
         "NOT_APPLICABLE",
         "NONE",
@@ -143,7 +143,7 @@ class TransportTaskListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    simulation_time: datetime
+    server_time: datetime
 
 class TransportTaskDepartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

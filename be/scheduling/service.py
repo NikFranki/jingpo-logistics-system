@@ -1,3 +1,4 @@
+import business_time
 """Pure previews, reviewed atomic confirmations and activation of existing tasks."""
 import base64
 import binascii
@@ -11,11 +12,10 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid5, NAMESPACE_URL
 
 from sqlalchemy import select, func
-from errors import NetworkError, ShipmentNotFoundError, SimulationClockNotInitializedError
-from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, SimulationSettings,
-                    ShipmentPathLeg, ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg)
+from errors import NetworkError, ShipmentNotFoundError
+from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentPathLeg, ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg)
 from planning.service import (active_task, current_legs, leg_state, plan_routes, routes_for_ids,
-                              validate_routes, save_path, clock_and_replay)
+                              validate_routes, save_path, time_and_replay)
 from scheduling.schemas import SchedulePreviewRequest
 
 _SECRET = os.getenv('SCHEDULE_SIGNING_KEY', '').encode() or secrets.token_bytes(32)
@@ -54,12 +54,6 @@ def unsign(token, kind):
     return body['data']
 
 
-def clock_time(session):
-    value = session.scalar(select(SimulationSettings.current_time).where(SimulationSettings.id == 1))
-    if value is None:
-        raise SimulationClockNotInitializedError
-    return value
-
 
 def parcel(session, shipment_id):
     value = session.get(Shipment, shipment_id)
@@ -76,7 +70,7 @@ def members(session, task_id, open_only=True):
 
 
 def forecast(session, task, now=None, cache=None, visiting=None):
-    now = now or clock_time(session)
+    now = now or business_time.server_now()
     cache = {} if cache is None else cache
     visiting = set() if visiting is None else visiting
     if task.id in cache:
@@ -227,8 +221,8 @@ def shared_candidate(session, route, departure, arrival, shipment_id, now):
     return None
 
 
-def make_preview(session, shipment, request):
-    now = clock_time(session)
+def make_preview(session, shipment, request, now=None):
+    now = now or business_time.server_now()
     pair, frozen_task, anchor = context(session, shipment)
     for expected, actual, code in [(request.expected_path_version, shipment.path_version, 'PATH_VERSION_CONFLICT'),
         (request.expected_schedule_version, shipment.schedule_version, 'SCHEDULE_VERSION_CONFLICT'),
@@ -313,7 +307,7 @@ def make_preview(session, shipment, request):
             departure = request.first_departure_at if i == 0 and request.first_departure_at is not None else reference_departure
             arrival = departure + timedelta(minutes=route.travel_minutes) if departure is not None and route.travel_minutes else None
         if departure is not None and (departure < now or (previous_arrival is not None and departure < previous_arrival)):
-            error('INVALID_SCHEDULE_TIMES', '计划出发不能早于演示时间或前段到达', 422)
+            error('INVALID_SCHEDULE_TIMES', '计划出发不能早于服务器时间或前段到达', 422)
         if arrival is not None and departure is not None and arrival <= departure:
             error('INVALID_SCHEDULE_TIMES', '到达必须晚于本段出发', 422)
         if departure is not None and arrival is not None:
@@ -361,12 +355,14 @@ def make_preview(session, shipment, request):
 
 def preview_schedule(session, shipment_id, request):
     shipment = parcel(session, shipment_id)
-    value = make_preview(session, shipment, request)
+    evaluated_at = business_time.server_now()
+    value = make_preview(session, shipment, request, evaluated_at)
     normalized = request.model_dump(mode='json')
     normalized.update(origin_station_id=int(value['anchor_station_id']), plan_id=int(value['source_plan_id']) if value['source_plan_id'] else None,
         expected_plan_version=value['source_plan_version'], route_ids=None if value['source_plan_id'] else [int(r['route_id']) for r in value['legs']],
         legs=[{'route_id': int(r['route_id']), 'planned_departure_at': r['planned_departure_at'], 'planned_arrival_at': r['planned_arrival_at']} for r in value['legs']])
-    value['preview_token'] = sign('schedule', {'shipment_id': shipment_id, 'request': normalized, 'fingerprint': digest(value)})
+    value['preview_token'] = sign('schedule', {'shipment_id': shipment_id, 'request': normalized,
+        'evaluated_at': evaluated_at.isoformat(), 'fingerprint': digest(value)})
     return value
 
 
@@ -388,17 +384,20 @@ def cancel_empty(session, task, now, reason):
 def confirm_schedule(session, shipment_id, request, key):
     request_hash = digest({'action': 'CONFIRM_SCHEDULE', 'shipment_id': shipment_id, 'body': request.model_dump(mode='json')})
     with session.begin():
-        clock, replay = clock_and_replay(session, key, request_hash)
+        clock, replay = time_and_replay(session, key, request_hash)
         if replay:
-            return replay.response_body
+            return business_time.normalize_cached_response(replay.response_body)
         token = unsign(request.preview_token, 'schedule')
         if token['shipment_id'] != shipment_id:
             error('PREVIEW_STALE', '预览不属于该运单')
         shipment = parcel(session, shipment_id)
         normalized = SchedulePreviewRequest(**token['request'])
-        value = make_preview(session, shipment, normalized)
+        value = make_preview(session, shipment, normalized, datetime.fromisoformat(token['evaluated_at']))
         if digest(value) != token['fingerprint']:
             error('PREVIEW_STALE', '路线、计划或共享任务已变化，请重新预览')
+        if any(row['planned_departure_at'] and datetime.fromisoformat(row['planned_departure_at']) < clock
+               for row in value['legs']):
+            error('PREVIEW_EXPIRED', '计划出发时间已过去，请重新预览并确认')
         if value['missing']:
             error('INVALID_SCHEDULE_TIMES', '请补全全部时间', 422)
         if any(entry['shared'] for entry in value['replacements']):
@@ -407,19 +406,19 @@ def confirm_schedule(session, shipment_id, request, key):
             error('SCHEDULE_WARNING_NOT_ACKNOWLEDGED', '请确认短于参考耗时的提醒')
         parent = OperationLog(idempotency_key=key, request_hash=request_hash, action='CONFIRM_SCHEDULE',
             resource_type='SHIPMENT', resource_id=shipment_id, before_data={'schedule_version': shipment.schedule_version},
-            after_data=None, response_body={}, response_status=200, occurred_at=clock.current_time)
+            after_data=None, response_body={}, response_status=200, occurred_at=clock)
         session.add(parent); session.flush()
         for replacement in value['replacements']:
             entry = session.get(TaskShipment, replacement['id'])
             task = session.get(TransportTask, entry.task_id)
-            release_entry(session, entry, clock.current_time, request.reason)
+            release_entry(session, entry, clock, request.reason)
             task.schedule_revision += 1
-            session.flush(); cancel_empty(session, task, clock.current_time, request.reason)
+            session.flush(); cancel_empty(session, task, clock, request.reason)
             sub_log(session, parent, 'REPLACE_PLANNED_TASK', entry, {'association_id': str(entry.id), 'state': 'RELEASED'})
         session.flush()
         routes = routes_for_ids(session, [int(r['route_id']) for r in value['legs']])
         plan = session.get(PathPlan, int(value['source_plan_id'])) if value['source_plan_id'] else None
-        save_path(session, shipment, routes, clock.current_time, request.reason, plan)
+        save_path(session, shipment, routes, clock, request.reason, plan)
         shipment.scheduling_mode = 'REVIEWED'
         shipment.schedule_version += 1
         shipment.schedule_status = 'CONFIRMED'
@@ -447,7 +446,7 @@ def confirm_schedule(session, shipment_id, request, key):
                 schedule_version=shipment.schedule_version, predecessor_association_id=predecessor.id if predecessor else None,
                 approved_transfer_minutes=row['approved_transfer_minutes'], planned_origin_arrival_at=normalized.planned_origin_arrival_at if predecessor is None else None)
             if shipment.stage == 'AT_STATION' and predecessor is None and route.origin_station_id == shipment.last_scanned_station_id:
-                entry.association_state = 'ACTIVE'; entry.ready_at = clock.current_time
+                entry.association_state = 'ACTIVE'; entry.ready_at = clock
             elif predecessor is not None and session.get(TransportTask, predecessor.task_id).status == 'ARRIVED' and route.origin_station_id == shipment.last_scanned_station_id:
                 entry.association_state = 'ACTIVE'
                 entry.ready_at = session.get(TransportTask, predecessor.task_id).arrived_at + timedelta(minutes=entry.approved_transfer_minutes)
@@ -473,7 +472,7 @@ def confirm_schedule(session, shipment_id, request, key):
         origin = int(snapshot[0]['origin_station_id']) if snapshot else int(value['anchor_station_id'])
         session.add(ShipmentScheduleVersion(shipment_id=shipment_id, version=shipment.schedule_version, path_version=shipment.path_version,
             origin_station_id=origin, destination_station_id=shipment.destination_station_id, source_plan_id=plan.id if plan else None,
-            source_plan_version=plan.version if plan else None, reason=request.reason, legs=snapshot, operation_id=parent.id, occurred_at=clock.current_time))
+            source_plan_version=plan.version if plan else None, reason=request.reason, legs=snapshot, operation_id=parent.id, occurred_at=clock))
         if not future and shipment.stage == 'AT_STATION' and shipment.last_scanned_station_id == shipment.destination_station_id:
             shipment.schedule_status = 'COMPLETED'
         session.flush()
@@ -486,7 +485,7 @@ def confirm_schedule(session, shipment_id, request, key):
 def schedule_body(session, shipment):
     version = session.scalar(select(ShipmentScheduleVersion).where(ShipmentScheduleVersion.shipment_id == shipment.id,
         ShipmentScheduleVersion.version == shipment.schedule_version))
-    now = clock_time(session)
+    now = business_time.server_now()
     rows, cache, configuration_risks = [], {}, []
     for saved in version.legs if version else []:
         row = dict(saved)
@@ -509,7 +508,7 @@ def schedule_body(session, shipment):
         'path_version': shipment.path_version, 'version': shipment.schedule_version,
         'origin_station_id': str(version.origin_station_id) if version else None,
         'destination_station_id': str(shipment.destination_station_id), 'legs': rows,
-        'configuration_risks': configuration_risks, 'simulation_time': now.isoformat()}
+        'configuration_risks': configuration_risks, 'server_time': now.isoformat()}
 
 
 def schedule_history(session, shipment_id, page, page_size):
@@ -557,7 +556,7 @@ def cancel_planned(session, task, request, clock, key, request_hash):
         body = get_transport_task(session, task.id)
         session.add(OperationLog(idempotency_key=key, request_hash=request_hash, action='CANCEL_TRANSPORT_TASK',
             resource_type='TRANSPORT_TASK', resource_id=task.id, before_data=None, after_data=None,
-            response_body=body, response_status=200, occurred_at=clock.current_time))
+            response_body=body, response_status=200, occurred_at=clock))
         return body
     if task.status not in UNSTARTED:
         error('INVALID_TASK_STATE', '只能取消未发车任务')
@@ -570,7 +569,7 @@ def cancel_planned(session, task, request, clock, key, request_hash):
         error('TASK_MEMBERSHIP_CONFLICT', '成员或下游安排已变化，请重新审核')
     parent = OperationLog(idempotency_key=key, request_hash=request_hash, action='CANCEL_TRANSPORT_TASK',
         resource_type='TRANSPORT_TASK', resource_id=task.id, before_data=current, after_data=None,
-        response_body={}, response_status=200, occurred_at=clock.current_time)
+        response_body={}, response_status=200, occurred_at=clock)
     session.add(parent); session.flush()
     touched = set()
     for item in current['impact']:
@@ -578,7 +577,7 @@ def cancel_planned(session, task, request, clock, key, request_hash):
         other_task = session.get(TransportTask, entry.task_id)
         if other_task.status not in UNSTARTED:
             error('INVALID_TASK_DEPENDENCY', '下游已有执行记录，不能取消此链路')
-        release_entry(session, entry, clock.current_time, request.reason)
+        release_entry(session, entry, clock, request.reason)
         shipment = parcel(session, entry.shipment_id)
         shipment.schedule_status = 'NEEDS_RECONFIRMATION'; shipment.schedule_reason = request.reason
         touched.add(other_task.id)
@@ -587,7 +586,7 @@ def cancel_planned(session, task, request, clock, key, request_hash):
     for task_id in sorted(touched):
         other = session.get(TransportTask, task_id)
         other.schedule_revision += 1
-        cancel_empty(session, other, clock.current_time, request.reason)
+        cancel_empty(session, other, clock, request.reason)
     session.flush()
     from transport.service import get_transport_task
     body = get_transport_task(session, task.id)

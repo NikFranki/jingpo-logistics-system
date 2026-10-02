@@ -9,7 +9,7 @@ from sqlalchemy.engine import make_url
 from pydantic import ValidationError
 from db import SessionLocal
 from errors import NetworkError, InvalidShipmentStateError, InvalidTaskShipmentError, IdempotencyKeyReusedError
-from models import Station, Shipment, SimulationSettings, TransportTask, OperationLog, TrackingEvent
+from models import Station, Shipment, TransportTask, OperationLog, TrackingEvent
 from network.schemas import StationCreateRequest, StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest
 from network.service import write_network, list_stations, list_routes
 from orders.schemas import OrderCreateRequest
@@ -28,6 +28,11 @@ class V3NetworkTests(unittest.TestCase):
             return fn(session, *args)
 
     def setUp(self):
+        from unittest.mock import patch
+        from datetime import datetime, timezone
+        self.time_source = patch("business_time.server_now", return_value=datetime.now(timezone.utc).replace(second=0, microsecond=0))
+        self.server_clock = self.time_source.start()
+        self.addCleanup(self.time_source.stop)
         self.prefix = 'T' + uuid4().hex[:8].upper()
         self.source = self.station('GZ', first=True)
         self.middle = self.station('WH', delivery=True)
@@ -39,7 +44,7 @@ class V3NetworkTests(unittest.TestCase):
             self.call(write_plan,PathPlanCreateRequest(code=self.prefix+'_'+suffix,name=suffix,
                 route_ids=route_ids),uuid4())
         with SessionLocal() as session:
-            self.clock = session.get(SimulationSettings, 1).current_time
+            self.clock = session.get(1).current_time
 
     def station(self, code, first=False, delivery=False):
         return self.call(write_network, 'STATION', StationCreateRequest(

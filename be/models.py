@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    ForeignKeyConstraint,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -24,34 +25,6 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 
 from db import Base
 from logistics_types import ShipmentStage, TrackingEventType, sql_enum_values
-
-# 全局表 保存整个系统共享的一份配置或状态（全局表保存“系统现在处于什么环境或时间”）
-# SimulationSettings 是一个 ORM 模型，作用是把 Python 类映射到 PostgreSQL 的 simulation_settings 表
-class SimulationSettings(Base):
-    __tablename__ = "simulation_settings"
-    __table_args__ = (
-        CheckConstraint("id = 1", name="ck_simulation_singleton"),
-        CheckConstraint(
-            "\"current_time\" >= TIMESTAMPTZ '2026-09-20 08:00:00+08:00'",
-            name="ck_simulation_start",
-        ),
-    )
-
-    # Mapped 表示 Python 中的数据类型
-    # mapped_column(...) 描述数据库列
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        autoincrement=False,
-    )
-    current_time: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=text("TIMESTAMPTZ '2026-09-20 08:00:00+08:00'"),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
 
 class OperationLog(Base):
     __tablename__ = "operation_logs"
@@ -106,7 +79,22 @@ class OperationLog(Base):
         server_default=func.now(),
     )
 
-class Order(Base):
+class StructuredAddressFields:
+    sender_province_id: Mapped[int | None] = mapped_column(ForeignKey("provinces.id", ondelete="RESTRICT"))
+    sender_province_name: Mapped[str | None] = mapped_column(String(100))
+    sender_city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"))
+    sender_city_name: Mapped[str | None] = mapped_column(String(100))
+    sender_district_id: Mapped[int | None] = mapped_column(ForeignKey("districts.id", ondelete="RESTRICT"))
+    sender_district_name: Mapped[str | None] = mapped_column(String(100))
+    recipient_province_id: Mapped[int | None] = mapped_column(ForeignKey("provinces.id", ondelete="RESTRICT"))
+    recipient_province_name: Mapped[str | None] = mapped_column(String(100))
+    recipient_city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"))
+    recipient_city_name: Mapped[str | None] = mapped_column(String(100))
+    recipient_district_id: Mapped[int | None] = mapped_column(ForeignKey("districts.id", ondelete="RESTRICT"))
+    recipient_district_name: Mapped[str | None] = mapped_column(String(100))
+
+
+class Order(StructuredAddressFields, Base):
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint(
@@ -235,7 +223,7 @@ class TransportRoute(Base):
         ForeignKey("stations.id"),
     )
 
-class Shipment(Base):
+class Shipment(StructuredAddressFields, Base):
     scheduling_mode: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
     schedule_version: Mapped[int] = mapped_column(Integer, server_default="0")
     schedule_status: Mapped[str] = mapped_column(String(32), server_default="NOT_CONFIRMED")
@@ -565,3 +553,51 @@ class ShipmentScheduleVersion(Base):
     legs: Mapped[list] = mapped_column(JSONB)
     operation_id: Mapped[int] = mapped_column(ForeignKey("operation_logs.id"))
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RegionFields:
+    """Shared dictionary fields; IDs are local to each administrative level."""
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    code: Mapped[str] = mapped_column(String(12), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text('true'))
+    sort_order: Mapped[int] = mapped_column(Integer, server_default='0')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Province(RegionFields, Base):
+    __tablename__ = 'provinces'
+    __table_args__ = (
+        CheckConstraint("code ~ '^[0-9]{2,12}$'", name='ck_provinces_code'),
+        CheckConstraint('length(btrim(name)) > 0', name='ck_provinces_name'),
+        CheckConstraint('sort_order >= 0', name='ck_provinces_sort'),
+        CheckConstraint("kind IN ('PROVINCE','AUTONOMOUS_REGION','MUNICIPALITY','SPECIAL_ADMINISTRATIVE_REGION')", name='ck_provinces_kind'),
+    )
+    kind: Mapped[str] = mapped_column(String(32), server_default='PROVINCE')
+
+
+class City(RegionFields, Base):
+    __tablename__ = 'cities'
+    __table_args__ = (
+        UniqueConstraint('id', 'province_id', name='uq_cities_id_province'),
+        CheckConstraint("code ~ '^[0-9]{2,12}$'", name='ck_cities_code'),
+        CheckConstraint('length(btrim(name)) > 0', name='ck_cities_name'),
+        CheckConstraint('sort_order >= 0', name='ck_cities_sort'),
+        Index('ix_cities_province', 'province_id'),
+    )
+    province_id: Mapped[int] = mapped_column(ForeignKey('provinces.id', ondelete='RESTRICT'))
+
+
+class District(RegionFields, Base):
+    __tablename__ = 'districts'
+    __table_args__ = (
+        ForeignKeyConstraint(['city_id', 'province_id'], ['cities.id', 'cities.province_id'],
+                             name='fk_districts_city_province', ondelete='RESTRICT'),
+        CheckConstraint("code ~ '^[0-9]{2,12}$'", name='ck_districts_code'),
+        CheckConstraint('length(btrim(name)) > 0', name='ck_districts_name'),
+        CheckConstraint('sort_order >= 0', name='ck_districts_sort'),
+        Index('ix_districts_parent', 'province_id', 'city_id'),
+    )
+    province_id: Mapped[int] = mapped_column(ForeignKey('provinces.id', ondelete='RESTRICT'))
+    city_id: Mapped[int | None] = mapped_column(BigInteger)

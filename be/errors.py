@@ -1,6 +1,3 @@
-class SimulationClockNotInitializedError(Exception):
-    pass
-
 
 class IdempotencyKeyReusedError(Exception):
     pass

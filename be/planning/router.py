@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 from db import get_db
 from models import Shipment
-from errors import IdempotencyKeyReusedError, ShipmentNotFoundError, SimulationClockNotInitializedError
+from errors import IdempotencyKeyReusedError, ShipmentNotFoundError
 from planning.schemas import (PathPlanCreateRequest,PathPlanUpdateRequest,PathPlanResponse,
     ShipmentPathUpdateRequest,ShipmentTransportPathResponse,PathOptionsResponse,PathHistoryResponse)
 from planning.service import (list_plans,write_plan,shipment_path_body,matching_plans,
@@ -18,7 +18,6 @@ Key = Annotated[UUID,Header(alias="Idempotency-Key")]
 def write(fn,*args):
     try: return fn(*args)
     except IdempotencyKeyReusedError: raise HTTPException(409,"Idempotency-Key was reused with different content")
-    except SimulationClockNotInitializedError: raise HTTPException(503,"Simulation clock is not initialized")
     except ShipmentNotFoundError: raise HTTPException(404,"Shipment not found")
 
 

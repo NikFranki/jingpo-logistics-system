@@ -62,9 +62,6 @@ class V6MigrationTests(unittest.TestCase):
             unplanned=self.shipments['AT_B']
             with self.assertRaises(InvalidTaskShipmentError):
                 create_transport_task(session,TransportTaskCreateRequest(route_code='BC',expected_arrival_at=clock+timedelta(days=1),shipment_ids=[unplanned]),uuid4())
-        # Rehearsal fixture events extend beyond its initial clock; advance before new physical events.
-        with self.engine.begin() as conn:
-            conn.execute(text('UPDATE simulation_settings SET "current_time"=:time'),{'time':clock+timedelta(hours=12)})
         # Existing pending tasks continue without inventing a path retroactively.
         with Session(self.engine) as session: depart_transport_task(session,task_id,uuid4())
         with Session(self.engine) as session: arrive_transport_task(session,task_id,uuid4())

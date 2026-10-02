@@ -1,3 +1,4 @@
+from regions.addresses import AddressSelection, AddressResponse, REGION_FIELDS, validate_patch
 from typing import Annotated, Literal, Self
 from datetime import datetime
 import re
@@ -33,7 +34,7 @@ class ShipmentCreateRequest(BaseModel):
     destination_station_id: int = Field(gt=0, strict=True)
 
 
-class ShipmentResponse(BaseModel):
+class ShipmentResponse(AddressResponse):
     id: str
     shipment_no: str
     order_id: str
@@ -76,7 +77,7 @@ AddressText = Annotated[
 ]
 
 
-class ShipmentAddressUpdateRequest(BaseModel):
+class ShipmentAddressUpdateRequest(AddressSelection):
     model_config = ConfigDict(extra="forbid")
 
     sender_address: AddressText | None = None
@@ -89,7 +90,9 @@ class ShipmentAddressUpdateRequest(BaseModel):
         if not changes:
             raise ValueError("At least one address must be provided")
 
-        if any(value is None for value in changes.values()):
+        validate_patch(changes)
+
+        if any(value is None for key, value in changes.items() if key not in REGION_FIELDS):
             raise ValueError("Address cannot be null")
 
         return self

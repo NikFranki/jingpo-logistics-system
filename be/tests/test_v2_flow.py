@@ -14,7 +14,7 @@ from sqlalchemy.engine import make_url
 
 from db import SessionLocal
 from errors import InvalidShipmentStateError, InvalidTaskShipmentError
-from models import OperationLog, Order, Shipment, SimulationSettings, Station, TaskShipment, TrackingEvent, TransportTask
+from models import OperationLog, Order, Shipment, Station, TaskShipment, TrackingEvent, TransportTask
 from orders.schemas import OrderCreateRequest
 from orders.service import create_order
 from shipments.schemas import ShipmentAddressUpdateRequest, ShipmentEventRequest
@@ -72,7 +72,7 @@ class V2FlowTests(unittest.TestCase):
         shipment_id = int(shipment["id"])
         with SessionLocal() as session:
             station_a = session.scalar(select(Station.id).where(Station.code == "A"))
-            clock = session.get(SimulationSettings, 1).current_time
+            clock = session.get(1).current_time
         self.call(process_shipment_event, shipment_id, ShipmentEventRequest(event_type="PICKUP"), uuid4())
         self.call(process_shipment_event, shipment_id, ShipmentEventRequest(event_type="ARRIVE", station_id=str(station_a)), uuid4())
 
@@ -117,12 +117,12 @@ class V2FlowTests(unittest.TestCase):
     @staticmethod
     def _clock():
         with SessionLocal() as session:
-            return session.get(SimulationSettings, 1).current_time
+            return session.get(1).current_time
 
     def test_arrival_rolls_back_every_shipment_on_event_failure(self):
         with SessionLocal() as session:
             station_a = session.scalar(select(Station.id).where(Station.code == "A"))
-            clock = session.get(SimulationSettings, 1).current_time
+            clock = session.get(1).current_time
         shipment_ids = []
         for number in (1, 2):
             order = self.call(
@@ -214,7 +214,7 @@ class V2FlowTests(unittest.TestCase):
             station_ids = {
                 station.code: station.id for station in session.scalars(select(Station))
             }
-            clock = session.get(SimulationSettings, 1).current_time
+            clock = session.get(1).current_time
 
         with self.assertRaises(InvalidShipmentStateError):
             self.call(

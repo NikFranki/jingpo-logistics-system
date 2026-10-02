@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from db import get_db
-from errors import IdempotencyKeyReusedError, SimulationClockNotInitializedError
+from errors import IdempotencyKeyReusedError
 from network.schemas import (StationResponse, TransportRouteResponse, StationCreateRequest,
     StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest)
 from network.service import list_stations, list_routes, station_body, route_body, write_network
@@ -25,8 +25,6 @@ def write(session, kind, request, key, resource_id=None):
         return write_network(session, kind, request, key, resource_id)
     except IdempotencyKeyReusedError:
         raise HTTPException(409, "Idempotency-Key was reused with different content")
-    except SimulationClockNotInitializedError:
-        raise HTTPException(503, "Simulation clock is not initialized")
 
 @router.post("/stations", response_model=StationResponse, status_code=201)
 def create_station(request: StationCreateRequest, idempotency_key: Key, session: DB):

@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models import Order
+from regions.addresses import address_body
 from logistics_types import ShipmentStage
 from shipments.schemas import ShipmentDetailResponse, ShipmentCreateRequest
 from shipments.service import create_shipment
 
 from errors import (
     IdempotencyKeyReusedError,
-    SimulationClockNotInitializedError,
     OrderNotEditableError,
     OrderNotFoundError,
 )
@@ -40,6 +40,7 @@ router = APIRouter(
 
 def to_order_response(order: Order) -> OrderResponse:
     return OrderResponse(
+        **address_body(order),
         id=str(order.id),
         order_no=order.order_no,
         product_name=order.product_name,
@@ -99,11 +100,6 @@ def create_order(
             request=request,
             idempotency_key=idempotency_key,
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -142,11 +138,6 @@ def update_order(
         raise HTTPException(
             status_code=409,
             detail="Order is no longer editable",
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
         )
     except IdempotencyKeyReusedError:
         raise HTTPException(
@@ -189,11 +180,6 @@ def create_order_shipment(
         raise HTTPException(
             status_code=409,
             detail="Order cannot create a shipment",
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
         )
     except IdempotencyKeyReusedError:
         raise HTTPException(

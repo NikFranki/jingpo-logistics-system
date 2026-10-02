@@ -1,0 +1,42 @@
+{
+  "repository": "https://github.com/kamaslau/chinese_regions",
+  "commit": "c3ac97435218222a622ebc9ee3ff797fd6e94df1",
+  "source_path": "out/all.min.json",
+  "data_updated": "2026-02-20 (upstream README)",
+  "mainland_source_published": "2025-04-25 (upstream README)",
+  "license": "MIT",
+  "sha256": {
+    "source.json": "2afd1a4f5e0c9598885000b93147710acc86ec4fe8425007b5c590cafa1cf4c7",
+    "china-regions.json": "ff068c85c51296ec58281c0482b6f0d734607b2a22a9ab880f18f15cbcfba53d",
+    "supplement-source.json": "83b7536f853ad16beb4d37b92890a3fd7bb9d33d4f37e7c8885fb948749a9bc4"
+  },
+  "counts": {
+    "provinces": 34,
+    "cities": 355,
+    "districts": 3241
+  },
+  "supplements": [
+    {
+      "repository": "https://github.com/modood/Administrative-divisions-of-China",
+      "commit": "c49d495b40ac73eb1a66f6eeae5f8fd10696f035",
+      "source_path": "dist/pca-code.json",
+      "data_version": "2023-06-30",
+      "license": "WTFPL",
+      "rows": [
+        {
+          "code": "654202",
+          "name": "乌苏市",
+          "province_code": "650000",
+          "city_code": "654200"
+        },
+        {
+          "code": "654203",
+          "name": "沙湾市",
+          "province_code": "650000",
+          "city_code": "654200"
+        }
+      ],
+      "verification": "https://yjgl.xinjiang.gov.cn/xjyjgl/c112888/202507/21cb279a8ed14b60a1663bd3fd665d9d.shtml"
+    }
+  ]
+}

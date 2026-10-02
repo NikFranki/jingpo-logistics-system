@@ -31,14 +31,14 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   ]
   return <PageContainer title="运单" subTitle="处理揽收、站点入站、运输安排和末端派送。">
     {loadError && <Alert type="error" showIcon message="运单列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
-    <ProTable<Shipment> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 90 }} pagination={{ pageSize: 20, showSizeChanger: true }} request={async params => {
+    <ProTable<Shipment> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 90 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} request={async params => {
       try { const result = await api.shipments({ page: params.current ?? 1, page_size: params.pageSize ?? 20, shipment_no: params.shipment_no as string, stage: params.stage as string }); setLoadError(undefined); return { data: result.items, total: result.total, success: true } }
       catch (error) { const reason = apiError(error); setLoadError(reason); return { data: [], total: 0, success: false } }
     }} />
   </PageContainer>
 }
 
-function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?: string }) {
+function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const { shipmentId = '' } = useParams()
   const navigate = useNavigate()
   const network = useNetwork(revision)
@@ -259,7 +259,7 @@ function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?
           <Alert type={detail.schedule.status === 'BLOCKED' || detail.schedule.status === 'NEEDS_RECONFIRMATION' ? 'warning' : detail.schedule.status === 'COMPLETED' ? 'success' : 'info'} showIcon message={`${scheduleStatusText[detail.schedule.status] ?? detail.schedule.status} · 计划版本 v${detail.schedule.version}`} description={<>
             {detail.schedule.origin_station_id && <>计划起点：<StationName id={detail.schedule.origin_station_id} />。 </>}
             {detail.schedule.reason && <>{detail.schedule.reason} </>}
-            <Text type="secondary">计划时间是审核基准；最新预测会随演示时间变化，实际发车和到达仍由操作记录。</Text>
+            <Text type="secondary">计划时间是审核基准；最新预测会随运输进度变化，实际发车和到达仍由操作记录。</Text>
           </>} style={{ marginBottom: 12 }} />
           {detail.schedule.configuration_risks.map((risk, index) => <Alert key={index} type="warning" showIcon message={risk.message ?? '计划中的线路或站点配置已停用'} style={{ marginBottom: 8 }} />)}
           {detail.schedule.legs.length ? <Table rowKey="path_leg_id" size="small" pagination={false} dataSource={detail.schedule.legs} scroll={{ x: 1050 }} columns={[
@@ -316,7 +316,7 @@ function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?
       </div>
       <Tabs items={[
         { key: 'tracking', label: '物流轨迹', children: detail.tracking_events.length ? <Timeline items={detail.tracking_events.map(event => ({ children: <><Text strong>{eventText[event.event_type] ?? event.event_type}</Text><br /><Text type="secondary">{formatTime(event.occurred_at)}{event.station_id ? ' · ' : ''}</Text>{event.station_id && <StationName id={event.station_id} />}</> }))} /> : <Empty description="暂无物流轨迹" /> },
-        { key: 'path-history', label: '路径安排历史', children: pathHistoryError ? <Alert type="warning" showIcon message="路径历史暂不可用" description={pathHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : pathHistory.length ? <Table<PathVersion> rowKey="version" dataSource={pathHistory} pagination={{ current: pathHistoryPage, pageSize: 20, total: pathHistoryTotal, onChange: setPathHistoryPage }} columns={[
+        { key: 'path-history', label: '路径安排历史', children: pathHistoryError ? <Alert type="warning" showIcon message="路径历史暂不可用" description={pathHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : pathHistory.length ? <Table<PathVersion> rowKey="version" dataSource={pathHistory} pagination={{ current: pathHistoryPage, pageSize: 20, showSizeChanger: false, total: pathHistoryTotal, onChange: setPathHistoryPage }} columns={[
           { title: '版本', dataIndex: 'version', width: 80, render: value => `v${value}` },
           { title: '目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
           { title: '来源方案', render: (_, row) => row.source_plan_id ? `方案 ${row.source_plan_id} · v${row.source_plan_version}` : '手动安排' },
@@ -324,20 +324,20 @@ function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?
           { title: '调整原因', dataIndex: 'reason' },
           { title: '记录时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
         ]} /> : <Empty description="尚无路径安排历史；未绑定前的旧任务和轨迹仍见各自历史记录。" /> },
-        ...(detail.scheduling_mode === 'REVIEWED' ? [{ key: 'schedule-history', label: '运输计划历史', children: scheduleHistoryError ? <Alert type="warning" showIcon message="计划历史暂不可用" description={scheduleHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : scheduleHistory.length ? <Table<ScheduleHistoryItem> rowKey="version" dataSource={scheduleHistory} pagination={{ current: scheduleHistoryPage, pageSize: 20, total: scheduleHistoryTotal, onChange: setScheduleHistoryPage }} columns={[
+        ...(detail.scheduling_mode === 'REVIEWED' ? [{ key: 'schedule-history', label: '运输计划历史', children: scheduleHistoryError ? <Alert type="warning" showIcon message="计划历史暂不可用" description={scheduleHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : scheduleHistory.length ? <Table<ScheduleHistoryItem> rowKey="version" dataSource={scheduleHistory} pagination={{ current: scheduleHistoryPage, pageSize: 20, showSizeChanger: false, total: scheduleHistoryTotal, onChange: setScheduleHistoryPage }} columns={[
           { title: '版本', dataIndex: 'version', width: 80, render: value => `v${value}` },
           { title: '全程路线', render: (_, row) => row.legs.map(leg => leg.route_code).join(' → ') || '无后续段' },
           { title: '计划时间', render: (_, row) => row.legs.map(leg => `${leg.route_code} ${formatTime(leg.planned_departure_at)} → ${formatTime(leg.planned_arrival_at)}`).join('；') },
           { title: '审核原因', dataIndex: 'reason' },
           { title: '确认时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
         ]} /> : <Empty description="尚无已确认计划版本" /> }] : []),
-        { key: 'destinations', label: '目的站更正记录', children: destinationChangesError ? <Alert type="warning" showIcon message="更正记录暂不可用" description={destinationChangesError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : <Table<DestinationChange> rowKey="id" dataSource={destinationChanges} pagination={{ current: destinationChangesPage, pageSize: 20, total: destinationChangesTotal, onChange: setDestinationChangesPage }} locale={{ emptyText: <Empty description="暂无目的站更正记录" /> }} columns={[
+        { key: 'destinations', label: '目的站更正记录', children: destinationChangesError ? <Alert type="warning" showIcon message="更正记录暂不可用" description={destinationChangesError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : <Table<DestinationChange> rowKey="id" dataSource={destinationChanges} pagination={{ current: destinationChangesPage, pageSize: 20, showSizeChanger: false, total: destinationChangesTotal, onChange: setDestinationChangesPage }} locale={{ emptyText: <Empty description="暂无目的站更正记录" /> }} columns={[
           { title: '原目的站', dataIndex: 'previous_destination_station_id', render: value => <StationName id={value} /> },
           { title: '新目的站', dataIndex: 'destination_station_id', render: value => <StationName id={value} /> },
           { title: '更正原因', dataIndex: 'reason' },
           { title: '操作时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
         ]} /> },
-        { key: 'tasks', label: '运输任务历史', children: historyError ? <Alert type="warning" showIcon message="任务历史暂不可用" description={historyError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : history.length ? <Table<ShipmentTaskHistory> rowKey="id" pagination={{ current: historyPage, pageSize: 20, total: historyTotal, onChange: setHistoryPage }} dataSource={history} columns={[
+        { key: 'tasks', label: '运输任务历史', children: historyError ? <Alert type="warning" showIcon message="任务历史暂不可用" description={historyError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : history.length ? <Table<ShipmentTaskHistory> rowKey="id" pagination={{ current: historyPage, pageSize: 20, showSizeChanger: false, total: historyTotal, onChange: setHistoryPage }} dataSource={history} columns={[
           { title: '任务号', dataIndex: 'task_no', render: (value, row) => <Link to={'/tasks/' + row.id}>{value}</Link> },
           { title: '线路', render: (_, row) => <>{row.route_code} · <StationName id={row.origin_station_id} /> → <StationName id={row.destination_station_id} /></> },
           { title: '状态', dataIndex: 'status', render: value => taskStatusText[value] }, { title: '释放占用时间', dataIndex: 'released_at', render: value => formatTime(value) },
@@ -429,7 +429,7 @@ function ShipmentDetailPage({ revision, busy, mutate, clock }: Shared & { clock?
           <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
         </>}
       </Modal>
-      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} clock={clock} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
+      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}

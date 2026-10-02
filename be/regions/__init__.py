@@ -1,0 +1,1 @@
+"""Domestic administrative region dictionary."""

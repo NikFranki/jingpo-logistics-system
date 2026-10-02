@@ -19,7 +19,6 @@ from errors import (
     InvalidExpectedArrivalError,
     InvalidTaskShipmentError,
     NetworkDataNotInitializedError,
-    SimulationClockNotInitializedError,
     TransportTaskNotFoundError,
     InvalidTransportTaskStateError,
 )
@@ -62,27 +61,21 @@ def read_transport_tasks(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> TransportTaskListResponse:
-    try:
-        items, total, simulation_time = list_transport_tasks(
-            session=session,
-            page=page,
-            page_size=page_size,
-            task_no=task_no,
-            route_code=route_code,
-            status=status,
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
+    items, total, server_time = list_transport_tasks(
+        session=session,
+        page=page,
+        page_size=page_size,
+        task_no=task_no,
+        route_code=route_code,
+        status=status,
+    )
 
     return TransportTaskListResponse(
         items=items,
         total=total,
         page=page,
         page_size=page_size,
-        simulation_time=simulation_time,
+        server_time=server_time,
     )
 
 @router.get(
@@ -137,11 +130,6 @@ def create_task(
             request=request,
             idempotency_key=idempotency_key,
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -150,7 +138,7 @@ def create_task(
     except InvalidExpectedArrivalError:
         raise HTTPException(
             status_code=409,
-            detail="Expected arrival must be after simulation time",
+            detail="Expected arrival must be after server time",
         )
     except InvalidTaskShipmentError:
         raise HTTPException(
@@ -200,11 +188,6 @@ def depart_task(
             status_code=409,
             detail="Task shipments are invalid",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -251,11 +234,6 @@ def arrive_task(
             status_code=409,
             detail="Task shipments are invalid",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -287,11 +265,6 @@ def read_transport_task(
             status_code=404,
             detail="Transport task not found",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
 
     return TransportTaskDetailResponse.model_validate(
         response_body
@@ -314,8 +287,6 @@ def cancel_task(
         raise HTTPException(409, "Task shipment associations or locations conflict")
     except IdempotencyKeyReusedError:
         raise HTTPException(409, "Idempotency-Key was reused with different content")
-    except SimulationClockNotInitializedError:
-        raise HTTPException(503, "Simulation clock is not initialized")
     except NetworkDataNotInitializedError:
         raise HTTPException(503, "Network data is not initialized")
     return TransportTaskDetailResponse.model_validate(body)

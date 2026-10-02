@@ -8,12 +8,12 @@ import { RouteSequenceEditor } from './RouteSequenceEditor'
 
 const { Text } = Typography
 type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
-type Props = { revision: number; busy: boolean; mutate: Mutate }
+type Props = { revision: number; busy: boolean; mutate: Mutate; view?: 'stations' | 'routes' | 'paths' }
 type StationForm = StationInput
 type RouteForm = Omit<RouteInput, 'origin_station_id' | 'destination_station_id'> & { origin_station_id: string; destination_station_id: string }
 type PathPlanForm = Omit<PathPlanInput, 'route_ids' | 'transfer_overrides'> & { route_ids: string[]; transfer_override_values?: Record<string, number> }
 
-export default function NetworkPage({ revision, busy, mutate }: Props) {
+export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: Props) {
   const [stations, setStations] = useState<Station[]>([])
   const [routes, setRoutes] = useState<TransportRoute[]>([])
   const [pathPlans, setPathPlans] = useState<PathPlan[]>([])
@@ -153,20 +153,28 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     { title: '操作', width: 90, render: (_, row) => <Button type="link" size="small" disabled={busy} onClick={() => openEditPathPlan(row)}>编辑</Button> },
   ]
 
-  return <><PageContainer title="网络配置" subTitle="维护物流站点、线路、参考耗时和可复用的完整路径方案。" extra={<Space wrap><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button><Button icon={<PlusOutlined />} onClick={openCreateStation}>新增站点</Button><Button onClick={openCreatePathPlan}>新增完整路径方案</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRoute(undefined); routeForm.setFieldsValue({ code: '', origin_station_id: undefined, destination_station_id: undefined, enabled: true, delay_monitoring_enabled: false, travel_minutes: undefined }); setRouteModal(true) }}>新增线路</Button></Space>}>
-    {error && <Alert type="error" showIcon message="网络配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
-    <Card title="站点" style={{ marginBottom: 16 }}>
+  const openCreateRoute = () => {
+    setEditingRoute(undefined)
+    routeForm.setFieldsValue({ code: '', origin_station_id: undefined, destination_station_id: undefined, enabled: true, delay_monitoring_enabled: false, travel_minutes: undefined })
+    setRouteModal(true)
+  }
+  const title = view === 'stations' ? '站点管理' : view === 'routes' ? '线路管理' : '路径方案'
+  const description = view === 'stations' ? '维护物流站点、站点能力和默认中转参考时长。' : view === 'routes' ? '维护站点间运输线路、参考运输时长和延误监测。' : '维护供运单匹配使用的可复用完整路径方案。'
+
+  return <><PageContainer title={title} subTitle={description} extra={<Space wrap><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button>{view === 'stations' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateStation}>新增站点</Button>}{view === 'routes' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateRoute}>新增线路</Button>}{view === 'paths' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreatePathPlan}>新增完整路径方案</Button>}</Space>}>
+    {error && view !== 'paths' && <Alert type="error" showIcon message="网络配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
+    {view === 'stations' && <Card title="站点列表">
       <Table<Station> rowKey="id" loading={loading} columns={[...stationColumns.slice(0, 2), { title: '默认中转参考', dataIndex: 'transfer_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟` }, ...stationColumns.slice(2)]} dataSource={stations} pagination={false} scroll={{ x: 1000 }} locale={{ emptyText: '还没有站点，先新增一个站点。' }} />
-    </Card>
-    <Card title="运输线路">
+    </Card>}
+    {view === 'routes' && <Card title="运输线路列表">
       <Table<TransportRoute> rowKey="id" loading={loading} columns={[...routeColumns.slice(0, 2), { title: '参考运输时长', dataIndex: 'travel_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟`, sorter: (a, b) => (a.travel_minutes ?? -1) - (b.travel_minutes ?? -1) }, ...routeColumns.slice(2)]} dataSource={routes} pagination={false} scroll={{ x: 900 }} locale={{ emptyText: '还没有线路，先配置站点再新增线路。' }} />
-    </Card>
-    <Card title="完整路径方案" style={{ marginTop: 16 }}>
+    </Card>}
+    {view === 'paths' && <Card title="完整路径方案">
       {pathPlanError && <Alert type="error" showIcon message="路径方案读取失败" description={pathPlanError} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 12 }} />}
       <Table<PathPlan> rowKey="id" loading={loading} columns={pathPlanColumns} dataSource={pathPlans} pagination={false} scroll={{ x: 900 }} locale={{ emptyText: pathPlanError ? '路径方案暂不可用。' : '还没有完整路径方案；运单首次入站后可手动规划完整路径。' }} />
       <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>方案用于新运单自动匹配；编辑或停用不会改动已经绑定方案的运单路径。线路和站点停用会影响未来新任务，不会改写已发生的运输。</Text>
-    </Card>
-    <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>站点编码和线路起终点创建后不可修改。停用受在途任务、在站运单和未签收目的运单约束。</Text>
+    </Card>}
+    {view !== 'paths' && <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>站点编码和线路起终点创建后不可修改。停用受在途任务、在站运单和未签收目的运单约束。</Text>}
   </PageContainer>
   <Modal title={editingStation ? `编辑站点 ${editingStation.code}` : '新增站点'} open={stationModal} onCancel={() => setStationModal(false)} onOk={() => stationForm.submit()} confirmLoading={busy} destroyOnHidden>
     <Form form={stationForm} layout="vertical" initialValues={{ enabled: true, allows_first_arrival: false, allows_delivery: false }} onFinish={values => void saveStation(values)}>

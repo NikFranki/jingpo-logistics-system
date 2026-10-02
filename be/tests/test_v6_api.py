@@ -41,7 +41,7 @@ class V6ApiTests(unittest.TestCase):
         detail=self.request(base)[1]
         self.assertEqual(detail['transport_path'],initial)
         self.assertEqual(self.request(base+'/path-options')[1]['plans'][0]['id'],plan['id'])
-        clock=datetime.fromisoformat(self.request('/simulation/clock')[1]['current_time'])
+        clock=datetime.fromisoformat(self.request('/server-time')[1]['server_time'])
         body=dict(shipment_ids=[int(parcel['id'])],expected_arrival_at=(clock+timedelta(hours=1)).isoformat(),expected_path_versions={parcel['id']:1})
         status,task=self.request('/transport-tasks/create','POST',body)
         self.assertEqual(status,201,task)
@@ -110,7 +110,7 @@ class V6ApiTests(unittest.TestCase):
         for suffix in ('path','path-options','path-history'):
             self.assertEqual(self.request('/shipments/999999999/'+suffix)[0],404)
         self.assertEqual(self.request('/shipments/999999999/path','PUT',chosen)[0],404)
-        clock=datetime.fromisoformat(self.request('/simulation/clock')[1]['current_time'])
+        clock=datetime.fromisoformat(self.request('/server-time')[1]['server_time'])
         task=dict(shipment_ids=[int(parcel['id'])],expected_arrival_at=(clock+timedelta(hours=1)).isoformat())
         self.assertEqual(self.request('/transport-tasks/create','POST',task)[0],422)
         for versions in ({},{parcel['id']:'1'},{parcel['id']:True},{parcel['id']:0}):

@@ -115,13 +115,16 @@ class V3ApiTests(unittest.TestCase):
         self.assertEqual(status,200,arrived)
         candidates=self.request('/transport-tasks/candidates?route_code='+code)[1]
         self.assertIn(shipment['id'],[s['id'] for s in candidates['items']])
-        clock=datetime.fromisoformat(self.request('/simulation/clock')[1]['current_time'])
+        clock=datetime.fromisoformat(self.request('/server-time')[1]['server_time'])
         status,task=self.request('/transport-tasks/create','POST',{'route_code':code,'expected_arrival_at':(clock+timedelta(hours=1)).isoformat(),'shipment_ids':[int(shipment['id'])]})
         self.assertEqual(status,201,task)
         self.assertTrue(task['delay_monitoring_enabled'])
         self.assertEqual(self.request('/routes/'+route['id'],'PATCH',{'enabled':False,'delay_monitoring_enabled':False})[0],200)
         self.assertEqual(self.request('/transport-tasks/'+task['id']+'/depart','POST')[0],200)
-        self.assertEqual(self.request('/simulation/clock/advance','POST',{'minutes':120})[0],200)
+        from db import engine
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE transport_tasks SET expected_arrival_at=now()-interval '60 minutes' WHERE id=:id"), {'id': int(task['id'])})
         status,detail=self.request('/transport-tasks/'+task['id'])
         self.assertEqual(status,200,detail)
         self.assertEqual((detail['delay_status'],detail['delay_minutes']),('OVERDUE',60))

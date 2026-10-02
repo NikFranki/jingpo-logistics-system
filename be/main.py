@@ -10,8 +10,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from db import engine
 from errors import NetworkError
 
-# 引入 simulation 路由
-from simulation.router import router as simulation_router
 # 引入 orders 路由
 from orders.router import router as orders_router
 # 引入 network 路由
@@ -20,6 +18,7 @@ from shipments.router import router as shipments_router
 from transport.router import router as transport_router
 from planning.router import router as planning_router
 from scheduling.router import router as scheduling_router
+from regions.router import router as regions_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS
@@ -131,13 +130,13 @@ async def handle_unexpected_error(
         headers={"X-Request-ID": request_id},
     )
 
-app.include_router(simulation_router)
 app.include_router(orders_router)
 app.include_router(network_router)
 app.include_router(shipments_router)
 app.include_router(transport_router)
 app.include_router(planning_router)
 app.include_router(scheduling_router)
+app.include_router(regions_router)
 
 # 把 get /health 请求交给下面的函数
 @app.get("/health")
@@ -155,3 +154,9 @@ def readiness():
             detail="Database not ready",
         )
     return {"status": "ready"}
+
+
+@app.get("/api/v1/server-time")
+def read_server_time():
+    from business_time import server_now
+    return {"server_time": server_now()}

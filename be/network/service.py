@@ -1,12 +1,13 @@
+import business_time
 import hashlib
 import json
 from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, aliased
 
-from errors import IdempotencyKeyReusedError, NetworkError, SimulationClockNotInitializedError
+from errors import IdempotencyKeyReusedError, NetworkError
 from logistics_types import TaskStatus
-from models import OperationLog, Shipment, SimulationSettings, Station, TransportRoute, TransportTask, ShipmentPathLeg, TaskShipment
+from models import OperationLog, Shipment, Station, TransportRoute, TransportTask, ShipmentPathLeg, TaskShipment
 
 
 def station_body(station: Station) -> dict:
@@ -87,14 +88,12 @@ def write_network(session: Session, kind: str, request, key: UUID, resource_id: 
     model = Station if kind == "STATION" else TransportRoute
     with session.begin():
         # This is also acquired by every business write, serializing config changes with admission.
-        clock = session.scalar(select(SimulationSettings).where(SimulationSettings.id == 1).with_for_update())
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
         replay = session.scalar(select(OperationLog).where(OperationLog.idempotency_key == key))
         if replay:
             if replay.request_hash != digest:
                 raise IdempotencyKeyReusedError
-            return replay.response_body
+            return business_time.normalize_cached_response(replay.response_body)
         before = None
         if resource_id is None:
             if session.scalar(select(model.id).where(model.code == changes["code"])):
@@ -127,5 +126,5 @@ def write_network(session: Session, kind: str, request, key: UUID, resource_id: 
         session.add(OperationLog(idempotency_key=key, request_hash=digest, action=action,
             resource_type=kind, resource_id=obj.id, before_data=before, after_data=body,
             response_body=body, response_status=201 if resource_id is None else 200,
-            occurred_at=clock.current_time))
+            occurred_at=clock))
     return body

@@ -139,7 +139,7 @@ class ScheduleResponse(BaseModel):
     origin_station_id: str | None
     destination_station_id: str
     legs: list[ScheduleLeg]
-    simulation_time: datetime
+    server_time: datetime
 
 
 class ScheduleHistoryItem(BaseModel):

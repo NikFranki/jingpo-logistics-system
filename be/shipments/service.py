@@ -1,3 +1,5 @@
+import business_time
+from regions.addresses import address_body, request_body, resolve_changes, REGION_FIELDS, SNAPSHOT_FIELDS
 import hashlib
 import json
 from uuid import UUID
@@ -10,7 +12,6 @@ from errors import (
     IdempotencyKeyReusedError,
     OrderNotEditableError,
     OrderNotFoundError,
-    SimulationClockNotInitializedError,
     InvalidShipmentStateError,
     InvalidShipmentDestinationError,
     ShipmentNotFoundError,
@@ -21,7 +22,6 @@ from models import (
     OperationLog,
     Order,
     Shipment,
-    SimulationSettings,
     TrackingEvent,
     Station,
     TaskShipment,
@@ -117,6 +117,7 @@ def build_shipment_response_body(
         can_update_path = False
     from scheduling.service import schedule_body
     return {
+        **address_body(shipment),
         "scheduling_mode": shipment.scheduling_mode,
         "schedule": schedule_body(session, shipment) if shipment.scheduling_mode == "REVIEWED" else None,
         "id": str(shipment.id),
@@ -202,14 +203,7 @@ def create_shipment(
         request_hash = hashlib.sha256((request_hash + ":" + scheduling_mode).encode()).hexdigest()
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -266,7 +260,7 @@ def create_shipment(
                     after_data=None,
                     response_body=response_body,
                     response_status=200,
-                    occurred_at=clock.current_time,
+                    occurred_at=clock,
                 )
             )
 
@@ -282,6 +276,7 @@ def create_shipment(
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
 
         shipment = Shipment(
+            **{field: getattr(order, field) for field in (*REGION_FIELDS, *SNAPSHOT_FIELDS)},
             order_id=order.id,
             scheduling_mode=scheduling_mode,
             destination_station_id=destination_station_id,
@@ -306,7 +301,7 @@ def create_shipment(
             after_data=None,
             response_body={},
             response_status=201,
-            occurred_at=clock.current_time,
+            occurred_at=clock,
         )
         # 写操作日志
         session.add(operation_log)
@@ -315,7 +310,7 @@ def create_shipment(
         event = TrackingEvent(
             shipment_id=shipment.id,
             event_type="SHIPMENT_CREATED",
-            occurred_at=clock.current_time,
+            occurred_at=clock,
             station_id=None,
             task_id=None,
             operation_id=operation_log.id,
@@ -342,7 +337,7 @@ def build_update_address_request_hash(
         {
             "action": "UPDATE_SHIPMENT_ADDRESS",
             "shipment_id": shipment_id,
-            "body": request.model_dump(exclude_unset=True),
+            "body": request_body(request),
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -363,14 +358,7 @@ def update_shipment_address(
     )
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -382,7 +370,7 @@ def update_shipment_address(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
         shipment = session.scalar(
             select(Shipment)
@@ -396,7 +384,7 @@ def update_shipment_address(
         if shipment.stage != "PENDING_PICKUP":
             raise InvalidShipmentStateError
 
-        changes = request.model_dump(exclude_unset=True)
+        changes = resolve_changes(session, request_body(request))
         before_data = {
             field: getattr(shipment, field)
             for field in changes
@@ -436,7 +424,7 @@ def update_shipment_address(
                 after_data=after_data,
                 response_body=response_body,
                 response_status=200,
-                occurred_at=clock.current_time,
+                occurred_at=clock,
             )
         )
 
@@ -468,14 +456,7 @@ def process_shipment_event(
     rule = SHIPMENT_EVENT_RULES[request.event_type]
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -487,7 +468,7 @@ def process_shipment_event(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
         shipment = session.scalar(
             select(Shipment)
@@ -531,7 +512,7 @@ def process_shipment_event(
                     after_data=None,
                     response_body=response_body,
                     response_status=200,
-                    occurred_at=clock.current_time,
+                    occurred_at=clock,
                 )
             )
 
@@ -601,7 +582,7 @@ def process_shipment_event(
             after_data=None,
             response_body={},
             response_status=200,
-            occurred_at=clock.current_time,
+            occurred_at=clock,
         )
 
         session.add(operation_log)
@@ -610,7 +591,7 @@ def process_shipment_event(
         event = TrackingEvent(
             shipment_id=shipment.id,
             event_type=request.event_type,
-            occurred_at=clock.current_time,
+            occurred_at=clock,
             station_id=station.id if station is not None else None,
             task_id=None,
             operation_id=operation_log.id,
@@ -620,9 +601,9 @@ def process_shipment_event(
         if request.event_type == TrackingEventType.ARRIVE:
             if shipment.scheduling_mode == 'REVIEWED' and shipment.schedule_version:
                 from scheduling.service import activate_next
-                activate_next(session, shipment, clock.current_time, operation_log)
+                activate_next(session, shipment, clock, operation_log)
             else:
-                auto_bind_path(session, shipment, clock.current_time)
+                auto_bind_path(session, shipment, clock)
         session.flush()
         session.refresh(shipment)
 
@@ -723,6 +704,7 @@ def list_shipments(
 
 def build_shipment_list_item(shipment: Shipment) -> dict:
     return {
+        **address_body(shipment),
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
         "order_id": str(shipment.order_id),
@@ -781,16 +763,13 @@ def update_shipment_destination(
     request_hash = build_update_destination_request_hash(shipment_id, request)
     with session.begin():
         # All network, shipment and transport writes take this lock first.
-        clock = session.scalar(select(SimulationSettings).where(
-            SimulationSettings.id == 1).with_for_update())
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
         existing = session.scalar(select(OperationLog).where(
             OperationLog.idempotency_key == idempotency_key))
         if existing is not None:
             if existing.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
-            return existing.response_body
+            return business_time.normalize_cached_response(existing.response_body)
         shipment = session.scalar(select(Shipment).where(
             Shipment.id == shipment_id).with_for_update())
         if shipment is None:
@@ -814,7 +793,7 @@ def update_shipment_destination(
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
         previous_destination = shipment.destination_station_id
         shipment.destination_station_id = request.destination_station_id
-        invalidate_destination_path(session, shipment, clock.current_time, "目的站更正：" + request.reason[:494])
+        invalidate_destination_path(session, shipment, clock, "目的站更正：" + request.reason[:494])
         if shipment.scheduling_mode == 'REVIEWED':
             shipment.schedule_status = 'NEEDS_RECONFIRMATION'
             shipment.schedule_reason = '目的站已更正，请重新确认运输计划'
@@ -827,7 +806,7 @@ def update_shipment_destination(
             action="UPDATE_SHIPMENT_DESTINATION", resource_type="SHIPMENT", resource_id=shipment_id,
             before_data={"destination_station_id": str(previous_destination)},
             after_data={"destination_station_id": str(request.destination_station_id), "reason": request.reason},
-            response_body=body, response_status=200, occurred_at=clock.current_time,
+            response_body=body, response_status=200, occurred_at=clock,
         ))
     return body
 

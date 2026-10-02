@@ -19,7 +19,6 @@ from errors import (
     InvalidShipmentStateError,
     InvalidShipmentDestinationError,
     ShipmentNotFoundError,
-    SimulationClockNotInitializedError,
     NetworkDataNotInitializedError,
 )
 from shipments.schemas import (
@@ -64,8 +63,6 @@ def update_destination(
         raise HTTPException(409, str(error))
     except IdempotencyKeyReusedError:
         raise HTTPException(409, "Idempotency-Key was reused with different content")
-    except SimulationClockNotInitializedError:
-        raise HTTPException(503, "Simulation clock is not initialized")
     return ShipmentDetailResponse.model_validate(body)
 
 
@@ -112,11 +109,6 @@ def update_address(
             status_code=409,
             detail="Shipment address is no longer editable",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -161,11 +153,6 @@ def create_shipment_event(
         raise HTTPException(
             status_code=409,
             detail="Shipment event is not allowed in the current stage",
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
         )
     except IdempotencyKeyReusedError:
         raise HTTPException(

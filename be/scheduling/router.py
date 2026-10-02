@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from db import get_db
-from errors import IdempotencyKeyReusedError, ShipmentNotFoundError, SimulationClockNotInitializedError
+from errors import IdempotencyKeyReusedError, ShipmentNotFoundError
 from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest, CancelPreviewRequest
 from scheduling.schemas import SchedulePreviewResponse, ScheduleResponse, ScheduleHistoryResponse, CancelPreviewResponse
 from scheduling.service import preview_schedule, confirm_schedule, schedule_body, schedule_history, parcel, preview_cancel
@@ -19,8 +19,6 @@ def call(fn, *args):
         return fn(*args)
     except ShipmentNotFoundError:
         raise HTTPException(404, 'Shipment not found')
-    except SimulationClockNotInitializedError:
-        raise HTTPException(503, 'Simulation clock is not initialized')
     except IdempotencyKeyReusedError:
         raise HTTPException(409, 'Idempotency-Key reused with different content')
 

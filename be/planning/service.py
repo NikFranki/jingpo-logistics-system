@@ -1,12 +1,11 @@
+import business_time
 import hashlib
 import json
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, func
-from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, SimulationSettings,
-    OperationLog, PathPlan, PathPlanLeg, ShipmentPathLeg, ShipmentPathVersion)
+from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, OperationLog, PathPlan, PathPlanLeg, ShipmentPathLeg, ShipmentPathVersion)
 from logistics_types import ShipmentStage, TaskStatus
-from errors import (NetworkError, ShipmentNotFoundError, IdempotencyKeyReusedError,
-                    SimulationClockNotInitializedError)
+from errors import (NetworkError, ShipmentNotFoundError, IdempotencyKeyReusedError)
 from network.service import require_enabled_route
 
 
@@ -14,10 +13,8 @@ def conflict(message, code="INVALID_TRANSPORT_PATH"):
     raise NetworkError(code, message)
 
 
-def clock_and_replay(session, key, digest):
-    clock = session.scalar(select(SimulationSettings).where(SimulationSettings.id == 1).with_for_update())
-    if clock is None:
-        raise SimulationClockNotInitializedError
+def time_and_replay(session, key, digest):
+    clock = business_time.begin_business_write(session)
     log = session.scalar(select(OperationLog).where(OperationLog.idempotency_key == key))
     if log is not None and log.request_hash != digest:
         raise IdempotencyKeyReusedError
@@ -98,9 +95,9 @@ def write_plan(session, request, key, plan_id=None):
     action = "CREATE_PATH_PLAN" if plan_id is None else "UPDATE_PATH_PLAN"
     digest = digest_request(action, plan_id, request)
     with session.begin():
-        clock, replay = clock_and_replay(session, key, digest)
+        clock, replay = time_and_replay(session, key, digest)
         if replay is not None:
-            return replay.response_body
+            return business_time.normalize_cached_response(replay.response_body)
         before = None
         overrides = request.transfer_overrides
         if plan_id is None:
@@ -139,7 +136,7 @@ def write_plan(session, request, key, plan_id=None):
         body = plan_body(session,plan)
         session.add(OperationLog(idempotency_key=key,request_hash=digest,action=action,
             resource_type="PATH_PLAN",resource_id=plan.id,before_data=before,after_data=body,
-            response_body=body,response_status=201 if plan_id is None else 200,occurred_at=clock.current_time))
+            response_body=body,response_status=201 if plan_id is None else 200,occurred_at=clock))
     return body
 
 
@@ -231,7 +228,7 @@ def matching_plans(session, shipment):
     return [p for p in list_plans(session,True,anchor,shipment.destination_station_id) if p['usable']]
 
 
-def save_path(session, shipment, routes, clock_time, reason, plan=None):
+def save_path(session, shipment, routes, occurred_at, reason, plan=None):
     old = current_legs(session,shipment.id)
     prefix = []
     for leg in old:
@@ -254,7 +251,7 @@ def save_path(session, shipment, routes, clock_time, reason, plan=None):
     for leg in old:
         if leg.id not in frozen_ids:
             if leg_state(session,leg)[0] != 'PENDING': conflict("不能修改已执行或被任务占用的路径段")
-            leg.superseded_at = clock_time
+            leg.superseded_at = occurred_at
     session.flush()
     new = [ShipmentPathLeg(shipment_id=shipment.id,position=len(prefix)+i,route_id=r.id) for i,r in enumerate(routes)]
     session.add_all(new); session.flush()
@@ -267,11 +264,11 @@ def save_path(session, shipment, routes, clock_time, reason, plan=None):
             "origin_station_id":str(route.origin_station_id),"destination_station_id":str(route.destination_station_id)})
     session.add(ShipmentPathVersion(shipment_id=shipment.id,version=shipment.path_version,
         destination_station_id=shipment.destination_station_id,source_plan_id=plan.id if plan else None,
-        source_plan_version=plan.version if plan else None,reason=reason,legs=snapshot,occurred_at=clock_time))
+        source_plan_version=plan.version if plan else None,reason=reason,legs=snapshot,occurred_at=occurred_at))
     session.flush()
 
 
-def auto_bind_path(session, shipment, clock_time):
+def auto_bind_path(session, shipment, occurred_at):
     if shipment.stage != ShipmentStage.AT_STATION or active_task(session,shipment) is not None:
         return
     if shipment.last_scanned_station_id == shipment.destination_station_id:
@@ -281,14 +278,14 @@ def auto_bind_path(session, shipment, clock_time):
     matches = matching_plans(session,shipment)
     if len(matches) == 1:
         plan = session.get(PathPlan,int(matches[0]['id']))
-        save_path(session,shipment,plan_routes(session,plan),clock_time,"自动匹配唯一可用路径方案",plan)
+        save_path(session,shipment,plan_routes(session,plan),occurred_at,"自动匹配唯一可用路径方案",plan)
 
 
 def write_shipment_path(session, shipment_id, request, key):
     digest = digest_request("UPDATE_SHIPMENT_PATH",shipment_id,request)
     with session.begin():
-        clock, replay = clock_and_replay(session,key,digest)
-        if replay is not None: return replay.response_body
+        clock, replay = time_and_replay(session,key,digest)
+        if replay is not None: return business_time.normalize_cached_response(replay.response_body)
         shipment = session.scalar(select(Shipment).where(Shipment.id==shipment_id).with_for_update())
         if shipment is None: raise ShipmentNotFoundError
         if shipment.stage not in (ShipmentStage.AT_STATION,ShipmentStage.IN_TRANSIT):
@@ -312,18 +309,18 @@ def write_shipment_path(session, shipment_id, request, key):
             routes = routes_for_ids(session,request.route_ids)
         validate_routes(session,routes,anchor,shipment.destination_station_id)
         before = shipment_path_body(session,shipment)
-        save_path(session,shipment,routes,clock.current_time,request.reason,plan)
+        save_path(session,shipment,routes,clock,request.reason,plan)
         body = shipment_path_body(session,shipment)
         session.add(OperationLog(idempotency_key=key,request_hash=digest,action="UPDATE_SHIPMENT_PATH",
             resource_type="SHIPMENT",resource_id=shipment.id,before_data=before,after_data=body,
-            response_body=body,response_status=200,occurred_at=clock.current_time))
+            response_body=body,response_status=200,occurred_at=clock))
     return body
 
 
-def invalidate_destination_path(session,shipment,clock_time,reason):
+def invalidate_destination_path(session,shipment,occurred_at,reason):
     if shipment.path_version:
-        save_path(session,shipment,[],clock_time,reason)
-    auto_bind_path(session,shipment,clock_time)
+        save_path(session,shipment,[],occurred_at,reason)
+    auto_bind_path(session,shipment,occurred_at)
 
 
 def next_path_leg(session,shipment):

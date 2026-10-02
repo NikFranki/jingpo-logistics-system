@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Form, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
-import dayjs from 'dayjs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Candidate, type CancelPreview, type RouteCode, type TaskDetail, type TaskItem } from '../api'
 import { apiError, delayText, formatTime, StatusTag, stageText, taskStatusText, TaskShipmentTag, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
 
-function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutate'> & { clock?: string }) {
+function TasksPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
   const network = useNetwork(revision)
   const [taskForm] = Form.useForm()
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -103,7 +102,7 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
   ]
   return <>{holder}<PageContainer title="运输任务" subTitle="V7 运单由计划审核一次生成全程任务；旧运单仍可按线路创建单段任务。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => { taskForm.resetFields(); setCandidatePathVersions({}); setCreateOpen(true) }}>创建旧版单段任务</Button>}>
     {network.error && <Alert type="error" message={network.error} style={{ marginBottom: 16 }} />}{loadError && <Alert type="error" showIcon message="运输任务列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
-    <ProTable<TaskItem> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 90 }} pagination={{ pageSize: 20 }} request={async params => {
+    <ProTable<TaskItem> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 90 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} request={async params => {
       try { const result = await api.tasks({ page: params.current ?? 1, page_size: params.pageSize ?? 20, task_no: params.task_no as string, route_code: params.route_code as string, status: params.status as string }); setLoadError(undefined); return { data: result.items, success: true, total: result.total } }
       catch (error) { const reason = apiError(error); setLoadError(reason); return { data: [], success: false, total: 0 } }
     }} />
@@ -127,9 +126,9 @@ function TasksPage({ revision, mutate, clock }: Pick<Shared, 'revision' | 'mutat
       return Boolean(result)
     }}>
       <ProFormSelect name="route_code" label="下一段线路分组" options={network.routes.filter(r => r.enabled && r.origin.enabled && r.destination.enabled).map(r => ({ label: `${r.code} · ${r.origin.code} → ${r.destination.code}`, value: r.code }))} fieldProps={{ notFoundContent: '暂无可用线路，请先配置站点、线路和运单路径' }} rules={[{ required: true }]} />
-      <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true, disabledDate: date => Boolean(clock && date.isBefore(dayjs(clock), 'day')) }} />
+      <ProFormDateTimePicker name="expected_arrival_at" label="预计到达时间（北京时间）" rules={[{ required: true }]} fieldProps={{ showTime: true }} />
       <ProFormSelect name="shipment_ids" label="下一段为该线路的运单" mode="multiple" dependencies={['route_code']} options={candidateOptions.map(item => ({ label: `${item.shipment_no} · ${stageText[item.stage]}`, value: item.id }))} rules={[{ required: true, message: '至少选择一张运单' }]} fieldProps={{ loading: candidateLoading || candidateVersionLoading, showSearch: true, optionFilterProp: 'label', placeholder: '系统只列出下一段匹配该线路的运单', maxCount: 100, maxTagCount: 'responsive', onPopupScroll: loadMoreCandidates, onChange: (ids: string[]) => void loadCandidatePathVersions(ids), notFoundContent: candidateLoading ? '正在加载运单…' : '当前线路暂无可选运单' }} />
-      <Text type="secondary">候选按路径的下一段线路分组；提交会带上每张运单当前看到的路径版本，后端冲突时整批不创建。若提示路径版本冲突，可刷新版本后核对并重试。预计到达须晚于当前演示时间 {formatTime(clock)}。</Text>
+      <Text type="secondary">候选按路径的下一段线路分组；提交会带上每张运单当前看到的路径版本，后端冲突时整批不创建。若提示路径版本冲突，可刷新版本后核对并重试。预计到达时间需符合后端校验规则。</Text>
       <Button type="link" size="small" disabled={!selectedRoute || !taskForm.getFieldValue('shipment_ids')?.length || candidateVersionLoading} loading={candidateVersionLoading} onClick={() => void loadCandidatePathVersions(taskForm.getFieldValue('shipment_ids') ?? [])}>刷新已选运单路径版本</Button>
     </ModalForm>
   </PageContainer></>
@@ -201,7 +200,7 @@ function TaskDetailPage({ revision, busy, mutate }: Shared) {
     return rule && !rule.enabled ? rule.reason : undefined
   }
 
-  return <>{holder}<PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button>{detail && <Button onClick={() => navigate('/simulation')}>打开演示时钟</Button>}</Space>}>
+  return <>{holder}<PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button></Space>}>
     {loadError && <Alert type="error" showIcon message="运输任务详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
       {detail.status === 'ARRIVED' && <Alert style={{ marginBottom: 16 }} type="success" showIcon message={<>任务已到达：<Text strong><StationName id={detail.destination_station_id} /></Text></>} />}
@@ -223,7 +222,6 @@ function TaskDetailPage({ revision, busy, mutate }: Shared) {
         {detail.status === 'CANCELLED' && <><Descriptions.Item label="取消时间">{formatTime(detail.cancelled_at)}</Descriptions.Item><Descriptions.Item label="取消原因">{detail.cancel_reason}</Descriptions.Item></>}
         <Descriptions.Item label="关联运单" span={2}><Space wrap>{detail.shipments.map(item => <Link key={item.id} to={'/shipments/' + item.id}><TaskShipmentTag item={item} /></Link>)}</Space></Descriptions.Item>
       </Descriptions>
-      <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>演示时间：{formatTime(detail.simulation_time)}。页面操作将按该时钟记录。</Text>
       <ModalForm<{ reason: string }> title="取消运输任务" open={cancelOpen} onOpenChange={open => { setCancelOpen(open); if (!open) { setCancelPreview(undefined); setCancelImpactTasks({}) } }} onValuesChange={() => { setCancelPreview(undefined); setCancelImpactTasks({}) }} submitter={{ submitButtonProps: { loading: cancelPreviewLoading } }} modalProps={{ destroyOnHidden: true }} onFinish={cancelTask}>
         <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={'将解除 ' + detail.shipments.length + ' 张运单的任务占用，货物仍留在起点站。'} />
         <ProFormTextArea name="reason" label="取消原因" rules={[{ required: true, whitespace: true, message: '请填写取消原因' }, { max: 500, message: '最多 500 个字符' }]} fieldProps={{ maxLength: 500, showCount: true, autoSize: { minRows: 3, maxRows: 6 } }} />
@@ -246,7 +244,7 @@ function TaskDetailPage({ revision, busy, mutate }: Shared) {
       <Modal title="审核取消影响" open={Boolean(cancelPreview)} confirmLoading={busy} okText="确认取消并解除后续安排" cancelText="返回检查" onCancel={() => setCancelPreview(undefined)} onOk={() => void confirmPlannedCancel()} okButtonProps={{ disabled: busy || cancelPreviewLoading || !cancelPreview }}>
         {cancelPreview && <>
           <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={`将影响 ${cancelPreview.impact.length} 条运输计划关联`} description="取消会解除该趟任务及相关下游待执行安排；尚未发车的货物仍停留在当前位置，系统不会自动重建计划。每张受影响运单需重新审核后续安排。" />
-          <Table size="small" pagination={{ pageSize: 8 }} rowKey="association_id" dataSource={cancelPreview.impact} columns={[
+          <Table size="small" pagination={{ defaultPageSize: 8 }} rowKey="association_id" dataSource={cancelPreview.impact} columns={[
             { title: '受影响运单', dataIndex: 'shipment_id', render: id => {
               const shipment = [detail, ...Object.values(cancelImpactTasks)].flatMap(task => task.shipments).find(item => item.id === id)
               return shipment ? <Link to={`/shipments/${shipment.id}`}>{shipment.shipment_no}</Link> : `运单 ${id}`

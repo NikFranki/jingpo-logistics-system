@@ -86,17 +86,3 @@ class V5ApiTests(unittest.TestCase):
         self.assertEqual(self.request(history)[1]['total'],3)
         self.assertEqual(self.request('/orders/'+order['id'])[1]['recipient_address'],'r')
 
-    def test_clock_uninitialized_503(self):
-        from db import engine
-        from models import SimulationSettings
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            clock=dict(conn.execute(text('SELECT * FROM simulation_settings WHERE id=1')).mappings().one())
-            conn.execute(text('DELETE FROM simulation_settings WHERE id=1'))
-        try:
-            status,error=self.request('/shipments/999999999/destination','PATCH',dict(
-                expected_destination_station_id=1,destination_station_id=2,reason='test'))
-            self.assertEqual((status,error['error']['code']),(503,'HTTP_503'))
-        finally:
-            with engine.begin() as conn:
-                conn.execute(SimulationSettings.__table__.insert().values(**clock))

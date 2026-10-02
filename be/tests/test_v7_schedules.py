@@ -16,7 +16,6 @@ from transport.schemas import TransportTaskCancelRequest
 from transport.service import depart_transport_task, arrive_transport_task, cancel_transport_task
 from network.schemas import RouteUpdateRequest
 from network.service import write_network
-from simulation.service import advance_clock
 import test_v3_network as helpers
 
 @unittest.skipUnless((make_url(os.environ['DATABASE_URL']).database or '').endswith('_test') if os.getenv('DATABASE_URL') else False, 'requires *_test database')
@@ -69,12 +68,12 @@ class V7ScheduleTests(unittest.TestCase):
         self.assertEqual([row['task_status'] for row in result['legs']], ['PENDING_DEPARTURE', 'WAITING_PREDECESSOR'])
         with self.assertRaises(NetworkError): self.call(depart_transport_task, b, uuid4(), 1)
         self.call(depart_transport_task, a, uuid4(), 1)
-        self.call(advance_clock, 60, uuid4())
+        self.server_clock.return_value += timedelta(minutes=60)
         count = self.counts()[0]; self.call(arrive_transport_task, a, uuid4())
         rows = self.state(shipment)['legs']
         self.assertEqual((self.counts()[0], int(rows[1]['task_id']), rows[1]['association_state']), (count, b, 'ACTIVE'))
         with self.assertRaises(NetworkError): self.call(depart_transport_task, b, uuid4(), 1)
-        self.call(advance_clock, 10, uuid4()); self.call(depart_transport_task, b, uuid4(), 1)
+        self.server_clock.return_value += timedelta(minutes=10); self.call(depart_transport_task, b, uuid4(), 1)
         self.call(arrive_transport_task, b, uuid4())
         self.assertEqual(self.state(shipment)['status'], 'COMPLETED')
 
@@ -174,7 +173,7 @@ class V7ScheduleTests(unittest.TestCase):
         shipment = self.shipment(); original = self.confirm(shipment)
         a = int(original['legs'][0]['task_id']); b = int(original['legs'][1]['task_id'])
         self.call(depart_transport_task, a, uuid4(), 1)
-        self.call(advance_clock, 90, uuid4())
+        self.server_clock.return_value += timedelta(minutes=90)
         late = self.state(shipment)
         self.assertTrue(late['legs'][0]['forecast_stale'])
         self.assertEqual(late['legs'][1]['planned_arrival_at'], original['legs'][1]['planned_arrival_at'])

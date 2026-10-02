@@ -3,16 +3,16 @@ import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Modal, 
 import dayjs, { type Dayjs } from 'dayjs'
 import { api, type PathOptions, type SchedulePreview, type SchedulePreviewInput, type ScheduleResponse, type ShipmentDetail, type TransportRoute } from '../api'
 import type { Mutate } from '../shared'
-import { apiError, formatTime, StationName } from '../shared'
+import { apiError, StationName } from '../shared'
 import { RouteSequenceEditor } from '../RouteSequenceEditor'
 
 const { Text } = Typography
 const legStateText: Record<string, string> = { ARRIVED: '已到达', IN_TRANSIT: '运输中' }
 type FormValues = { mode: 'plan' | 'routes'; origin_station_id?: string; plan_id?: string; route_ids?: string[]; first_departure_at?: Dayjs; planned_origin_arrival_at?: Dayjs; legs?: { route_id: string; planned_departure_at?: Dayjs | null; planned_arrival_at?: Dayjs | null }[]; reason?: string }
-type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; clock?: string; open: boolean; busy: boolean; mutate: Mutate; onClose: () => void; onSaved: () => void }
+type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; open: boolean; busy: boolean; mutate: Mutate; onClose: () => void; onSaved: () => void }
 const stamp = (value?: Dayjs | null) => value?.second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ssZ')
 
-export function SchedulePlanner({ shipment, routes, clock, open, busy, mutate, onClose, onSaved }: Props) {
+export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose, onSaved }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [options, setOptions] = useState<PathOptions>()
   const [currentSchedule, setCurrentSchedule] = useState<ScheduleResponse | null>()
@@ -22,7 +22,7 @@ export function SchedulePlanner({ shipment, routes, clock, open, busy, mutate, o
   const [error, setError] = useState<string>()
   const [acknowledged, setAcknowledged] = useState<string[]>([])
   const mode = Form.useWatch('mode', form)
-  const originId = Form.useWatch('origin_station_id', form)
+  const selectedPlanId = Form.useWatch('plan_id', form)
   const routeById = useMemo(() => new Map(routes.map(route => [route.id, route])), [routes])
   const warningCodes = preview?.warnings.map(warning => warning.code) ?? []
   const allWarningsAcknowledged = warningCodes.every(code => acknowledged.includes(code))
@@ -31,23 +31,21 @@ export function SchedulePlanner({ shipment, routes, clock, open, busy, mutate, o
     if (!open) return
     let active = true
     setLoading(true); setError(undefined); setPreview(undefined); setPreviewFresh(false); setAcknowledged([])
-    Promise.all([api.shipmentPathOptions(shipment.id), api.shipmentSchedule(shipment.id).catch(() => shipment.schedule ?? null)]).then(([pathOptions, schedule]) => {
+    Promise.all([
+      api.shipmentPathOptions(shipment.id),
+      api.shipmentSchedule(shipment.id).catch(() => shipment.schedule ?? null),
+      shipment.transport_path?.anchor_station_id
+        ? Promise.resolve([])
+        : api.pathPlans({ enabled: true, destination_station_id: Number(shipment.destination_station_id) }),
+    ]).then(([pathOptions, schedule, destinationPlans]) => {
       if (!active) return
-      setOptions(pathOptions)
+      const plans = pathOptions.path.anchor_station_id ? pathOptions.plans : destinationPlans.filter(item => item.usable)
+      setOptions({ ...pathOptions, plans })
       setCurrentSchedule(schedule)
-      form.setFieldsValue({ mode: pathOptions.plans.length ? 'plan' : 'routes', origin_station_id: pathOptions.path.anchor_station_id ?? undefined, plan_id: undefined, route_ids: [], reason: '' })
+      form.setFieldsValue({ mode: plans.length ? 'plan' : 'routes', origin_station_id: pathOptions.path.anchor_station_id ?? undefined, plan_id: plans.length === 1 ? plans[0].id : undefined, route_ids: [], reason: '' })
     }).catch(reason => { if (active) setError(apiError(reason)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [open, shipment.id, shipment.schedule, form])
-
-  useEffect(() => {
-    if (!open || options?.path.anchor_station_id || !originId) return
-    let active = true
-    api.pathPlans({ enabled: true, origin_station_id: Number(originId), destination_station_id: Number(shipment.destination_station_id) }).then(plans => {
-      if (active) setOptions(current => current ? { ...current, plans: plans.filter(item => item.usable) } : current)
-    }).catch(reason => { if (active) setError(apiError(reason)) })
-    return () => { active = false }
-  }, [open, options?.path.anchor_station_id, originId, shipment.destination_station_id])
+  }, [open, shipment.id, shipment.schedule, shipment.destination_station_id, shipment.transport_path?.anchor_station_id, form])
 
   const requestBody = (values: FormValues, useEditedLegs: boolean): SchedulePreviewInput => {
     if (!options) throw new Error('路径选项尚未加载')
@@ -56,13 +54,14 @@ export function SchedulePlanner({ shipment, routes, clock, open, busy, mutate, o
       expected_schedule_version: currentSchedule?.version ?? shipment.schedule?.version ?? 0,
       expected_destination_station_id: Number(shipment.destination_station_id),
     }
+    const selectedPlan = values.mode === 'plan' ? options.plans.find(item => item.id === values.plan_id) : undefined
     if (!options.path.anchor_station_id) {
-      if (!values.origin_station_id) throw new Error('首次入站前请先选择计划起点')
-      body.origin_station_id = Number(values.origin_station_id)
+      const plannedOriginId = selectedPlan?.origin_station_id ?? values.origin_station_id
+      if (!plannedOriginId) throw new Error('请选择候选路径，或指定计划起点')
+      body.origin_station_id = Number(plannedOriginId)
     }
     if (values.mode === 'plan') {
       if (!values.plan_id) throw new Error('请选择完整路径方案')
-      const selectedPlan = options.plans.find(item => item.id === values.plan_id)
       if (!selectedPlan) throw new Error('该路径方案已不可用，请刷新页面后重新选择')
       body.plan_id = Number(values.plan_id)
       body.expected_plan_version = selectedPlan.version
@@ -113,15 +112,20 @@ export function SchedulePlanner({ shipment, routes, clock, open, busy, mutate, o
       <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} style={{ marginBottom: 16 }}>
         <Descriptions.Item label="运单">{shipment.shipment_no}</Descriptions.Item>
         <Descriptions.Item label="计划目的站"><StationName id={shipment.destination_station_id} /></Descriptions.Item>
-        {options?.path.anchor_station_id ? <Descriptions.Item label="接续站"><StationName id={options.path.anchor_station_id} /></Descriptions.Item> : <Descriptions.Item label="计划起点"><Form.Item name="origin_station_id" noStyle rules={[{ required: true, message: '请选择计划起点' }]}><Select placeholder="选择首次入站前的计划起点" options={routes.map(route => route.origin).concat(routes.map(route => route.destination)).filter((station, index, all) => all.findIndex(item => item.id === station.id) === index && station.enabled && station.allows_first_arrival).map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} /></Form.Item></Descriptions.Item>}
+        {options?.path.anchor_station_id ? <Descriptions.Item label="实际接续站"><StationName id={options.path.anchor_station_id} /></Descriptions.Item> : <Descriptions.Item label="计划起点">{mode === 'plan' && options?.plans.find(item => item.id === selectedPlanId) ? <StationName id={options.plans.find(item => item.id === selectedPlanId)!.origin_station_id} /> : '选择候选路线后带出'}</Descriptions.Item>}
         <Descriptions.Item label="冻结路段">{options?.path.legs.filter(leg => leg.state === 'ARRIVED' || leg.state === 'IN_TRANSIT').map(leg => `${leg.route_code}（${legStateText[leg.state]}）`).join(' → ') || '暂无'}</Descriptions.Item>
-        <Descriptions.Item label="演示时间">{formatTime(clock)}</Descriptions.Item>
       </Descriptions>
-      {(options?.plans.length ?? 0) > 0 && <Form.Item name="mode" label="路线来源"><Radio.Group options={[{ label: '使用完整路径方案', value: 'plan' }, { label: '手动逐段配置', value: 'routes' }]} /></Form.Item>}
-      {mode === 'plan' && <Form.Item name="plan_id" label="完整路径方案" rules={[{ required: true, message: '请选择完整路径方案' }]}><Select options={options?.plans.map(item => ({ value: item.id, label: `${item.code} · ${item.name} · ${item.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')}` }))} placeholder="选择可用于当前运单的方案" /></Form.Item>}
+      {(options?.plans.length ?? 0) > 0 && <Form.Item name="mode" label="选择运输路线"><Radio.Group options={[{ label: '候选完整路线', value: 'plan' }, { label: '手动逐段配置', value: 'routes' }]} /></Form.Item>}
+      {mode === 'plan' && <Form.Item name="plan_id" rules={[{ required: true, message: '请选择一条完整路线' }]}><Radio.Group style={{ display: 'grid', gap: 8 }} options={options?.plans.map(item => {
+        const routeLabels = item.route_ids.map(id => routeById.get(id)).filter(Boolean).map(route => `${route!.origin.name} → ${route!.destination.name}`)
+        const stationPath = item.route_ids.map(id => routeById.get(id)).filter(Boolean)
+        const pathLabel = stationPath.length ? [stationPath[0]!.origin.name, ...stationPath.map(route => route!.destination.name)].join(' → ') : item.route_ids.map(id => routeById.get(id)?.code ?? id).join(' → ')
+        return { value: item.id, label: <span><Text strong>{pathLabel}</Text><br /><Text type="secondary">{item.code} · {item.name} · {routeLabels.length} 段</Text></span> }
+      })} /></Form.Item>}
+      {!options?.path.anchor_station_id && (mode === 'routes' || !options?.plans.length) && <Form.Item name="origin_station_id" label="计划起点" rules={[{ required: true, message: '请选择计划起点' }]}><Select placeholder="选择首次入站前的计划起点" options={routes.map(route => route.origin).concat(routes.map(route => route.destination)).filter((station, index, all) => all.findIndex(item => item.id === station.id) === index && station.enabled && station.allows_first_arrival).map(station => ({ value: station.id, label: `${station.code} · ${station.name}` }))} /></Form.Item>}
       {(mode === 'routes' || !options?.plans.length) && <RouteSequenceEditor name="route_ids" routes={routes} title="完整运输路径" emptyText="从计划起点或接续站开始，逐段添加线路。" anchorStationId={options?.path.anchor_station_id ?? undefined} destinationStationId={shipment.destination_station_id} />}
       {!preview && !options?.path.anchor_station_id && <Form.Item name="planned_origin_arrival_at" label="计划起点入站时间（可选）"><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>}
-      {!preview && <Form.Item name="first_departure_at" label="首段计划出发时间（可选；默认按演示时间建议）"><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>}
+      {!preview && <Form.Item name="first_departure_at" label="首段计划出发时间（可选；默认由后端建议）"><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>}
       {!preview && <Space style={{ marginTop: 16 }}><Button type="primary" loading={loading} disabled={busy || loading} onClick={() => void runPreview()}>生成全程时间预览</Button><Text type="secondary">预览只计算方案，不会创建任务。</Text></Space>}
       {preview && <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 20, marginBottom: 10 }}><Text strong>逐站计划时间</Text><Button onClick={() => void runPreview()} loading={loading} disabled={busy || loading}>重新计算预览</Button></div>

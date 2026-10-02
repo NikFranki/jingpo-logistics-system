@@ -75,7 +75,12 @@ class V4MigrationTests(unittest.TestCase):
         for action, fn, arg, key in fixtures:
             expected = next(log['response_body'] for log in after['operation_logs'] if log['idempotency_key']==key)
             with Session(self.engine) as session:
-                self.assertEqual(fn(session, arg, key), expected)
+                actual = fn(session, arg, key)
+                if 'simulation_time' in expected:
+                    expected = {k:v for k,v in expected.items() if k != 'simulation_time'}
+                    self.assertIn('server_time', actual)
+                    actual = {k:v for k,v in actual.items() if k != 'server_time'}
+                self.assertEqual(actual, expected)
         self.assertEqual(self.snapshot(), after)
         env = {**os.environ, 'DATABASE_URL':self.url.render_as_string(hide_password=False)}
         failed = subprocess.run([sys.executable,'-m','alembic','downgrade',V3], env=env, capture_output=True, text=True)

@@ -35,7 +35,7 @@ class V4ApiTests(unittest.TestCase):
             self.assertEqual(self.request(base+'/events','POST',event)[0],200)
         detail=self.request(base)[1]
         self.assertTrue(next(a for a in detail['allowed_actions'] if a['action']=='CREATE_TRANSPORT_TASK')['enabled'])
-        clock=datetime.fromisoformat(self.request('/simulation/clock')[1]['current_time'])
+        clock=datetime.fromisoformat(self.request('/server-time')[1]['server_time'])
         request=dict(route_code=route['code'],expected_arrival_at=(clock+timedelta(hours=1)).isoformat(),shipment_ids=[int(parcel['id'])])
         status, task=self.request('/transport-tasks/create','POST',request)
         self.assertEqual(status,201,task)
@@ -54,7 +54,9 @@ class V4ApiTests(unittest.TestCase):
         self.assertTrue(all(not a['enabled'] for a in cancelled['allowed_actions']))
         self.assertEqual((cancelled['delay_status'],cancelled['delay_minutes']),('NOT_APPLICABLE',None))
         self.assertEqual(self.request(cancel,'POST',{'reason':'调整路线'},key),(200,cancelled))
-        self.assertEqual(self.request(cancel,'POST',{'reason':'调整路线'}),(200,cancelled))
+        status, repeated = self.request(cancel,'POST',{'reason':'调整路线'})
+        self.assertEqual(status, 200)
+        self.assertEqual({k:v for k,v in repeated.items() if k != 'server_time'}, {k:v for k,v in cancelled.items() if k != 'server_time'})
         for suffix,body in (('/depart',None),('/arrive',None),('/cancel',{'reason':'另一原因'})):
             status,error=self.request(taskbase+suffix,'POST',body)
             self.assertEqual((status,error['error']['code']),(409,'HTTP_409'))
@@ -75,16 +77,3 @@ class V4ApiTests(unittest.TestCase):
         self.assertEqual(self.request(history+'?page=2&page_size=1')[1]['items'][0]['id'],task['id'])
         self.assertEqual(self.request(history+'?page=3&page_size=1')[1]['items'],[])
 
-    def test_clock_uninitialized_returns_503(self):
-        from db import engine
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            clock = dict(conn.execute(text('SELECT * FROM simulation_settings WHERE id=1')).mappings().one())
-            conn.execute(text('DELETE FROM simulation_settings WHERE id=1'))
-        try:
-            status, error = self.request('/transport-tasks/999999999/cancel', 'POST', {'reason':'test'})
-            self.assertEqual((status, error['error']['code']), (503, 'HTTP_503'))
-        finally:
-            with engine.begin() as conn:
-                from models import SimulationSettings
-                conn.execute(SimulationSettings.__table__.insert().values(**clock))

@@ -1,3 +1,4 @@
+from regions.addresses import AddressSelection, AddressResponse, REGION_FIELDS, validate_patch
 from typing import Annotated, Self
 
 from datetime import datetime
@@ -11,7 +12,7 @@ from pydantic import (
 )
 
 
-class OrderResponse(BaseModel):
+class OrderResponse(AddressResponse):
     id: str
     order_no: str
     product_name: str
@@ -50,7 +51,7 @@ AddressText = Annotated[
     ),
 ]
 
-class OrderCreateRequest(BaseModel):
+class OrderCreateRequest(AddressSelection):
     model_config = ConfigDict(extra="forbid")
 
     product_name: NameText
@@ -60,7 +61,7 @@ class OrderCreateRequest(BaseModel):
     recipient_name: NameText
     recipient_address: AddressText
 
-class OrderUpdateRequest(BaseModel):
+class OrderUpdateRequest(AddressSelection):
     model_config = ConfigDict(extra="forbid")
 
     product_name: NameText | None = None
@@ -77,7 +78,9 @@ class OrderUpdateRequest(BaseModel):
         if not changes:
             raise ValueError("At least one field must be provided")
 
-        if any(value is None for value in changes.values()):
+        validate_patch(changes)
+
+        if any(value is None for key, value in changes.items() if key not in REGION_FIELDS):
             raise ValueError("Fields cannot be null")
 
         return self
