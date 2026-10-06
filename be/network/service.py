@@ -2,7 +2,7 @@ import business_time
 import hashlib
 import json
 from uuid import UUID
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from errors import IdempotencyKeyReusedError, NetworkError
@@ -22,14 +22,22 @@ def route_body(session: Session, route: TransportRoute) -> dict:
             "destination": station_body(session.get(Station, route.destination_station_id))}
 
 
-def list_stations(session: Session, enabled: bool | None = None) -> list[Station]:
+def list_stations(session: Session, enabled: bool | None = None, page: int | None = None,
+                  page_size: int | None = None):
     statement = select(Station).order_by(Station.code)
     if enabled is not None:
         statement = statement.where(Station.enabled == enabled)
-    return list(session.scalars(statement))
+    if page is None and page_size is None:
+        return list(session.scalars(statement))
+    total = session.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+    current_page = page or 1
+    current_page_size = page_size or 20
+    rows = session.scalars(statement.offset((current_page - 1) * current_page_size).limit(current_page_size))
+    return list(rows), total
 
 
-def list_routes(session: Session, enabled: bool | None = None):
+def list_routes(session: Session, enabled: bool | None = None, page: int | None = None,
+                page_size: int | None = None):
     origin, destination = aliased(Station), aliased(Station)
     statement = (select(TransportRoute, origin, destination)
         .join(origin, TransportRoute.origin_station_id == origin.id)
@@ -37,7 +45,13 @@ def list_routes(session: Session, enabled: bool | None = None):
         .order_by(TransportRoute.code))
     if enabled is not None:
         statement = statement.where(TransportRoute.enabled == enabled)
-    return list(session.execute(statement).tuples())
+    if page is None and page_size is None:
+        return list(session.execute(statement).tuples())
+    total = session.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+    current_page = page or 1
+    current_page_size = page_size or 20
+    rows = session.execute(statement.offset((current_page - 1) * current_page_size).limit(current_page_size))
+    return list(rows.tuples()), total
 
 
 def require_station(session: Session, station_id: int) -> Station:

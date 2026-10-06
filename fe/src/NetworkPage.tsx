@@ -18,6 +18,14 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   const [stations, setStations] = useState<Station[]>([])
   const [routes, setRoutes] = useState<TransportRoute[]>([])
   const [pathPlans, setPathPlans] = useState<PathPlan[]>([])
+  const [stationRows, setStationRows] = useState<Station[]>([])
+  const [routeRows, setRouteRows] = useState<TransportRoute[]>([])
+  const [stationPage, setStationPage] = useState(1)
+  const [routePage, setRoutePage] = useState(1)
+  const [stationPageSize, setStationPageSize] = useState(10)
+  const [routePageSize, setRoutePageSize] = useState(10)
+  const [stationTotal, setStationTotal] = useState(0)
+  const [routeTotal, setRouteTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [pathPlanError, setPathPlanError] = useState<string>()
@@ -36,21 +44,34 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [stationRows, routeRows] = await Promise.all([api.stations(), api.routes()])
-      setStations(stationRows)
-      setRoutes(routeRows)
+      if (view === 'stations') {
+        const result = await api.stationPage({ page: stationPage, page_size: stationPageSize })
+        setStationRows(result.items)
+        setStationTotal(result.total)
+      } else {
+        const [allStations, allRoutes] = await Promise.all([api.stations(), api.routes()])
+        setStations(allStations)
+        setRoutes(allRoutes)
+        if (view === 'routes') {
+          const result = await api.routePage({ page: routePage, page_size: routePageSize })
+          setRouteRows(result.items)
+          setRouteTotal(result.total)
+        }
+      }
       setError(undefined)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '网络配置加载失败，请重试。')
     }
-    try {
-      setPathPlans(await api.pathPlans())
-      setPathPlanError(undefined)
-    } catch (reason) {
-      setPathPlanError(reason instanceof Error ? reason.message : '路径方案加载失败，请重试。')
+    if (view === 'paths') {
+      try {
+        setPathPlans(await api.pathPlans())
+        setPathPlanError(undefined)
+      } catch (reason) {
+        setPathPlanError(reason instanceof Error ? reason.message : '路径方案加载失败，请重试。')
+      }
     }
     setLoading(false)
-  }, [])
+  }, [view, stationPage, stationPageSize, routePage, routePageSize])
   useEffect(() => { void refresh() }, [revision, refresh])
 
   const openCreateStation = () => {
@@ -165,10 +186,10 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   return <><PageContainer title={title} subTitle={description} extra={<Space wrap><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button>{view === 'stations' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateStation}>新增站点</Button>}{view === 'routes' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateRoute}>新增线路</Button>}{view === 'paths' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreatePathPlan}>新增完整路径方案</Button>}</Space>}>
     {error && view !== 'paths' && <Alert type="error" showIcon message="网络配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
     {view === 'stations' && <Card title="站点列表">
-      <Table<Station> rowKey="id" loading={loading} columns={[...stationColumns.slice(0, 2), { title: '默认中转参考', dataIndex: 'transfer_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟` }, ...stationColumns.slice(2)]} dataSource={stations} pagination={false} scroll={{ x: 1000 }} locale={{ emptyText: '还没有站点，先新增一个站点。' }} />
+      <Table<Station> rowKey="id" loading={loading} columns={[...stationColumns.slice(0, 2), { title: '默认中转参考', dataIndex: 'transfer_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟` }, ...stationColumns.slice(2)]} dataSource={stationRows} pagination={{ current: stationPage, pageSize: stationPageSize, total: stationTotal, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 个站点`, onChange: (page, pageSize) => { setStationPage(page); setStationPageSize(pageSize) } }} scroll={{ x: 1000 }} locale={{ emptyText: '还没有站点，先新增一个站点。' }} />
     </Card>}
     {view === 'routes' && <Card title="运输线路列表">
-      <Table<TransportRoute> rowKey="id" loading={loading} columns={[...routeColumns.slice(0, 2), { title: '参考运输时长', dataIndex: 'travel_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟`, sorter: (a, b) => (a.travel_minutes ?? -1) - (b.travel_minutes ?? -1) }, ...routeColumns.slice(2)]} dataSource={routes} pagination={false} scroll={{ x: 900 }} locale={{ emptyText: '还没有线路，先配置站点再新增线路。' }} />
+      <Table<TransportRoute> rowKey="id" loading={loading} columns={[...routeColumns.slice(0, 2), { title: '参考运输时长', dataIndex: 'travel_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟`, sorter: (a, b) => (a.travel_minutes ?? -1) - (b.travel_minutes ?? -1) }, ...routeColumns.slice(2)]} dataSource={routeRows} pagination={{ current: routePage, pageSize: routePageSize, total: routeTotal, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条线路`, onChange: (page, pageSize) => { setRoutePage(page); setRoutePageSize(pageSize) } }} scroll={{ x: 900 }} locale={{ emptyText: '还没有线路，先配置站点再新增线路。' }} />
     </Card>}
     {view === 'paths' && <Card title="完整路径方案">
       {pathPlanError && <Alert type="error" showIcon message="路径方案读取失败" description={pathPlanError} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 12 }} />}

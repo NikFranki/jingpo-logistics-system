@@ -30,7 +30,7 @@ flowchart LR
 
 目的站放在运单上，订单保留下单信息。继续保留最近扫描站点；不能用目的站取代当前所在站。
 
-V3 配置规模按演示项目处理，GET 网络列表沿用数组结构；列表默认含停用记录，接受 enabled 过滤。大规模分页留后续版本。
+V3 配置规模按演示项目处理，GET 网络列表默认沿用数组结构；传分页参数时返回分页对象。列表默认含停用记录，接受 enabled 过滤；分页每页默认 20 条，最大 100 条。
 
 ## 3. 接口契约
 
@@ -38,7 +38,7 @@ V3 配置规模按演示项目处理，GET 网络列表沿用数组结构；列�
 
 | 接口 | 行为 |
 | --- | --- |
-| GET /stations、GET /routes | 返回能力、启用状态、线路监测配置；不传 enabled 时含历史配置 |
+| GET /stations、GET /routes | 返回能力、启用状态、线路监测配置；不传 enabled 时含历史配置。传 `page` 或 `page_size` 时返回 `items/total/page/page_size`（默认 20 条，最大 100 条）；不传分页参数仍返回完整数组以兼容旧客户端 |
 | POST /stations | 创建站点：code、name、enabled、allows_first_arrival、allows_delivery |
 | PATCH /stations/{id} | 修改名称、能力和启用状态，禁止提交 code |
 | POST /routes | 创建线路：code、origin_station_id、destination_station_id、enabled、delay_monitoring_enabled |

@@ -178,7 +178,7 @@ export DATABASE_URL="postgresql+psycopg:///jingpo_logistics"
 
 ### 主要接口
 
-- `GET /api/v1/stations`、`GET /api/v1/routes` 默认包括停用配置，`?enabled=true` 只查询启用记录。
+- `GET /api/v1/stations`、`GET /api/v1/routes` 默认包括停用配置，`?enabled=true` 只查询启用记录。为兼容现有客户端，不传分页参数时仍返回完整数组；传 `page` 或 `page_size` 时返回 `items/total/page/page_size`，默认第 1 页、每页 20 条，最大 100 条。新统一线路接口 `/api/v1/transport-lines` 始终分页。
 - `POST /api/v1/stations`、`PATCH /api/v1/stations/{id}` 维护站点。
 - `POST /api/v1/routes`、`PATCH /api/v1/routes/{id}` 维护线路。
 - `POST /api/v1/orders/{id}/shipment` 请求体为 `{"destination_station_id": 3}`，站点 ID 必须是实际启用的派送站。

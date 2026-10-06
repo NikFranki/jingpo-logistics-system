@@ -93,7 +93,7 @@ function TasksPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
     { title: '计划来源', dataIndex: 'scheduling_source', search: false, render: value => value === 'PLAN' ? '全程计划' : '旧版单段任务' },
     { title: '任务状态', dataIndex: 'status', fieldProps: { showSearch: true, filterOption: fuzzySelectFilter }, valueEnum: Object.fromEntries(Object.entries(taskStatusText).map(([key, text]) => [key, { text }])) },
     { title: '计划发车', dataIndex: 'planned_departure_at', valueType: 'dateTime', search: false, render: (_, row) => row.planned_departure_at ? formatTime(row.planned_departure_at) : '—' },
-    { title: '预计到达', dataIndex: 'expected_arrival_at', valueType: 'dateTime', search: false },
+    { title: '预计到达', dataIndex: 'expected_arrival_at', search: false, render: (_, row) => formatTime(row.expected_arrival_at) },
     { title: '最新预测', dataIndex: 'forecast_arrival_at', valueType: 'dateTime', search: false, render: (_, row) => <>{formatTime(row.forecast_arrival_at)}{row.forecast_stale && <Text type="warning"> · 预测已过期</Text>}</> },
     { title: '实际到达', dataIndex: 'arrived_at', valueType: 'dateTime', search: false },
     { title: '取消时间', dataIndex: 'cancelled_at', valueType: 'dateTime', search: false },

@@ -17,6 +17,7 @@ export type PathLeg = { id: string; position: number; route_id: string; route_co
 export type ShipmentTransportPath = { version: number; status: TransportPathStatus; anchor_station_id: string | null; destination_station_id: string; next_route_id: string | null; next_route_code: string | null; reason_code: string | null; reason: string | null; legs: PathLeg[] }
 export type PathPlan = { id: string; code: string; name: string; enabled: boolean; version: number; origin_station_id: string; destination_station_id: string; usable: boolean; reason: string | null; route_ids: string[]; transfer_overrides?: TransferOverride[] }
 export type PathOptions = { path: ShipmentTransportPath; plans: PathPlan[] }
+export type ShipmentLineOptions = { recommended_line_id: string | null; lines: { id: string; total_reference_minutes: number | null }[] }
 export type PathVersionLeg = Pick<PathLeg, 'id' | 'position' | 'route_id' | 'route_code' | 'origin_station_id' | 'destination_station_id'>
 export type PathVersion = { version: number; destination_station_id: string; source_plan_id: string | null; source_plan_version: number | null; reason: string; occurred_at: string; legs: PathVersionLeg[] }
 export type PathHistoryPage = Page<PathVersion>
@@ -110,7 +111,16 @@ const networkCacheTtl = 30_000
 function stations() {
   if (!stationsRequest || Date.now() - stationsCachedAt > networkCacheTtl) {
     stationsCachedAt = Date.now()
-    stationsRequest = request<Station[]>('/api/v1/stations').catch(error => {
+    stationsRequest = request<Station[] | Page<Station>>('/api/v1/stations').then(async result => {
+      if (Array.isArray(result)) return result
+      const rows = [...result.items]
+      for (let page = 2; rows.length < result.total; page += 1) {
+        const next = (await api.stationPage({ page, page_size: result.page_size })).items
+        if (!next.length) break
+        rows.push(...next)
+      }
+      return rows
+    }).catch(error => {
       stationsRequest = undefined
       stationsCachedAt = 0
       throw error
@@ -122,7 +132,16 @@ function stations() {
 function routes() {
   if (!routesRequest || Date.now() - routesCachedAt > networkCacheTtl) {
     routesCachedAt = Date.now()
-    routesRequest = request<TransportRoute[]>('/api/v1/routes').catch(error => {
+    routesRequest = request<TransportRoute[] | Page<TransportRoute>>('/api/v1/routes').then(async result => {
+      if (Array.isArray(result)) return result
+      const rows = [...result.items]
+      for (let page = 2; rows.length < result.total; page += 1) {
+        const next = (await api.routePage({ page, page_size: result.page_size })).items
+        if (!next.length) break
+        rows.push(...next)
+      }
+      return rows
+    }).catch(error => {
       routesRequest = undefined
       routesCachedAt = 0
       throw error
@@ -147,6 +166,8 @@ export const api = {
   districts: (province_id: string, city_id?: string) => request<AdministrativeRegion[]>(`/api/v1/districts${query({ province_id, city_id })}`),
   stations,
   routes,
+  stationPage: (params: { page?: number; page_size?: number } = {}) => request<Page<Station> | Station[]>(`/api/v1/stations${query(params)}`).then(result => Array.isArray(result) ? { items: result, total: result.length, page: params.page ?? 1, page_size: params.page_size ?? result.length } : result),
+  routePage: (params: { page?: number; page_size?: number } = {}) => request<Page<TransportRoute> | TransportRoute[]>(`/api/v1/routes${query(params)}`).then(result => Array.isArray(result) ? { items: result, total: result.length, page: params.page ?? 1, page_size: params.page_size ?? result.length } : result),
   createStation: (body: StationInput, key?: string) => writeNetwork<Station>('/api/v1/stations', 'POST', body, key),
   updateStation: (id: string, body: Partial<Omit<StationInput, 'code'>>, key?: string) => writeNetwork<Station>(`/api/v1/stations/${id}`, 'PATCH', body, key),
   createRoute: (body: RouteInput, key?: string) => writeNetwork<TransportRoute>('/api/v1/routes', 'POST', body, key),
@@ -164,6 +185,7 @@ export const api = {
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   shipmentPath: (id: string) => request<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`),
   shipmentPathOptions: (id: string) => request<PathOptions>(`/api/v1/shipments/${id}/path-options`),
+  shipmentLineOptions: (id: string) => request<ShipmentLineOptions>(`/api/v1/shipments/${id}/line-options`),
   updateShipmentPath: (id: string, body: ShipmentPathUpdate, key?: string) => write<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`, 'PUT', body, key),
   shipmentPathHistory: (id: string, page = 1, page_size = 20) => request<PathHistoryPage>(`/api/v1/shipments/${id}/path-history${query({ page, page_size })}`),
   updateShipmentDestination: (id: string, body: { expected_destination_station_id: number; destination_station_id: number; reason: string }, key?: string) => write<ShipmentDetail>(`/api/v1/shipments/${id}/destination`, 'PATCH', body, key),

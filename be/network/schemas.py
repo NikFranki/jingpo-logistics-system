@@ -22,6 +22,18 @@ class TransportRouteResponse(BaseModel):
     delay_monitoring_enabled: bool
     travel_minutes: int | None = None
 
+class StationListResponse(BaseModel):
+    items: list[StationResponse]
+    total: int
+    page: int
+    page_size: int
+
+class TransportRouteListResponse(BaseModel):
+    items: list[TransportRouteResponse]
+    total: int
+    page: int
+    page_size: int
+
 class StationCreateRequest(BaseModel):
     transfer_minutes: int | None = Field(default=None, ge=0, le=525600, strict=True)
     model_config = ConfigDict(extra="forbid")

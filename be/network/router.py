@@ -1,10 +1,11 @@
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 from db import get_db
 from errors import IdempotencyKeyReusedError
-from network.schemas import (StationResponse, TransportRouteResponse, StationCreateRequest,
+from network.schemas import (StationResponse, StationListResponse, TransportRouteResponse,
+    TransportRouteListResponse, StationCreateRequest,
     StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest)
 from network.service import list_stations, list_routes, station_body, route_body, write_network
 from network.coverage import (ServiceAreaCreate, ServiceAreaUpdate, ServiceAreaResponse,
@@ -15,9 +16,15 @@ router = APIRouter(prefix="/api/v1", tags=["network"])
 DB = Annotated[Session, Depends(get_db)]
 Key = Annotated[UUID, Header(alias="Idempotency-Key")]
 
-@router.get("/stations", response_model=list[StationResponse])
-def read_stations(session: DB, enabled: bool | None = None):
-    return [station_body(station) for station in list_stations(session, enabled)]
+@router.get("/stations", response_model=list[StationResponse] | StationListResponse)
+def read_stations(session: DB, enabled: bool | None = None,
+                  page: Annotated[int | None, Query(ge=1)] = None,
+                  page_size: Annotated[int | None, Query(ge=1, le=100)] = None):
+    if page is None and page_size is None:
+        return [station_body(station) for station in list_stations(session, enabled)]
+    stations, total = list_stations(session, enabled, page, page_size)
+    items = [station_body(station) for station in stations]
+    return dict(items=items, total=total, page=page or 1, page_size=page_size or 20)
 
 
 @router.get('/stations/{station_id}/service-areas', response_model=list[ServiceAreaResponse])
@@ -45,9 +52,15 @@ def update_service_area(station_id: int, area_id: int, request: ServiceAreaUpdat
 def preview_destination(order_id: int, session: DB):
     return order_destination_preview(session, order_id)
 
-@router.get("/routes", response_model=list[TransportRouteResponse], deprecated=True)
-def read_routes(session: DB, enabled: bool | None = None):
-    return [route_body(session, route) for route, _, _ in list_routes(session, enabled)]
+@router.get("/routes", response_model=list[TransportRouteResponse] | TransportRouteListResponse, deprecated=True)
+def read_routes(session: DB, enabled: bool | None = None,
+                page: Annotated[int | None, Query(ge=1)] = None,
+                page_size: Annotated[int | None, Query(ge=1, le=100)] = None):
+    if page is None and page_size is None:
+        return [route_body(session, route) for route, _, _ in list_routes(session, enabled)]
+    routes, total = list_routes(session, enabled, page, page_size)
+    items = [route_body(session, route) for route, _, _ in routes]
+    return dict(items=items, total=total, page=page or 1, page_size=page_size or 20)
 
 def write(session, kind, request, key, resource_id=None):
     try:

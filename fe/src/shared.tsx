@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
+import type { Dayjs } from 'dayjs'
 import { api, ApiError, type Action, type OrderInput, type ShipmentDetail, type Stage, type TaskDetail, type Station, type TransportRoute } from './api'
 import { statusTagStyles, type StatusTone } from './theme'
 
@@ -14,7 +15,32 @@ export const actionText: Record<string, string> = { PICKUP: '揽收', ARRIVE: '�
 export const stages = Object.fromEntries(Object.entries(stageText).map(([value, text]) => [value, { text }]))
 export const blankOrder: OrderInput = { product_name: '', quantity: 1, sender_name: '', sender_address: '', recipient_name: '', recipient_address: '' }
 
-export function formatTime(value?: string | null) { return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—' }
+const chinaTimeZone = 'Asia/Shanghai'
+const chinaDateTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: chinaTimeZone,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+})
+
+function chinaDateTimeParts(value: Date) {
+  return Object.fromEntries(chinaDateTimeFormatter.formatToParts(value).map(part => [part.type, part.value]))
+}
+
+export function formatTime(value?: string | null) {
+  if (!value) return '—'
+  const parts = chinaDateTimeParts(new Date(value))
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
+}
+
+export function chinaDatePickerValue(value?: string | null) {
+  if (!value) return undefined
+  const parts = chinaDateTimeParts(new Date(value))
+  return dayjs(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`)
+}
+
+export function chinaTimeStamp(value?: Dayjs | null) {
+  return value ? `${value.second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss')}+08:00` : undefined
+}
 export function apiError(error: unknown) {
   if (error instanceof ApiError) {
     const fields = error.details?.map(item => `${item.field.replace(/^body\./, '')}: ${item.message}`).join('；')
