@@ -55,6 +55,13 @@ def require_enabled_route(session: Session, route: TransportRoute):
 def _station_changes(session: Session, station: Station, changes: dict):
     disabling = changes.get("enabled") is False and station.enabled
     removing_delivery = changes.get("allows_delivery", "transfer_minutes") is False and station.allows_delivery
+    removing_first_arrival = changes.get('allows_first_arrival') is False and station.allows_first_arrival
+    if disabling or removing_first_arrival:
+        planned = session.scalar(select(Shipment.id).where(
+            Shipment.planned_origin_station_id == station.id,
+            Shipment.stage.in_(['PENDING_PICKUP', 'PICKED_UP'])).limit(1))
+        if planned:
+            raise NetworkError('NETWORK_RESOURCE_IN_USE', '仍有未入站运单以此站为计划始发站')
     if disabling or removing_delivery:
         has_destination = session.scalar(select(Shipment.id).where(
             Shipment.destination_station_id == station.id, Shipment.stage != "SIGNED").limit(1))
@@ -122,6 +129,9 @@ def write_network(session: Session, kind: str, request, key: UUID, resource_id: 
         session.add(obj)
         session.flush()
         session.refresh(obj)
+        if kind == 'ROUTE' and resource_id is None:
+            from lines.service import ensure_direct_line
+            ensure_direct_line(session, obj)
         body = station_body(obj) if kind == "STATION" else route_body(session, obj)
         session.add(OperationLog(idempotency_key=key, request_hash=digest, action=action,
             resource_type=kind, resource_id=obj.id, before_data=before, after_data=body,

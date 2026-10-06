@@ -4,7 +4,7 @@ import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Radio,
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type DestinationChange, type PathLeg, type PathOptions, type PathVersion, type ScheduleHistoryItem, type Shipment, type ShipmentDetail, type ShipmentPathUpdate, type ShipmentTaskHistory, type TransportRoute } from '../api'
 import { RouteSequenceEditor } from '../RouteSequenceEditor'
 import { SchedulePlanner } from './SchedulePlanner'
@@ -42,6 +42,7 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
 function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const { shipmentId = '' } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const network = useNetwork(revision)
   const [detail, setDetail] = useState<ShipmentDetail>()
   const [history, setHistory] = useState<ShipmentTaskHistory[]>([])
@@ -69,6 +70,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAutoPreview, setScheduleAutoPreview] = useState(false)
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
@@ -104,6 +106,15 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
     }).catch(error => { if (active) setLoadError(apiError(error)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [shipmentId, revision, retry, historyPage, destinationChangesPage, pathHistoryPage])
+
+  useEffect(() => {
+    if (searchParams.get('schedule') !== '1' || !detail || detail.scheduling_mode !== 'REVIEWED') return
+    setScheduleOpen(true)
+    setScheduleAutoPreview(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('schedule')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, detail])
 
   useEffect(() => {
     let active = true
@@ -430,7 +441,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
         </>}
       </Modal>
-      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
+      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} autoPreview={scheduleAutoPreview} onClose={() => { setScheduleOpen(false); setScheduleAutoPreview(false) }} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1); setScheduleAutoPreview(false) }} />}
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}

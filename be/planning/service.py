@@ -7,6 +7,8 @@ from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipme
 from logistics_types import ShipmentStage, TaskStatus
 from errors import (NetworkError, ShipmentNotFoundError, IdempotencyKeyReusedError)
 from network.service import require_enabled_route
+from network.coverage import planned_origin, match_origin
+from collections import deque
 
 
 def conflict(message, code="INVALID_TRANSPORT_PATH"):
@@ -99,6 +101,7 @@ def write_plan(session, request, key, plan_id=None):
         if replay is not None:
             return business_time.normalize_cached_response(replay.response_body)
         before = None
+        travel_by_route = {}
         overrides = request.transfer_overrides
         if plan_id is None:
             if session.scalar(select(PathPlan.id).where(PathPlan.code == request.code)):
@@ -115,6 +118,7 @@ def write_plan(session, request, key, plan_id=None):
             if plan.version != request.expected_version:
                 conflict("方案版本已变化，请刷新后重新确认", "PATH_VERSION_CONFLICT")
             before = plan_body(session,plan)
+            travel_by_route = {l.route_id:l.travel_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))}
             changes = request.model_dump(exclude_unset=True)
             if overrides is None:
                 overrides = [dict(station_id=entry.origin_station_id, minutes=leg.origin_transfer_override_minutes) for leg,entry in session.execute(select(PathPlanLeg,TransportRoute).join(TransportRoute,PathPlanLeg.route_id==TransportRoute.id).where(PathPlanLeg.plan_id==plan.id)) if leg.origin_transfer_override_minutes is not None]
@@ -131,7 +135,7 @@ def write_plan(session, request, key, plan_id=None):
             conflict("中转覆盖必须是方案中不重复的中间站")
         mapping = {v['station_id']:v['minutes'] for v in values}
         session.add_all([PathPlanLeg(plan_id=plan.id,position=i,route_id=r.id,
-            origin_transfer_override_minutes=mapping.get(r.origin_station_id)) for i,r in enumerate(routes)])
+            origin_transfer_override_minutes=mapping.get(r.origin_station_id), travel_override_minutes=travel_by_route.get(r.id)) for i,r in enumerate(routes)])
         session.flush()
         body = plan_body(session,plan)
         session.add(OperationLog(idempotency_key=key,request_hash=digest,action=action,
@@ -193,6 +197,8 @@ def shipment_path_body(session, shipment):
     next_route = session.get(TransportRoute,next_leg.route_id) if next_leg else None
     if shipment.stage in (ShipmentStage.PENDING_PICKUP,ShipmentStage.PICKED_UP):
         status, code, reason = "WAITING_FIRST_ARRIVAL", "FIRST_STATION_UNKNOWN", "首次入站后确定路径"
+        if shipment.scheduling_mode == 'REVIEWED' and planned_origin(session, shipment):
+            code, reason = 'FIRST_ARRIVAL_PENDING', '计划始发站已确定；可先审核计划，实际入站后才能发车'
     elif shipment.last_scanned_station_id == shipment.destination_station_id and active is None:
         status = "COMPLETED"
         next_route = None
@@ -223,7 +229,7 @@ def shipment_path_body(session, shipment):
 
 
 def matching_plans(session, shipment):
-    anchor = anchor_station(session,shipment)
+    anchor = anchor_station(session,shipment) or planned_origin(session, shipment)
     if anchor is None: return []
     return [p for p in list_plans(session,True,anchor,shipment.destination_station_id) if p['usable']]
 
@@ -337,3 +343,52 @@ def path_history(session, shipment_id, page, page_size):
         "source_plan_id":str(r.source_plan_id) if r.source_plan_id else None,"source_plan_version":r.source_plan_version,
         "reason":r.reason,"occurred_at":r.occurred_at,"legs":r.legs} for r in rows]
     return items,total
+
+
+def candidate_route_paths(session, origin, destination, limit=5):
+    if origin is None:
+        return []
+    if origin == destination:
+        return [dict(route_ids=[], route_codes=[], station_ids=[str(origin)], hop_count=0)]
+    stations = {s.id: s for s in session.scalars(select(Station).where(Station.enabled.is_(True)))}
+    if origin not in stations or destination not in stations or not stations[destination].allows_delivery:
+        return []
+    outgoing = {}
+    for route in session.scalars(select(TransportRoute).where(TransportRoute.enabled.is_(True))
+                                .order_by(TransportRoute.code, TransportRoute.id)):
+        if route.origin_station_id in stations and route.destination_station_id in stations:
+            outgoing.setdefault(route.origin_station_id, []).append(route)
+    queue = deque([(origin, [origin], [])])
+    found = []
+    expanded = 0
+    while queue and len(found) < limit and expanded < 10000:
+        node, visited, path = queue.popleft()
+        expanded += 1
+        if len(path) >= 100:
+            continue
+        for route in outgoing.get(node, []):
+            target = route.destination_station_id
+            if target in visited:
+                continue
+            next_path = path + [route]
+            nodes = visited + [target]
+            if target == destination:
+                found.append(dict(route_ids=[str(r.id) for r in next_path],
+                    route_codes=[r.code for r in next_path], station_ids=[str(n) for n in nodes],
+                    hop_count=len(next_path)))
+                if len(found) >= limit:
+                    break
+            elif len(queue) < 10000:
+                queue.append((target, nodes, next_path))
+    return found
+
+
+def path_options_body(session, shipment):
+    actual = anchor_station(session, shipment)
+    origin = actual or planned_origin(session, shipment)
+    result = match_origin(session, shipment) if origin is None else None
+    return dict(path=shipment_path_body(session, shipment), plans=matching_plans(session, shipment),
+                planning_origin_station_id=str(origin) if origin else None,
+                origin_match_status=result['status'] if result else 'MATCHED',
+                origin_match_reason=result['reason'] if result else None,
+                route_candidates=candidate_route_paths(session, origin, shipment.destination_station_id))

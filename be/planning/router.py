@@ -8,7 +8,7 @@ from errors import IdempotencyKeyReusedError, ShipmentNotFoundError
 from planning.schemas import (PathPlanCreateRequest,PathPlanUpdateRequest,PathPlanResponse,
     ShipmentPathUpdateRequest,ShipmentTransportPathResponse,PathOptionsResponse,PathHistoryResponse)
 from planning.service import (list_plans,write_plan,shipment_path_body,matching_plans,
-    write_shipment_path,path_history)
+    write_shipment_path,path_history,path_options_body)
 
 router = APIRouter(prefix="/api/v1",tags=["transport-paths"])
 DB = Annotated[Session,Depends(get_db)]
@@ -26,15 +26,15 @@ def require_shipment(session,shipment_id):
     if shipment is None: raise HTTPException(404,"Shipment not found")
     return shipment
 
-@router.get('/path-plans',response_model=list[PathPlanResponse])
+@router.get('/path-plans',response_model=list[PathPlanResponse],deprecated=True)
 def read_plans(session:DB,enabled:bool|None=None,origin_station_id:int|None=None,destination_station_id:int|None=None):
     return list_plans(session,enabled,origin_station_id,destination_station_id)
 
-@router.post('/path-plans',response_model=PathPlanResponse,status_code=201)
+@router.post('/path-plans',response_model=PathPlanResponse,status_code=201,deprecated=True)
 def create_plan(request:PathPlanCreateRequest,idempotency_key:Key,session:DB):
     return write(write_plan,session,request,idempotency_key)
 
-@router.patch('/path-plans/{plan_id}',response_model=PathPlanResponse)
+@router.patch('/path-plans/{plan_id}',response_model=PathPlanResponse,deprecated=True)
 def update_plan(plan_id:int,request:PathPlanUpdateRequest,idempotency_key:Key,session:DB):
     return write(write_plan,session,request,idempotency_key,plan_id)
 
@@ -45,7 +45,7 @@ def read_path(shipment_id:int,session:DB):
 @router.get('/shipments/{shipment_id}/path-options',response_model=PathOptionsResponse)
 def read_options(shipment_id:int,session:DB):
     shipment = require_shipment(session,shipment_id)
-    return {"path":shipment_path_body(session,shipment),"plans":matching_plans(session,shipment)}
+    return path_options_body(session, shipment)
 
 @router.put('/shipments/{shipment_id}/path',response_model=ShipmentTransportPathResponse)
 def replace_future_path(shipment_id:int,request:ShipmentPathUpdateRequest,idempotency_key:Key,session:DB):

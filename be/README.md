@@ -1,10 +1,22 @@
 # BE
 
+## 统一运输线路
+
+`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐；预览支持 line_id/expected_line_version。旧 routes 是内部运输分段，path-plans 是旧完整线路接口，两类管理接口已标记弃用并保留兼容。
+
+开发库已备份升级 c52d09a13f84，目录 2,347 条（启用 2,346），现有 44 个城市站的 1,892 个有向组合全部有线路。耗时为明确标注的演示值。初始化其他环境用 `python -m lines.seed` 和 `python -m lines.seed_national`，先迁移并备份。契约、部署与实际检查见 [统一线路说明](../docs/技术方案/v7/be/unified-transport-lines.md)。
+
 ## 服务器时间（取代模拟时钟）
 
 揽收、收货入站、发车、到达、派送、签收及其他操作，均由后端在执行时记录服务器 UTC 时间。延误和预测使用服务器当前时间；计划时间仍由用户审核。前端已移除演示时钟与推进时间入口。
 
 新增迁移 `c84e2b19a607`（接 `30ec3dbeb8ac`）删除模拟时钟表，保留历史业务时间。部署需停止旧服务、备份、迁移并重启；开发库尚未执行本次迁移。`GET /api/v1/server-time` 及任务/计划响应的观察时间字段统一为 `server_time`。详细契约见 [服务器时间说明](../docs/技术方案/server-time.md)。
+
+## 寄件首站与创建后计划预览
+
+服务范围新增 purpose：PICKUP 接收、DELIVERY 派送。创建运单时唯一匹配寄件区域会保存 planned_origin_station_id；已有运单可只读推断。path-options 现在提供计划起点和多段路线候选，`GET /api/v1/shipments/{id}/schedule/initial-preview` 可在实际入站前生成默认时间预览。参考耗时缺失时返回缺项，保留人工编辑时间；确认后才建任务。ARRIVE 可省略 station_id，确认实际入站时默认计划首站。
+
+开发库已备份并升级 a39f04d72816，新增 44 条接收范围；旧 44 条派送范围保留。源码合并 head 为 b41c60e79a23，开发库未执行模拟时钟表删除分支。详细契约与实际检查见 [计划首站说明](../docs/技术方案/v7/be/planned-origin-and-preview.md)。
 
 ## 站点服务范围与自动目的站
 

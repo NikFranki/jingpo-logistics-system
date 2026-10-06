@@ -1,5 +1,5 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Modal, Radio, Select, Space, Table, Typography } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { api, type PathOptions, type SchedulePreview, type SchedulePreviewInput, type ScheduleResponse, type ShipmentDetail, type TransportRoute } from '../api'
@@ -10,10 +10,10 @@ import { RouteSequenceEditor } from '../RouteSequenceEditor'
 const { Text } = Typography
 const legStateText: Record<string, string> = { ARRIVED: '已到达', IN_TRANSIT: '运输中' }
 type FormValues = { mode: 'plan' | 'routes'; origin_station_id?: string; plan_id?: string; route_ids?: string[]; first_departure_at?: Dayjs; planned_origin_arrival_at?: Dayjs; legs?: { route_id: string; planned_departure_at?: Dayjs | null; planned_arrival_at?: Dayjs | null }[]; reason?: string }
-type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; open: boolean; busy: boolean; mutate: Mutate; onClose: () => void; onSaved: () => void }
+type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; open: boolean; busy: boolean; mutate: Mutate; onClose: () => void; onSaved: () => void; autoPreview?: boolean }
 const stamp = (value?: Dayjs | null) => value?.second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ssZ')
 
-export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose, onSaved }: Props) {
+export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose, onSaved, autoPreview = false }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [options, setOptions] = useState<PathOptions>()
   const [currentSchedule, setCurrentSchedule] = useState<ScheduleResponse | null>()
@@ -22,6 +22,8 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const [acknowledged, setAcknowledged] = useState<string[]>([])
+  const [autoPreviewPending, setAutoPreviewPending] = useState(false)
+  const autoPreviewStarted = useRef(false)
   const mode = Form.useWatch('mode', form)
   const selectedPlanId = Form.useWatch('plan_id', form)
   const routeById = useMemo(() => new Map(routes.map(route => [route.id, route])), [routes])
@@ -30,6 +32,8 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
 
   useEffect(() => {
     if (!open) return
+    autoPreviewStarted.current = false
+    setAutoPreviewPending(false)
     let active = true
     setLoading(true); setError(undefined); setPreview(undefined); setPreviewFresh(false); setAcknowledged([])
     Promise.all([
@@ -44,11 +48,12 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
       setOptions({ ...pathOptions, plans })
       setCurrentSchedule(schedule)
       form.setFieldsValue({ mode: plans.length ? 'plan' : 'routes', origin_station_id: pathOptions.path.anchor_station_id ?? undefined, plan_id: plans.length === 1 ? plans[0].id : undefined, route_ids: [], reason: '' })
+      setAutoPreviewPending(autoPreview && plans.length === 1)
     }).catch(reason => { if (active) setError(apiError(reason)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [open, shipment.id, shipment.schedule, shipment.destination_station_id, shipment.transport_path?.anchor_station_id, form])
+  }, [open, shipment.id, shipment.schedule, shipment.destination_station_id, shipment.transport_path?.anchor_station_id, form, autoPreview])
 
-  const requestBody = (values: FormValues, useEditedLegs: boolean): SchedulePreviewInput => {
+  const requestBody = useCallback((values: FormValues, useEditedLegs: boolean): SchedulePreviewInput => {
     if (!options) throw new Error('路径选项尚未加载')
     const body: SchedulePreviewInput = {
       expected_path_version: shipment.path_version ?? options.path.version,
@@ -77,9 +82,9 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
       || (values.mode === 'routes' && (values.route_ids ?? []).map(String).join(',') === preview.legs.map(leg => leg.route_id).join(',')))
     if (useEditedLegs && sameSource) body.legs = (values.legs ?? []).map(leg => ({ route_id: Number(leg.route_id), planned_departure_at: stamp(leg.planned_departure_at), planned_arrival_at: stamp(leg.planned_arrival_at) }))
     return body
-  }
+  }, [options, shipment.path_version, shipment.destination_station_id, currentSchedule?.version, shipment.schedule?.version, preview])
 
-  const runPreview = async () => {
+  const runPreview = useCallback(async () => {
     if (!options) return
     let values: FormValues
     try { values = await form.validateFields() } catch { return }
@@ -94,7 +99,14 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
       })
     } catch (reason) { setError(apiError(reason)); setPreviewFresh(false) }
     finally { setLoading(false) }
-  }
+  }, [options, form, shipment.id, requestBody, preview])
+
+  useEffect(() => {
+    if (!open || !autoPreviewPending || !options || autoPreviewStarted.current) return
+    autoPreviewStarted.current = true
+    setAutoPreviewPending(false)
+    void runPreview()
+  }, [open, autoPreviewPending, options, runPreview])
 
   const confirm = async () => {
     if (!preview || !previewFresh || !preview.can_confirm || !allWarningsAcknowledged) return

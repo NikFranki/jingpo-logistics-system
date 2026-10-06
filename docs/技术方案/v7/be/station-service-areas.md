@@ -110,3 +110,7 @@ flowchart LR
 - OpenAPI 已将 ShipmentCreateRequest.destination_station_id 标记为可省略、可 null；配置与预览接口已发布。
 
 本轮未新增或运行功能测试；未验收区县覆盖省市、冲突、停用、并发、幂等以及实际运单创建的写流程。FE/查询 Agent 代码未修改；前端需接入预览、自动创建及配置页面，查询 Agent 如需读取配置需独立接入。
+
+## 6. 接收范围与计划首站后续适配
+
+服务范围已增加 purpose，默认 DELIVERY，PICKUP 独立配置并按寄件区域匹配。最新开发库为 a39f04d72816，共 44 条派送和 44 条接收范围。始发站保存、线路候选、默认时间预览、入站默认站点以及新的迁移记录见 [计划首站说明](planned-origin-and-preview.md)。上述第 5 节为首次派送范围交付记录。

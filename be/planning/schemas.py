@@ -87,7 +87,18 @@ class PathPlanResponse(BaseModel):
     reason: str | None
     route_ids: list[str]
 
+class RouteCandidateResponse(BaseModel):
+    route_ids: list[str]
+    route_codes: list[str]
+    station_ids: list[str]
+    hop_count: int
+
+
 class PathOptionsResponse(BaseModel):
+    planning_origin_station_id: str | None = None
+    origin_match_status: str | None = None
+    origin_match_reason: str | None = None
+    route_candidates: list[RouteCandidateResponse] = Field(default_factory=list)
     path: ShipmentTransportPathResponse
     plans: list[PathPlanResponse]
 

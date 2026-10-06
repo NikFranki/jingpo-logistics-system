@@ -35,6 +35,7 @@ class ShipmentCreateRequest(BaseModel):
 
 
 class ShipmentResponse(AddressResponse):
+    planned_origin_station_id: str | None = None
     id: str
     shipment_no: str
     order_id: str
@@ -136,8 +137,8 @@ class ShipmentEventRequest(BaseModel):
     @model_validator(mode="after")
     def validate_station(self) -> Self:
         if self.event_type == TrackingEventType.ARRIVE:
-            if self.station_id is None or re.fullmatch(r"[1-9][0-9]*", self.station_id) is None:
-                raise ValueError("ARRIVE requires a positive station_id")
+            if self.station_id is not None and re.fullmatch(r"[1-9][0-9]*", self.station_id) is None:
+                raise ValueError("station_id must be positive when supplied")
         elif self.station_id is not None:
             raise ValueError("station_id is only allowed for ARRIVE")
         return self

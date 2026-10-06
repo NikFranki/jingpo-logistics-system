@@ -224,6 +224,7 @@ class TransportRoute(Base):
     )
 
 class Shipment(StructuredAddressFields, Base):
+    planned_origin_station_id: Mapped[int | None] = mapped_column(ForeignKey("stations.id", ondelete="RESTRICT"))
     scheduling_mode: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
     schedule_version: Mapped[int] = mapped_column(Integer, server_default="0")
     schedule_status: Mapped[str] = mapped_column(String(32), server_default="NOT_CONFIRMED")
@@ -486,12 +487,14 @@ class PathPlan(Base):
 
 
 class PathPlanLeg(Base):
+    travel_override_minutes: Mapped[int | None] = mapped_column(Integer)
     origin_transfer_override_minutes: Mapped[int | None] = mapped_column(Integer)
     __tablename__ = "path_plan_legs"
     __table_args__ = (
         UniqueConstraint("plan_id", "position", name="uq_path_plan_legs_position"),
         CheckConstraint("position >= 0", name="ck_path_plan_legs_position"),
         CheckConstraint("origin_transfer_override_minutes BETWEEN 0 AND 525600", name="ck_path_plan_legs_transfer"),
+        CheckConstraint("travel_override_minutes BETWEEN 1 AND 525600", name="ck_path_plan_legs_travel"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id"))
@@ -604,12 +607,14 @@ class District(RegionFields, Base):
 
 
 class StationServiceArea(Base):
+    purpose: Mapped[str] = mapped_column(String(16), server_default='DELIVERY')
     __tablename__ = 'station_service_areas'
     __table_args__ = (
         ForeignKeyConstraint(['city_id', 'province_id'], ['cities.id', 'cities.province_id'],
                              name='fk_service_areas_city_province', ondelete='RESTRICT'),
         Index('ix_service_areas_station', 'station_id'),
-        Index('uq_service_areas_enabled_region', 'province_id',
+        CheckConstraint("purpose IN ('DELIVERY','PICKUP')", name='ck_service_areas_purpose'),
+        Index('uq_service_areas_enabled_region', 'purpose', 'province_id',
               text('COALESCE(city_id, 0)'), text('COALESCE(district_id, 0)'),
               unique=True, postgresql_where=text('enabled')),
     )

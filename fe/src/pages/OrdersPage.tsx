@@ -163,7 +163,9 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
     <ModalForm<{ destination_station_id?: string }> title="创建运单" open={shipmentOpen} onOpenChange={setShipmentOpen} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '确认创建' }, submitButtonProps: { disabled: destinationMatchLoading || Boolean(destinationMatchError) || (destinationMatch?.status !== 'MATCHED' && destinationMatch?.status !== 'ADDRESS_REQUIRED') } }} onFinish={async values => {
       if (!detail) return false
       const destination = values.destination_station_id ? Number(values.destination_station_id) : undefined
-      return Boolean(await mutate(`create-shipment:${detail.id}:${destination ?? 'AUTO'}`, key => api.createShipment(detail.id, destination, key), '运单已创建'))
+      const shipment = await mutate(`create-shipment:${detail.id}:${destination ?? 'AUTO'}`, key => api.createShipment(detail.id, destination, key), '运单已创建')
+      if (shipment) navigate(`/shipments/${shipment.id}?schedule=1`)
+      return Boolean(shipment)
     }}>
       {detail && <Alert type="info" showIcon message="收件地址会自动从订单同步到运单" description={<span className="jp-wrap-anywhere">{detail.recipient_name} · {fullAddress(detail, 'recipient')}</span>} style={{ marginBottom: 20 }} />}
       {destinationMatchLoading && <Spin tip="正在按收件区域匹配目的站…" />}

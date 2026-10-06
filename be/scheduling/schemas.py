@@ -26,6 +26,8 @@ class SchedulePreviewRequest(BaseModel):
     expected_schedule_version: int | None = Field(default=None, ge=0, strict=True)
     expected_destination_station_id: Id | None = None
     origin_station_id: Id | None = None
+    line_id: Id | None = None
+    expected_line_version: int | None = Field(default=None, gt=0, strict=True)
     plan_id: Id | None = None
     expected_plan_version: int | None = Field(default=None, gt=0, strict=True)
     route_ids: list[Id] | None = Field(default=None, max_length=100)
@@ -36,6 +38,16 @@ class SchedulePreviewRequest(BaseModel):
 
     @model_validator(mode='after')
     def source(self):
+        if self.line_id is not None:
+            if self.plan_id is not None and self.plan_id != self.line_id:
+                raise ValueError('line_id and plan_id refer to different lines')
+            self.plan_id = self.line_id
+            self.line_id = None
+        if self.expected_line_version is not None:
+            if self.expected_plan_version is not None and self.expected_plan_version != self.expected_line_version:
+                raise ValueError('Line version fields disagree')
+            self.expected_plan_version = self.expected_line_version
+            self.expected_line_version = None
         if self.plan_id is not None and self.route_ids is not None:
             raise ValueError('Choose a plan or route_ids')
         if self.plan_id is None and self.expected_plan_version is not None:
@@ -78,6 +90,8 @@ class PreviewNotice(BaseModel):
 
 
 class SchedulePreviewResponse(BaseModel):
+    line_id: str | None = None
+    line_version: int | None = None
     shipment_id: str
     path_version: int
     schedule_version: int

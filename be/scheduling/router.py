@@ -47,3 +47,8 @@ def history(shipment_id: ResourceId, session: DB, page: Annotated[int, Query(ge=
 @router.post('/transport-tasks/{task_id}/cancel-preview', response_model=CancelPreviewResponse)
 def cancellation_preview(task_id: ResourceId, request: CancelPreviewRequest, session: DB):
     return call(preview_cancel, session, task_id, request.reason)
+
+
+@router.get('/shipments/{shipment_id}/schedule/initial-preview', response_model=SchedulePreviewResponse)
+def initial_preview(shipment_id: ResourceId, session: DB):
+    return call(preview_schedule, session, shipment_id, SchedulePreviewRequest())

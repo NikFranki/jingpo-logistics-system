@@ -8,7 +8,8 @@ from network.schemas import (StationResponse, TransportRouteResponse, StationCre
     StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest)
 from network.service import list_stations, list_routes, station_body, route_body, write_network
 from network.coverage import (ServiceAreaCreate, ServiceAreaUpdate, ServiceAreaResponse,
-    DestinationMatchResponse, list_areas, write_area, order_destination_preview)
+    DestinationMatchResponse, OriginMatchResponse, order_origin_preview,
+    list_areas, write_area, order_destination_preview)
 
 router = APIRouter(prefix="/api/v1", tags=["network"])
 DB = Annotated[Session, Depends(get_db)]
@@ -44,7 +45,7 @@ def update_service_area(station_id: int, area_id: int, request: ServiceAreaUpdat
 def preview_destination(order_id: int, session: DB):
     return order_destination_preview(session, order_id)
 
-@router.get("/routes", response_model=list[TransportRouteResponse])
+@router.get("/routes", response_model=list[TransportRouteResponse], deprecated=True)
 def read_routes(session: DB, enabled: bool | None = None):
     return [route_body(session, route) for route, _, _ in list_routes(session, enabled)]
 
@@ -62,10 +63,15 @@ def create_station(request: StationCreateRequest, idempotency_key: Key, session:
 def update_station(station_id: int, request: StationUpdateRequest, idempotency_key: Key, session: DB):
     return write(session, "STATION", request, idempotency_key, station_id)
 
-@router.post("/routes", response_model=TransportRouteResponse, status_code=201)
+@router.post("/routes", response_model=TransportRouteResponse, status_code=201, deprecated=True)
 def create_route(request: RouteCreateRequest, idempotency_key: Key, session: DB):
     return write(session, "ROUTE", request, idempotency_key)
 
-@router.patch("/routes/{route_id}", response_model=TransportRouteResponse)
+@router.patch("/routes/{route_id}", response_model=TransportRouteResponse, deprecated=True)
 def update_route(route_id: int, request: RouteUpdateRequest, idempotency_key: Key, session: DB):
     return write(session, "ROUTE", request, idempotency_key, route_id)
+
+
+@router.get('/orders/{order_id}/origin-match', response_model=OriginMatchResponse)
+def preview_origin(order_id: int, session: DB):
+    return order_origin_preview(session, order_id)

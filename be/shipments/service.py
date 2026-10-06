@@ -30,7 +30,7 @@ from models import (
 )
 
 from planning.service import shipment_path_body, auto_bind_path, invalidate_destination_path
-from network.coverage import require_matched_destination
+from network.coverage import require_matched_destination, match_origin, planned_origin
 
 from shipments.schemas import (
     ShipmentAddressUpdateRequest,
@@ -117,6 +117,7 @@ def build_shipment_response_body(
     if shipment.scheduling_mode == 'REVIEWED' and shipment.schedule_version:
         can_update_path = False
     from scheduling.service import schedule_body
+    planned_start = planned_origin(session, shipment)
     return {
         **address_body(shipment),
         "scheduling_mode": shipment.scheduling_mode,
@@ -128,6 +129,7 @@ def build_shipment_response_body(
         "recipient_address": shipment.recipient_address,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
+        "planned_origin_station_id": str(planned_start) if planned_start else None,
         "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": (
             str(shipment.last_scanned_station_id)
@@ -282,7 +284,9 @@ def create_shipment(
         if not destination.enabled or not destination.allows_delivery:
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
 
+        origin_result = match_origin(session, order)
         shipment = Shipment(
+            planned_origin_station_id=int(origin_result["origin_station"]["id"]) if origin_result["status"] == "MATCHED" else None,
             **{field: getattr(order, field) for field in (*REGION_FIELDS, *SNAPSHOT_FIELDS)},
             order_id=order.id,
             scheduling_mode=scheduling_mode,
@@ -392,14 +396,28 @@ def update_shipment_address(
             raise InvalidShipmentStateError
 
         changes = resolve_changes(session, request_body(request))
+        origin_changed = any(field in changes and changes[field] != getattr(shipment, field)
+                             for field in ('sender_province_id', 'sender_city_id', 'sender_district_id'))
+        if origin_changed and session.scalar(select(TaskShipment.id).where(
+                TaskShipment.shipment_id == shipment.id,
+                TaskShipment.association_state.in_(['ACTIVE', 'PLANNED'])).limit(1)):
+            raise NetworkError('SHIPMENT_HAS_ARRANGEMENTS', '请先取消未执行的运输安排，再修改寄件区域')
         before_data = {
             field: getattr(shipment, field)
             for field in changes
         }
+        if origin_changed:
+            before_data['planned_origin_station_id'] = shipment.planned_origin_station_id
 
         for field, value in changes.items():
             setattr(shipment, field, value)
 
+        if origin_changed:
+            origin_result = match_origin(session, shipment)
+            shipment.planned_origin_station_id = int(origin_result['origin_station']['id']) if origin_result['status'] == 'MATCHED' else None
+            if shipment.schedule_version:
+                shipment.schedule_status = 'NEEDS_RECONFIRMATION'
+                shipment.schedule_reason = '寄件区域已变化，请重新审核起点和运输计划'
         shipment.updated_at = datetime.now(timezone.utc)
         session.flush()
         session.refresh(shipment)
@@ -414,6 +432,8 @@ def update_shipment_address(
             field: getattr(shipment, field)
             for field in changes
         }
+        if origin_changed:
+            after_data['planned_origin_station_id'] = shipment.planned_origin_station_id
         response_body = build_shipment_response_body(
             session=session,
             shipment=shipment,
@@ -486,13 +506,26 @@ def process_shipment_event(
         if shipment is None:
             raise ShipmentNotFoundError
 
+        arrival_station_id = None
+        if request.event_type == TrackingEventType.ARRIVE:
+            if request.station_id is not None:
+                arrival_station_id = int(request.station_id)
+            else:
+                first_arrival = session.scalar(select(TrackingEvent).where(
+                    TrackingEvent.shipment_id == shipment_id,
+                    TrackingEvent.event_type == TrackingEventType.ARRIVE,
+                    TrackingEvent.task_id.is_(None)).order_by(TrackingEvent.id).limit(1))
+                arrival_station_id = first_arrival.station_id if first_arrival else planned_origin(session, shipment)
+            if arrival_station_id is None:
+                raise NetworkError('ORIGIN_REQUIRED', '未匹配到计划始发站，请配置揽收接收范围或明确实际入站站点')
+
         event_filters = [
             TrackingEvent.shipment_id == shipment_id,
             TrackingEvent.event_type == request.event_type,
         ]
         if request.event_type == TrackingEventType.ARRIVE:
             event_filters.extend((
-                TrackingEvent.station_id == int(request.station_id),
+                TrackingEvent.station_id == arrival_station_id,
                 TrackingEvent.task_id.is_(None),
             ))
         existing_event = session.scalar(
@@ -544,7 +577,7 @@ def process_shipment_event(
 
         if request.event_type == TrackingEventType.ARRIVE:
             station = session.scalar(
-                select(Station).where(Station.id == int(request.station_id))
+                select(Station).where(Station.id == arrival_station_id)
             )
             if station is None or not station.enabled or not station.allows_first_arrival:
                 raise InvalidShipmentStateError

@@ -16,6 +16,8 @@ from errors import NetworkError, ShipmentNotFoundError
 from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentPathLeg, ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg)
 from planning.service import (active_task, current_legs, leg_state, plan_routes, routes_for_ids,
                               validate_routes, save_path, time_and_replay)
+from network.coverage import planned_origin
+from planning.service import candidate_route_paths
 from scheduling.schemas import SchedulePreviewRequest
 
 _SECRET = os.getenv('SCHEDULE_SIGNING_KEY', '').encode() or secrets.token_bytes(32)
@@ -229,6 +231,7 @@ def make_preview(session, shipment, request, now=None):
         (request.expected_destination_station_id, shipment.destination_station_id, 'DESTINATION_VERSION_CONFLICT')]:
         if expected is not None and expected != actual:
             error(code, '页面数据已变化，请刷新后重新预览')
+    proposed_origin = anchor or request.origin_station_id or planned_origin(session, shipment)
     plan = None
     if request.plan_id is not None:
         plan = session.get(PathPlan, request.plan_id)
@@ -243,7 +246,6 @@ def make_preview(session, shipment, request, now=None):
         routes = [session.get(TransportRoute, leg.route_id) for leg in current_legs(session, shipment.id)
                   if leg_state(session, leg)[0] not in ('ARRIVED', 'IN_TRANSIT')]
         if not routes:
-            proposed_origin = anchor or request.origin_station_id
             if proposed_origin is None:
                 error('SCHEDULE_ORIGIN_REQUIRED', '首次入站前请明确计划起点')
             matches = list(session.scalars(select(PathPlan).where(PathPlan.enabled.is_(True),
@@ -255,11 +257,17 @@ def make_preview(session, shipment, request, now=None):
                 except NetworkError:
                     continue
                 usable.append(candidate)
-            if len(usable) != 1:
-                error('SCHEDULE_PATH_REQUIRED', '没有唯一完整路线，请选择或配置路线')
-            plan = usable[0]
-            routes = plan_routes(session, plan)
-    anchor = anchor or request.origin_station_id
+            if usable:
+                from lines.service import list_lines
+                recommended = [item for item in list_lines(session, True, proposed_origin,
+                    shipment.destination_station_id) if item['usable']]
+                plan = session.get(PathPlan, int(recommended[0]['id']))
+                routes = plan_routes(session, plan)
+            elif proposed_origin == shipment.destination_station_id:
+                routes = []
+            else:
+                error('SCHEDULE_LINE_REQUIRED', '起终站之间没有启用的运输线路，请先配置线路')
+    anchor = proposed_origin
     if anchor is None:
         error('SCHEDULE_ORIGIN_REQUIRED', '首次入站前请明确计划起点')
     if request.origin_station_id is not None and request.origin_station_id != anchor:
@@ -270,6 +278,7 @@ def make_preview(session, shipment, request, now=None):
             error('INVALID_TRANSPORT_PATH', '计划首站必须允许首次入站')
     validate_routes(session, routes, anchor, shipment.destination_station_id)
     overrides = {l.position: l.origin_transfer_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan else {}
+    travel_overrides = {l.position: l.travel_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan else {}
     anchor_arrival = None
     completed_predecessor = None
     for leg in current_legs(session, shipment.id):
@@ -288,11 +297,12 @@ def make_preview(session, shipment, request, now=None):
         error('INVALID_SCHEDULE_TIMES', '时间段必须与完整未来路线一一对应', 422)
     previous_arrival = anchor_arrival
     for i, route in enumerate(routes):
+        travel_reference = travel_overrides.get(i) if travel_overrides.get(i) is not None else route.travel_minutes
         station = session.get(Station, route.origin_station_id)
         transfer = overrides.get(i)
         if transfer is None:
             transfer = station.transfer_minutes if i or anchor_arrival is not None else 0
-        configuration.append({'route': route.id, 'enabled': route.enabled, 'travel': route.travel_minutes,
+        configuration.append({'route': route.id, 'enabled': route.enabled, 'travel': travel_reference,
             'monitor': route.delay_monitoring_enabled, 'origin_enabled': station.enabled,
             'transfer': transfer, 'destination_enabled': session.get(Station, route.destination_station_id).enabled})
         reference_departure = max(now, previous_arrival + timedelta(minutes=transfer)) if previous_arrival is not None and transfer is not None else (now if i == 0 and not frozen_task else None)
@@ -305,7 +315,7 @@ def make_preview(session, shipment, request, now=None):
             departure, arrival = request.legs[i].planned_departure_at, request.legs[i].planned_arrival_at
         else:
             departure = request.first_departure_at if i == 0 and request.first_departure_at is not None else reference_departure
-            arrival = departure + timedelta(minutes=route.travel_minutes) if departure is not None and route.travel_minutes else None
+            arrival = departure + timedelta(minutes=travel_reference) if departure is not None and travel_reference else None
         if departure is not None and (departure < now or (previous_arrival is not None and departure < previous_arrival)):
             error('INVALID_SCHEDULE_TIMES', '计划出发不能早于服务器时间或前段到达', 422)
         if arrival is not None and departure is not None and arrival <= departure:
@@ -315,7 +325,7 @@ def make_preview(session, shipment, request, now=None):
             gap = int((departure-previous_arrival).total_seconds()/60) if previous_arrival else 0
             if travel > 525600 or gap > 525600:
                 error('INVALID_SCHEDULE_TIMES', '已审核耗时不能超过一年', 422)
-            if route.travel_minutes and travel < route.travel_minutes:
+            if travel_reference and travel < travel_reference:
                 warnings.append({'code': f'TRAVEL_BELOW_REFERENCE:{i}', 'message': f'{route.code} 运输时间短于参考值'})
             if previous_arrival is not None and transfer is not None and gap < transfer:
                 warnings.append({'code': f'TRANSFER_BELOW_REFERENCE:{i}', 'message': f'{station.code} 中转时间短于参考值'})
@@ -327,7 +337,7 @@ def make_preview(session, shipment, request, now=None):
             'origin_station_id': str(route.origin_station_id), 'destination_station_id': str(route.destination_station_id),
             'planned_departure_at': departure.isoformat() if departure else None,
             'planned_arrival_at': arrival.isoformat() if arrival else None,
-            'travel_reference_minutes': route.travel_minutes, 'transfer_reference_minutes': transfer,
+            'travel_reference_minutes': travel_reference, 'transfer_reference_minutes': transfer,
             'approved_transfer_minutes': gap, 'planned_travel_minutes': travel,
             'shared_task_id': str(shared.id) if shared else None,
             'shared_task_revision': shared.schedule_revision if shared else None,
@@ -347,6 +357,7 @@ def make_preview(session, shipment, request, now=None):
         'frozen_task_id': str(frozen_task.id) if frozen_task else None,
         'frozen_task_revision': frozen_task.schedule_revision if frozen_task else None,
         'anchor_arrival_at': anchor_arrival.isoformat() if anchor_arrival else None,
+        'line_id': str(plan.id) if plan else None, 'line_version': plan.version if plan else None,
         'source_plan_id': str(plan.id) if plan else None, 'source_plan_version': plan.version if plan else None,
         'configuration': configuration, 'legs': rows, 'warnings': warnings, 'missing': missing,
         'replacements': replacements, 'planned_origin_arrival_at': request.planned_origin_arrival_at.isoformat() if request.planned_origin_arrival_at else None,
@@ -418,6 +429,8 @@ def confirm_schedule(session, shipment_id, request, key):
         session.flush()
         routes = routes_for_ids(session, [int(r['route_id']) for r in value['legs']])
         plan = session.get(PathPlan, int(value['source_plan_id'])) if value['source_plan_id'] else None
+        if shipment.last_scanned_station_id is None:
+            shipment.planned_origin_station_id = int(value['anchor_station_id'])
         save_path(session, shipment, routes, clock, request.reason, plan)
         shipment.scheduling_mode = 'REVIEWED'
         shipment.schedule_version += 1
@@ -506,7 +519,7 @@ def schedule_body(session, shipment):
     return {'shipment_id': str(shipment.id), 'scheduling_mode': shipment.scheduling_mode,
         'status': shipment.schedule_status, 'reason': shipment.schedule_reason,
         'path_version': shipment.path_version, 'version': shipment.schedule_version,
-        'origin_station_id': str(version.origin_station_id) if version else None,
+        'origin_station_id': str(version.origin_station_id) if version else (str(planned_origin(session, shipment)) if planned_origin(session, shipment) else None),
         'destination_station_id': str(shipment.destination_station_id), 'legs': rows,
         'configuration_risks': configuration_risks, 'server_time': now.isoformat()}
 

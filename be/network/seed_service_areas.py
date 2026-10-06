@@ -32,6 +32,7 @@ PROVINCE_COVERAGE = {'BEIJING': '110000', 'TIANJIN': '120000',
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--purpose', choices=['DELIVERY', 'PICKUP'], default='DELIVERY')
     args = parser.parse_args()
     report = {'dry_run': args.dry_run, 'created': [], 'unchanged': [], 'skipped_missing_station': []}
     with SessionLocal() as session, session.begin():
@@ -49,12 +50,12 @@ def main():
                 p = region.province_id if level == 'CITY' else region.id
                 c = region.id if level == 'CITY' else None
                 existing = session.scalar(select(StationServiceArea).where(
-                    StationServiceArea.station_id == station.id, StationServiceArea.province_id == p,
+                    StationServiceArea.station_id == station.id, StationServiceArea.purpose == args.purpose, StationServiceArea.province_id == p,
                     StationServiceArea.city_id.is_not_distinct_from(c), StationServiceArea.district_id.is_(None)))
                 if existing:
                     report['unchanged'].append(station_code)
                     continue  # Preserve manually disabled configuration as well.
-                area = StationServiceArea(station_id=station.id, province_id=p, city_id=c, enabled=True)
+                area = StationServiceArea(station_id=station.id, province_id=p, city_id=c, enabled=True, purpose=args.purpose)
                 ensure_scope_available(session, area)
                 report['created'].append(station_code)
                 if args.dry_run:
@@ -62,7 +63,8 @@ def main():
                 session.add(area)
                 session.flush()
                 body = area_body(session, area)
-                key = uuid5(NAMESPACE_URL, f'jingpo/demo-delivery-coverage/v1/{station_code}/{region_code}')
+                prefix = 'demo-delivery-coverage' if args.purpose == 'DELIVERY' else 'demo-pickup-coverage'
+                key = uuid5(NAMESPACE_URL, f'jingpo/{prefix}/v1/{station_code}/{region_code}')
                 if session.scalar(select(OperationLog.id).where(OperationLog.idempotency_key == key)):
                     raise ValueError(f'Initialization key already used: {station_code}')
                 session.add(OperationLog(idempotency_key=key,

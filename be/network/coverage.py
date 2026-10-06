@@ -22,6 +22,7 @@ class DestinationMatchResponse(BaseModel):
 
 
 class ServiceAreaCreate(BaseModel):
+    purpose: Literal['DELIVERY', 'PICKUP'] = 'DELIVERY'
     model_config = ConfigDict(extra='forbid')
     province_id: int = Field(gt=0, strict=True)
     city_id: int | None = Field(default=None, gt=0, strict=True)
@@ -35,6 +36,7 @@ class ServiceAreaUpdate(BaseModel):
 
 
 class ServiceAreaResponse(BaseModel):
+    purpose: Literal['DELIVERY', 'PICKUP'] = 'DELIVERY'
     id: str
     station_id: str
     province_id: str
@@ -61,7 +63,7 @@ def validate_scope(session, province_id, city_id, district_id):
 
 
 def area_body(session, area):
-    return dict(id=str(area.id), station_id=str(area.station_id),
+    return dict(id=str(area.id), station_id=str(area.station_id), purpose=area.purpose,
                 province_id=str(area.province_id), city_id=str(area.city_id) if area.city_id else None,
                 district_id=str(area.district_id) if area.district_id else None,
                 province_name=session.get(Province, area.province_id).name,
@@ -82,10 +84,12 @@ def list_areas(session, station_id, enabled=None):
 def ensure_scope_available(session, area):
     validate_scope(session, area.province_id, area.city_id, area.district_id)
     station = require_station(session, area.station_id)
-    if not station.enabled or not station.allows_delivery:
-        raise NetworkError('INVALID_NETWORK_CONFIGURATION', '服务范围需要启用且允许派送的站点')
+    eligible = station.allows_delivery if area.purpose == 'DELIVERY' else station.allows_first_arrival
+    if not station.enabled or not eligible:
+        raise NetworkError('INVALID_NETWORK_CONFIGURATION', '站点必须启用并具备所配置用途的接收或派送资格')
     conflict = session.scalar(select(StationServiceArea.id).where(
-        StationServiceArea.enabled.is_(True), StationServiceArea.id != (area.id or 0),
+        StationServiceArea.enabled.is_(True), StationServiceArea.purpose == area.purpose,
+        StationServiceArea.id != (area.id or 0),
         StationServiceArea.province_id == area.province_id,
         StationServiceArea.city_id.is_not_distinct_from(area.city_id),
         StationServiceArea.district_id.is_not_distinct_from(area.district_id)).limit(1))
@@ -96,8 +100,11 @@ def ensure_scope_available(session, area):
 def write_area(session, station_id, request, key, area_id=None):
     action = 'CREATE_STATION_SERVICE_AREA' if area_id is None else 'UPDATE_STATION_SERVICE_AREA'
     changes = request.model_dump()
+    hash_changes = dict(changes)
+    if hash_changes.get('purpose') == 'DELIVERY':
+        hash_changes.pop('purpose')  # Preserve hashes of pre-purpose delivery requests.
     digest = hashlib.sha256(json.dumps(dict(action=action, station_id=station_id,
-        area_id=area_id, body=changes), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        area_id=area_id, body=hash_changes), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     with session.begin():
         now = business_time.begin_business_write(session)
         replay = session.scalar(select(OperationLog).where(OperationLog.idempotency_key == key))
@@ -132,18 +139,21 @@ def write_area(session, station_id, request, key, area_id=None):
         return body
 
 
-def match_destination(session, order):
-    p, c, d = (getattr(order, 'recipient_' + level + '_id') for level in ('province', 'city', 'district'))
+def match_region_station(session, order, purpose='DELIVERY'):
+    side = 'recipient' if purpose == 'DELIVERY' else 'sender'
+    label = '收件' if purpose == 'DELIVERY' else '寄件'
+    p, c, d = (getattr(order, side + '_' + level + '_id') for level in ('province', 'city', 'district'))
     empty = dict(destination_station=None, matched_level=None, service_area_id=None)
     if p is None:
-        return dict(status='ADDRESS_REQUIRED', reason='订单缺少收件省市区，请先完善地址或为旧订单手动选择目的站', **empty)
+        return dict(status='ADDRESS_REQUIRED', reason=f'缺少{label}省市区，请先完善地址或手动指定站点', **empty)
     try:
         validate_scope(session, p, c, d)
     except NetworkError as exc:
         return dict(status='INVALID_ADDRESS', reason=str(exc), **empty)
     rows = session.execute(select(StationServiceArea, Station).join(Station).where(
-        StationServiceArea.enabled.is_(True), StationServiceArea.province_id == p,
-        Station.enabled.is_(True), Station.allows_delivery.is_(True))).all()
+        StationServiceArea.enabled.is_(True), StationServiceArea.purpose == purpose,
+        StationServiceArea.province_id == p, Station.enabled.is_(True),
+        (Station.allows_delivery if purpose == 'DELIVERY' else Station.allows_first_arrival).is_(True))).all()
     matches = []
     for area, station in rows:
         if area.district_id is not None:
@@ -163,11 +173,11 @@ def match_destination(session, order):
             continue
         matches.append((rank, area, station))
     if not matches:
-        return dict(status='NOT_FOUND', reason='收件区域尚未配置可派送的服务站点', **empty)
+        return dict(status='NOT_FOUND', reason=f'{label}区域尚未配置此用途的服务站点', **empty)
     rank = max(item[0] for item in matches)
     best = [item for item in matches if item[0] == rank]
     if len({item[2].id for item in best}) != 1:
-        return dict(status='CONFLICT', reason='收件区域匹配到多个目的站，请修正服务范围配置', **empty)
+        return dict(status='CONFLICT', reason=f'{label}区域匹配到多个站点，请修正服务范围配置', **empty)
     _, area, station = best[0]
     return dict(status='MATCHED', reason=None, destination_station=station_body(station),
                 matched_level='DISTRICT' if rank == 3 else 'CITY' if rank == 2 else 'PROVINCE',
@@ -191,3 +201,40 @@ def order_destination_preview(session, order_id):
                     destination_station=station_body(session.get(Station, existing.destination_station_id)),
                     matched_level=None, service_area_id=None)
     return match_destination(session, order)
+
+
+def match_destination(session, order):
+    return match_region_station(session, order, 'DELIVERY')
+
+
+def match_origin(session, value):
+    result = match_region_station(session, value, 'PICKUP')
+    result['origin_station'] = result.pop('destination_station')
+    return result
+
+
+def planned_origin(session, shipment):
+    if shipment.planned_origin_station_id is not None:
+        return shipment.planned_origin_station_id
+    result = match_origin(session, shipment)
+    return int(result['origin_station']['id']) if result['status'] == 'MATCHED' else None
+
+
+class OriginMatchResponse(BaseModel):
+    status: Literal['MATCHED', 'NOT_FOUND', 'CONFLICT', 'ADDRESS_REQUIRED', 'INVALID_ADDRESS', 'SAVED']
+    reason: str | None
+    origin_station: StationResponse | None
+    matched_level: Literal['PROVINCE', 'CITY', 'DISTRICT'] | None
+    service_area_id: str | None
+
+
+def order_origin_preview(session, order_id):
+    order = session.get(Order, order_id)
+    if order is None:
+        raise NetworkError('ORDER_NOT_FOUND', '订单不存在', 404)
+    shipment = session.scalar(select(Shipment).where(Shipment.order_id == order_id))
+    if shipment and shipment.planned_origin_station_id:
+        return dict(status='SAVED', reason=None,
+                    origin_station=station_body(session.get(Station, shipment.planned_origin_station_id)),
+                    matched_level=None, service_area_id=None)
+    return match_origin(session, shipment or order)

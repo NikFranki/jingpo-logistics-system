@@ -20,6 +20,7 @@ from transport.router import router as transport_router
 from planning.router import router as planning_router
 from scheduling.router import router as scheduling_router
 from regions.router import router as regions_router
+from lines.router import router as lines_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS
@@ -138,6 +139,7 @@ app.include_router(transport_router)
 app.include_router(planning_router)
 app.include_router(scheduling_router)
 app.include_router(regions_router)
+app.include_router(lines_router)
 
 # 把 get /health 请求交给下面的函数
 @app.get("/health")
