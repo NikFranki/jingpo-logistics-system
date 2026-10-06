@@ -36,6 +36,8 @@ class ShipmentCreateRequest(BaseModel):
 
 class ShipmentResponse(AddressResponse):
     planned_origin_station_id: str | None = None
+    earliest_handover_at: datetime | None = None
+    latest_delivery_at: datetime | None = None
     id: str
     shipment_no: str
     order_id: str

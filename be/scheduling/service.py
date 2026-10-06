@@ -209,13 +209,22 @@ def context(session, shipment):
     return pair, frozen_task, anchor
 
 
-def shared_candidate(session, route, departure, arrival, shipment_id, now):
+def shared_candidate(session, route, departure, arrival, shipment_id, now, not_before=None,
+                     arrive_by=None, use_window=False):
     if departure < now:
         return None
-    candidates = session.scalars(select(TransportTask).where(TransportTask.route_id == route.id,
+    query = select(TransportTask).where(TransportTask.route_id == route.id,
         TransportTask.scheduling_source == 'PLAN', TransportTask.status.in_(UNSTARTED),
-        TransportTask.planned_departure_at == departure, TransportTask.expected_arrival_at == arrival,
-        TransportTask.delay_monitoring_enabled == route.delay_monitoring_enabled).order_by(TransportTask.id))
+        TransportTask.delay_monitoring_enabled == route.delay_monitoring_enabled)
+    if use_window:
+        query = query.where(TransportTask.planned_departure_at >= (not_before or now))
+        if arrive_by is not None:
+            query = query.where(TransportTask.expected_arrival_at <= arrive_by)
+        query = query.order_by(TransportTask.planned_departure_at, TransportTask.id)
+    else:
+        query = query.where(TransportTask.planned_departure_at == departure,
+            TransportTask.expected_arrival_at == arrival).order_by(TransportTask.id)
+    candidates = session.scalars(query)
     for task in candidates:
         entries = members(session, task.id)
         if len(entries) < 100 and all(e.shipment_id != shipment_id for e in entries):
@@ -293,6 +302,7 @@ def make_preview(session, shipment, request, now=None):
     elif completed_predecessor:
         anchor_arrival = completed_predecessor.arrived_at
     warnings, missing, rows, configuration = [], [], [], []
+    windowed = shipment.earliest_handover_at is not None or shipment.latest_delivery_at is not None
     if request.legs is not None and [l.route_id for l in request.legs] != [r.id for r in routes]:
         error('INVALID_SCHEDULE_TIMES', '时间段必须与完整未来路线一一对应', 422)
     previous_arrival = anchor_arrival
@@ -308,6 +318,8 @@ def make_preview(session, shipment, request, now=None):
         reference_departure = max(now, previous_arrival + timedelta(minutes=transfer)) if previous_arrival is not None and transfer is not None else (now if i == 0 and not frozen_task else None)
         if i == 0 and previous_arrival is None and request.planned_origin_arrival_at is not None and reference_departure is not None:
             reference_departure = max(reference_departure, request.planned_origin_arrival_at)
+        if i == 0 and shipment.earliest_handover_at is not None and reference_departure is not None:
+            reference_departure = max(reference_departure, shipment.earliest_handover_at)
         if reference_departure:
             round_up = bool(reference_departure.second or reference_departure.microsecond)
             reference_departure = reference_departure.replace(second=0, microsecond=0) + (timedelta(minutes=1) if round_up else timedelta())
@@ -316,8 +328,21 @@ def make_preview(session, shipment, request, now=None):
         else:
             departure = request.first_departure_at if i == 0 and request.first_departure_at is not None else reference_departure
             arrival = departure + timedelta(minutes=travel_reference) if departure is not None and travel_reference else None
+        shared = None
+        if windowed and request.legs is None and departure is not None:
+            not_before = max(departure, reference_departure or now)
+            if i == 0 and shipment.earliest_handover_at is not None:
+                not_before = max(not_before, shipment.earliest_handover_at)
+            if i == 0 and request.planned_origin_arrival_at is not None:
+                not_before = max(not_before, request.planned_origin_arrival_at)
+            shared = shared_candidate(session, route, departure, arrival, shipment.id, now,
+                not_before=not_before, arrive_by=shipment.latest_delivery_at, use_window=True)
+            if shared is not None:
+                departure, arrival = shared.planned_departure_at, shared.expected_arrival_at
         if departure is not None and (departure < now or (previous_arrival is not None and departure < previous_arrival)):
             error('INVALID_SCHEDULE_TIMES', '计划出发不能早于服务器时间或前段到达', 422)
+        if i == 0 and shipment.earliest_handover_at is not None and departure is not None and departure < shipment.earliest_handover_at:
+            error('INVALID_DELIVERY_WINDOW', '首段计划发车早于订单最早可交运时间', 422)
         if arrival is not None and departure is not None and arrival <= departure:
             error('INVALID_SCHEDULE_TIMES', '到达必须晚于本段出发', 422)
         if departure is not None and arrival is not None:
@@ -332,7 +357,10 @@ def make_preview(session, shipment, request, now=None):
         else:
             missing.append({'position': i, 'message': '请补全本段出发和到达时间'})
             travel, gap = None, 0
-        shared = shared_candidate(session, route, departure, arrival, shipment.id, now) if departure and arrival else None
+        if shared is None and departure and arrival:
+            shared = shared_candidate(session, route, departure, arrival, shipment.id, now)
+        if i == len(routes) - 1 and shipment.latest_delivery_at is not None and arrival is not None and arrival > shipment.latest_delivery_at:
+            missing.append({'position': i, 'message': '预计到达晚于订单最晚送达时间'})
         rows.append({'position': i, 'route_id': str(route.id), 'route_code': route.code,
             'origin_station_id': str(route.origin_station_id), 'destination_station_id': str(route.destination_station_id),
             'planned_departure_at': departure.isoformat() if departure else None,

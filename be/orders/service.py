@@ -14,6 +14,7 @@ from models import (
 
 from errors import (
     IdempotencyKeyReusedError,
+    NetworkError,
     OrderNotEditableError,
     OrderNotFoundError,
     )
@@ -96,6 +97,7 @@ def build_create_order_request_hash(
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+        default=lambda value: value.isoformat() if isinstance(value, datetime) else str(value),
     )
 
     return hashlib.sha256(content.encode()).hexdigest()
@@ -160,6 +162,8 @@ def build_order_response_body(order: Order) -> dict:
         "sender_address": order.sender_address,
         "recipient_name": order.recipient_name,
         "recipient_address": order.recipient_address,
+        "earliest_handover_at": order.earliest_handover_at.isoformat() if order.earliest_handover_at else None,
+        "latest_delivery_at": order.latest_delivery_at.isoformat() if order.latest_delivery_at else None,
         "region_code": order.region_code,
         "status": order.status,
         "created_at": order.created_at.isoformat(),
@@ -179,6 +183,7 @@ def build_update_order_request_hash(
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+        default=lambda value: value.isoformat() if isinstance(value, datetime) else str(value),
     )
 
     return hashlib.sha256(content.encode()).hexdigest()
@@ -222,8 +227,12 @@ def update_order(
             raise OrderNotEditableError
 
         changes = resolve_changes(session, request_body(request))
+        earliest_handover_at = changes.get("earliest_handover_at", order.earliest_handover_at)
+        latest_delivery_at = changes.get("latest_delivery_at", order.latest_delivery_at)
+        if earliest_handover_at and latest_delivery_at and earliest_handover_at > latest_delivery_at:
+            raise NetworkError("INVALID_DELIVERY_WINDOW", "最早可交运时间不能晚于最晚送达时间", 422)
         before_data = {
-            field: getattr(order, field)
+            field: getattr(order, field).isoformat() if isinstance(getattr(order, field), datetime) else getattr(order, field)
             for field in changes
         }
 
@@ -235,7 +244,7 @@ def update_order(
         session.refresh(order)
 
         after_data = {
-            field: getattr(order, field)
+            field: getattr(order, field).isoformat() if isinstance(getattr(order, field), datetime) else getattr(order, field)
             for field in changes
         }
         response_body = build_order_response_body(order)

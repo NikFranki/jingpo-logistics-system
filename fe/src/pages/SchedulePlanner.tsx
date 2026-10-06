@@ -4,7 +4,7 @@ import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Modal, 
 import type { Dayjs } from 'dayjs'
 import { api, type PathOptions, type SchedulePreview, type SchedulePreviewInput, type ScheduleResponse, type ShipmentDetail, type TransportRoute } from '../api'
 import type { Mutate } from '../shared'
-import { apiError, chinaDatePickerValue, chinaTimeStamp, StationName } from '../shared'
+import { apiError, chinaDatePickerValue, chinaTimeStamp, formatTime, StationName } from '../shared'
 import { RouteSequenceEditor } from '../RouteSequenceEditor'
 
 const { Text } = Typography
@@ -131,6 +131,8 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
       <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} style={{ marginBottom: 16 }}>
         <Descriptions.Item label="运单">{shipment.shipment_no}</Descriptions.Item>
         <Descriptions.Item label="计划目的站"><StationName id={shipment.destination_station_id} /></Descriptions.Item>
+        {shipment.earliest_handover_at && <Descriptions.Item label="最早始发站就绪">{formatTime(shipment.earliest_handover_at)}</Descriptions.Item>}
+        {shipment.latest_delivery_at && <Descriptions.Item label="最晚目的站到达">{formatTime(shipment.latest_delivery_at)}</Descriptions.Item>}
         {options?.path.anchor_station_id ? <Descriptions.Item label="实际接续站"><StationName id={options.path.anchor_station_id} /></Descriptions.Item> : <Descriptions.Item label="计划起点">{mode === 'plan' && options?.plans.find(item => item.id === selectedPlanId) ? <StationName id={options.plans.find(item => item.id === selectedPlanId)!.origin_station_id} /> : '选择候选路线后带出'}</Descriptions.Item>}
         <Descriptions.Item label="冻结路段">{options?.path.legs.filter(leg => leg.state === 'ARRIVED' || leg.state === 'IN_TRANSIT').map(leg => `${leg.route_code}（${legStateText[leg.state]}）`).join(' → ') || '暂无'}</Descriptions.Item>
       </Descriptions>

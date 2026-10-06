@@ -49,6 +49,8 @@ def to_order_response(order: Order) -> OrderResponse:
         sender_address=order.sender_address,
         recipient_name=order.recipient_name,
         recipient_address=order.recipient_address,
+        earliest_handover_at=order.earliest_handover_at,
+        latest_delivery_at=order.latest_delivery_at,
         region_code=order.region_code,
         status=order.status,
         created_at=order.created_at,

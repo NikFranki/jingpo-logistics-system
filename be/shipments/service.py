@@ -130,6 +130,8 @@ def build_shipment_response_body(
         "region_code": shipment.region_code,
         "stage": shipment.stage,
         "planned_origin_station_id": str(planned_start) if planned_start else None,
+        "earliest_handover_at": shipment.earliest_handover_at.isoformat() if shipment.earliest_handover_at else None,
+        "latest_delivery_at": shipment.latest_delivery_at.isoformat() if shipment.latest_delivery_at else None,
         "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": (
             str(shipment.last_scanned_station_id)
@@ -288,6 +290,8 @@ def create_shipment(
         shipment = Shipment(
             planned_origin_station_id=int(origin_result["origin_station"]["id"]) if origin_result["status"] == "MATCHED" else None,
             **{field: getattr(order, field) for field in (*REGION_FIELDS, *SNAPSHOT_FIELDS)},
+            earliest_handover_at=order.earliest_handover_at,
+            latest_delivery_at=order.latest_delivery_at,
             order_id=order.id,
             scheduling_mode=scheduling_mode,
             destination_station_id=destination_station_id,
@@ -750,6 +754,8 @@ def build_shipment_list_item(shipment: Shipment) -> dict:
         "order_id": str(shipment.order_id),
         "sender_address": shipment.sender_address,
         "recipient_address": shipment.recipient_address,
+        "earliest_handover_at": shipment.earliest_handover_at,
+        "latest_delivery_at": shipment.latest_delivery_at,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
         "destination_station_id": str(shipment.destination_station_id),

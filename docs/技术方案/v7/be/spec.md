@@ -27,6 +27,7 @@ flowchart LR
 | TransportRoute | travel_minutes | 可空表示无参考；正整数 |
 | PathPlanLeg | origin_transfer_override_minutes | 可空；仅方案中间站覆盖，首段禁止覆盖首站 |
 | Shipment | scheduling_mode、schedule_version、schedule_status | 旧运单 LEGACY，新运单 REVIEWED；时间版本从 0 开始；初始 NOT_CONFIRMED |
+| Order / Shipment | earliest_handover_at、latest_delivery_at | 订单可选时间窗；创建运单时复制为履约快照；空值保持旧行为 |
 | ShipmentScheduleVersion 新表 | 运单、路径版本、版本、起终点、各段已确认时间/耗时副本、原因、来源方案和操作 | 每次确认追加不可变布局，同运单版本唯一；包含全段任务/关联编号 |
 | ShipmentPathLeg | travel_reference_minutes、origin_transfer_reference_minutes | 参考值副本可空；明确重新预览时才能采用更新配置 |
 | TransportTask | scheduling_source、planned_departure_at、planned_travel_minutes、schedule_revision | 来源 LEGACY/PLAN；任务 expected_arrival_at 保存已确认到达时间；成员变化递增 revision |
@@ -51,7 +52,7 @@ PLANNED 是未来安排，可有多行。ACTIVE 表示货物当前关联的一�
 
 预览参数包括计划起点、运单目的站、plan_id/expected_plan_version 或完整 route_ids，以及可选首段出发时间和用户编辑的各段时间。当前在站时起点取实际站；运输中从当前任务终点接续；首次入站未知时用户显式指定计划起点。系统不通过收件地址猜站点。
 
-- 默认首段建议出发取当前演示时间，允许用户修改；后段按参考运输时长与中转耗时顺推。
+- 默认首段建议出发取当前演示时间或订单最早可交运时间的较晚值，允许用户修改；后段按参考运输时长与中转耗时顺推。
 - 参考缺失时返回缺项和空建议，用户填写完整未来时间后可确认。
 - 用户可编辑每个未来站点的到达/出发时间；中间站到达对应前段 planned_arrival_at，出发对应后段 planned_departure_at，保持单一值来源。
 - 首站实际到达只读；未到首站时可选填计划入站时间，不得晚于首段计划出发。目的站没有后续出发字段。
@@ -107,7 +108,7 @@ stateDiagram-v2
 
 共享依赖是逐段向前的无环关系，预测需按依赖次序传播；共享成员最晚到达可能影响整趟及后续，不能只算单张运单忽略其他成员。缺输入时明确未知，预测过期时显示估算下界。预测不写回已确认任务时间、不创建任务、不增加时间版本；延误仍比较原 expected_arrival_at。
 
-共享键为 `(route_id, planned_departure_at, expected_arrival_at, delay_monitoring_snapshot)`。只加入 PLAN 来源且未发车/未取消、时间未过期的兼容任务，最多 100 张运单，满额可生成同时间另一趟。预览明示已有任务和成员，确认校验其 revision；共享不移动其他运单时间、不提前发车，也不自动凑批改时间。
+没有订单时间窗时，共享键为 `(route_id, planned_departure_at, expected_arrival_at, delay_monitoring_snapshot)`。有时间窗时，任务分段相同、仍待执行、起点就绪不晚于发车、全程预计到达不晚于订单截止时间且延误监测配置一致，即可作为候选，不要求两组发车/到达时间相等。候选计划时间写入预览，确认后共享任务；每趟最多 100 张运单。预览明示已有任务和成员，确认校验其 revision；共享不改变既有任务时间。详细规则见[订单交运与送达时间窗](order-delivery-windows.md)。
 
 同一任务共享成员追加或解除均递增 schedule_revision；PLAN 任务发车和取消请求带 expected_schedule_revision，过期 409 后刷新名单。未来任务不能追加已经具有另一未结束同段安排的运单。
 

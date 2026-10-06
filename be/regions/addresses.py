@@ -46,6 +46,9 @@ def request_body(request, create=False):
     for field in REGION_FIELDS:
         if field not in request.model_fields_set:
             body.pop(field, None)
+    for field in ("earliest_handover_at", "latest_delivery_at"):
+        if field not in request.model_fields_set:
+            body.pop(field, None)
     return body
 
 

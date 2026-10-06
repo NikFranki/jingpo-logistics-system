@@ -2,6 +2,8 @@
 
 后端负责保存运输计划、生成全部任务和判断能否执行。前端由单独 Agent 实现；本说明用于接口交接，不表示页面已经验收。查询 Agent 也需要独立适配新状态。
 
+订单 `POST/PATCH /orders` 可选填写 `earliest_handover_at` 和 `latest_delivery_at`，值为带时区的整分钟时间或 `null`。订单详情和创建后的运单都会返回该时间窗；计划预览可自动采用符合时间窗的既有运输任务，即使订单时间与任务计划时间不完全相等。字段与兼容条件见[时间窗专项说明](order-delivery-windows.md)。
+
 ## 1. 正常操作顺序
 
 ```mermaid

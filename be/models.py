@@ -106,6 +106,11 @@ class Order(StructuredAddressFields, Base):
             name="ck_orders_region",
         ),
         CheckConstraint(
+            "earliest_handover_at IS NULL OR latest_delivery_at IS NULL "
+            "OR earliest_handover_at <= latest_delivery_at",
+            name="ck_orders_delivery_window",
+        ),
+        CheckConstraint(
             "status IN "
             "('PENDING_SHIPMENT', 'SHIPMENT_CREATED', 'COMPLETED')",
             name="ck_orders_status",
@@ -138,6 +143,8 @@ class Order(StructuredAddressFields, Base):
     sender_address: Mapped[str] = mapped_column(String(500))
     recipient_name: Mapped[str] = mapped_column(String(100))
     recipient_address: Mapped[str] = mapped_column(String(500))
+    earliest_handover_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    latest_delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     region_code: Mapped[str] = mapped_column(
         String(1),
         server_default="Z",
@@ -236,6 +243,11 @@ class Shipment(StructuredAddressFields, Base):
         CheckConstraint("scheduling_mode IN ('LEGACY','REVIEWED')", name="ck_shipments_schedule_mode"),
         CheckConstraint("schedule_status IN ('NOT_CONFIRMED','CONFIRMED','NEEDS_RECONFIRMATION','BLOCKED','COMPLETED')", name="ck_shipments_schedule_status"),
         CheckConstraint(
+            "earliest_handover_at IS NULL OR latest_delivery_at IS NULL "
+            "OR earliest_handover_at <= latest_delivery_at",
+            name="ck_shipments_delivery_window",
+        ),
+        CheckConstraint(
             "region_code = 'Z'",
             name="ck_shipments_region",
         ),
@@ -276,6 +288,8 @@ class Shipment(StructuredAddressFields, Base):
     )
     sender_address: Mapped[str] = mapped_column(String(500))
     recipient_address: Mapped[str] = mapped_column(String(500))
+    earliest_handover_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    latest_delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     region_code: Mapped[str] = mapped_column(
         String(1),
         server_default="Z",
