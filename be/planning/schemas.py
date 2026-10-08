@@ -41,16 +41,28 @@ class ShipmentPathUpdateRequest(BaseModel):
     expected_version: int = Field(ge=0, strict=True)
     expected_anchor_station_id: PositiveId
     reason: Reason
-    plan_id: PositiveId | None = None
-    expected_plan_version: int | None = Field(default=None, gt=0, strict=True)
-    route_ids: list[PositiveId] | None = Field(default=None, max_length=100)
+    line_id: PositiveId | None = None
+    expected_line_version: int | None = Field(default=None, gt=0, strict=True)
+    plan_id: PositiveId | None = Field(default=None, deprecated=True)
+    expected_plan_version: int | None = Field(default=None, gt=0, strict=True, deprecated=True)
+    route_ids: list[PositiveId] | None = Field(default=None, max_length=100, deprecated=True)
 
     @model_validator(mode="after")
     def exactly_one_path(self) -> Self:
+        if self.line_id is not None:
+            if self.plan_id is not None and self.plan_id != self.line_id:
+                raise ValueError("line_id and plan_id refer to different lines")
+            self.plan_id = self.line_id
+            self.line_id = None
+        if self.expected_line_version is not None:
+            if self.expected_plan_version is not None and self.expected_plan_version != self.expected_line_version:
+                raise ValueError("Line version fields disagree")
+            self.expected_plan_version = self.expected_line_version
+            self.expected_line_version = None
         if (self.plan_id is None) == (self.route_ids is None):
-            raise ValueError("Provide either plan_id or the complete future route_ids")
+            raise ValueError("Provide either line_id or the complete future route_ids")
         if (self.plan_id is None) != (self.expected_plan_version is None):
-            raise ValueError("plan_id requires expected_plan_version")
+            raise ValueError("line_id requires expected_line_version")
         return self
 
 class PathLegResponse(BaseModel):
@@ -65,6 +77,9 @@ class PathLegResponse(BaseModel):
 
 class ShipmentTransportPathResponse(BaseModel):
     version: int
+    line_id: str | None = None
+    line_version: int | None = None
+    scheduled_trip_id: str | None = None
     status: TransportPathStatus
     anchor_station_id: str | None
     destination_station_id: str
@@ -105,8 +120,10 @@ class PathOptionsResponse(BaseModel):
 class PathVersionResponse(BaseModel):
     version: int
     destination_station_id: str
-    source_plan_id: str | None
-    source_plan_version: int | None
+    line_id: str | None = None
+    line_version: int | None = None
+    source_plan_id: str | None = Field(default=None, deprecated=True)
+    source_plan_version: int | None = Field(default=None, deprecated=True)
     reason: str
     occurred_at: datetime
     legs: list[dict]

@@ -1,12 +1,11 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, DatePicker, Descriptions, Form, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Descriptions, Space, Spin, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
-import dayjs, { type Dayjs } from 'dayjs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type DestinationMatch, type Order, type OrderDetail, type OrderInput } from '../api'
-import { apiError, chinaDatePickerValue, chinaTimeStamp, formatTime, stageLabel, stageText, stages, StatusTag, type Shared, useNetwork } from '../shared'
+import { apiError, stageLabel, stageText, stages, StatusTag, type Shared, useNetwork } from '../shared'
 import { AddressRegionFields } from '../AddressRegionFields'
 
 const { Text } = Typography
@@ -21,8 +20,6 @@ type OrderFormValues = Omit<OrderInput, 'sender_address' | 'recipient_address' |
   recipient_city_id?: string
   recipient_district_id?: string
   recipient_detail_address: string
-  earliest_handover_at?: Dayjs | string | null
-  latest_delivery_at?: Dayjs | string | null
 }
 
 function regionPath(provinceId?: string | null, cityId?: string | null, districtId?: string | null) {
@@ -40,9 +37,6 @@ function fullAddress(address: Order, side: 'sender' | 'recipient') {
 }
 
 function orderInput(values: OrderFormValues): OrderInput {
-  const timeString = (value?: Dayjs | string | null) => value && dayjs(value).isValid()
-    ? chinaTimeStamp(dayjs(value)) ?? null
-    : null
   const input: OrderInput = {
     product_name: values.product_name,
     quantity: values.quantity,
@@ -50,8 +44,6 @@ function orderInput(values: OrderFormValues): OrderInput {
     sender_address: values.sender_detail_address,
     recipient_name: values.recipient_name,
     recipient_address: values.recipient_detail_address,
-    earliest_handover_at: timeString(values.earliest_handover_at),
-    latest_delivery_at: timeString(values.latest_delivery_at),
   }
   if (values.sender_region_ids?.length) Object.assign(input, {
     sender_province_id: Number(values.sender_province_id),
@@ -64,31 +56,6 @@ function orderInput(values: OrderFormValues): OrderInput {
     recipient_district_id: values.recipient_district_id ? Number(values.recipient_district_id) : null,
   })
   return input
-}
-
-function OrderWindowFields() {
-  const form = Form.useFormInstance<OrderFormValues>()
-  const earliestRule = { validator: (_: unknown, value?: Dayjs) => {
-    const deadline = form.getFieldValue('latest_delivery_at')
-    return value && deadline && dayjs(value).isAfter(dayjs(deadline))
-      ? Promise.reject(new Error('最早可交运时间不能晚于最晚送达时间'))
-      : Promise.resolve()
-  } }
-  const deadlineRule = { validator: (_: unknown, value?: Dayjs) => {
-    const earliest = form.getFieldValue('earliest_handover_at')
-    return value && earliest && dayjs(value).isBefore(dayjs(earliest))
-      ? Promise.reject(new Error('最晚送达时间不能早于最早可交运时间'))
-      : Promise.resolve()
-  } }
-  return <>
-    <Form.Item name="earliest_handover_at" label="货物最早可在始发站交运时间" dependencies={['latest_delivery_at']} rules={[earliestRule]}>
-      <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} placeholder="不限制" />
-    </Form.Item>
-    <Form.Item name="latest_delivery_at" label="最晚送达目的站时间" dependencies={['earliest_handover_at']} rules={[deadlineRule]}>
-      <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} placeholder="不限制" />
-    </Form.Item>
-    <Text type="secondary">留空表示不设时间限制；按北京时间填写。符合时间窗的线路任务可自动共享。</Text>
-  </>
 }
 
 const blankOrderForm: OrderFormValues = {
@@ -136,7 +103,6 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
       <AddressRegionFields prefix="sender" label="卖家" />
       <ProFormText name="recipient_name" label="买家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} />
       <AddressRegionFields prefix="recipient" label="买家" />
-      <OrderWindowFields />
       <Text type="secondary">配送区域固定为 Z，订单号由后端生成。</Text>
     </ModalForm>
   </PageContainer>
@@ -190,8 +156,6 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
         <Descriptions.Item label="商品">{detail.product_name} × {detail.quantity}</Descriptions.Item>
         <Descriptions.Item label="下单发件地址"><span className="jp-wrap-anywhere">{detail.sender_name} · {fullAddress(detail, 'sender')}</span></Descriptions.Item>
         <Descriptions.Item label="下单收件地址"><span className="jp-wrap-anywhere">{detail.recipient_name} · {fullAddress(detail, 'recipient')}</span></Descriptions.Item>
-        <Descriptions.Item label="最早可交运">{detail.earliest_handover_at ? formatTime(detail.earliest_handover_at) : '不限制'}</Descriptions.Item>
-        <Descriptions.Item label="最晚送达">{detail.latest_delivery_at ? formatTime(detail.latest_delivery_at) : '不限制'}</Descriptions.Item>
         <Descriptions.Item label="关联运单">{detail.shipment ? <><span>{detail.shipment.shipment_no} · {stageText[detail.shipment.stage]}</span> <Button type="link" onClick={() => navigate(`/shipments/${detail.shipment!.id}`)}>打开运单详情</Button></> : '未创建'}</Descriptions.Item>
       </Descriptions>
       <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>订单配送区域固定为 Z；运单创建后，履约操作和物流轨迹在运单详情中查看。</Text>
@@ -215,14 +179,14 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
       </>}
       <Text type="secondary">收件地址会同步到运单。目的站在创建时由后端按服务范围确认，创建后不可变更；运单到达该站后才能开始派送。</Text>
     </ModalForm>
-    <ModalForm<OrderFormValues> title={`编辑订单 ${detail?.order_no ?? ''}`} open={editOrderOpen} onOpenChange={setEditOrderOpen} initialValues={detail ? { product_name: detail.product_name, quantity: detail.quantity, sender_name: detail.sender_name, sender_region_ids: regionPath(detail.sender_province_id, detail.sender_city_id, detail.sender_district_id), sender_province_id: detail.sender_province_id ?? undefined, sender_city_id: detail.sender_city_id ?? undefined, sender_district_id: detail.sender_district_id ?? undefined, sender_detail_address: detail.sender_address, recipient_name: detail.recipient_name, recipient_region_ids: regionPath(detail.recipient_province_id, detail.recipient_city_id, detail.recipient_district_id), recipient_province_id: detail.recipient_province_id ?? undefined, recipient_city_id: detail.recipient_city_id ?? undefined, recipient_district_id: detail.recipient_district_id ?? undefined, recipient_detail_address: detail.recipient_address, earliest_handover_at: chinaDatePickerValue(detail.earliest_handover_at), latest_delivery_at: chinaDatePickerValue(detail.latest_delivery_at) } : blankOrderForm} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '保存修改' } }} onFinish={async values => {
+    <ModalForm<OrderFormValues> title={`编辑订单 ${detail?.order_no ?? ''}`} open={editOrderOpen} onOpenChange={setEditOrderOpen} initialValues={detail ? { product_name: detail.product_name, quantity: detail.quantity, sender_name: detail.sender_name, sender_region_ids: regionPath(detail.sender_province_id, detail.sender_city_id, detail.sender_district_id), sender_province_id: detail.sender_province_id ?? undefined, sender_city_id: detail.sender_city_id ?? undefined, sender_district_id: detail.sender_district_id ?? undefined, sender_detail_address: detail.sender_address, recipient_name: detail.recipient_name, recipient_region_ids: regionPath(detail.recipient_province_id, detail.recipient_city_id, detail.recipient_district_id), recipient_province_id: detail.recipient_province_id ?? undefined, recipient_city_id: detail.recipient_city_id ?? undefined, recipient_district_id: detail.recipient_district_id ?? undefined, recipient_detail_address: detail.recipient_address } : blankOrderForm} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '保存修改' } }} onFinish={async values => {
       if (!detail) return false
       const body = orderInput(values)
       const result = await mutate(`edit-order:${detail.id}:${JSON.stringify(body)}`, key => api.updateOrder(detail.id, body, key), '订单已更新')
       if (result) setEditOrderOpen(false)
       return Boolean(result)
     }}>
-      <ProFormText name="product_name" label="商品名称" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><ProFormDigit name="quantity" label="商品数量" min={1} precision={0} rules={[{ required: true }]} /><ProFormText name="sender_name" label="卖家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><AddressRegionFields prefix="sender" label="卖家" regionRequired={false} /><ProFormText name="recipient_name" label="买家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><AddressRegionFields prefix="recipient" label="买家" regionRequired={false} /><OrderWindowFields /><Text type="secondary">历史地址按详细地址载入；选择行政区后保存时会一并写入显示地址。配送区域固定为 Z。</Text>
+      <ProFormText name="product_name" label="商品名称" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><ProFormDigit name="quantity" label="商品数量" min={1} precision={0} rules={[{ required: true }]} /><ProFormText name="sender_name" label="卖家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><AddressRegionFields prefix="sender" label="卖家" regionRequired={false} /><ProFormText name="recipient_name" label="买家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} /><AddressRegionFields prefix="recipient" label="买家" regionRequired={false} /><Text type="secondary">历史地址按详细地址载入；选择行政区后保存时会一并写入显示地址。配送区域固定为 Z。</Text>
     </ModalForm>
   </PageContainer>
 }

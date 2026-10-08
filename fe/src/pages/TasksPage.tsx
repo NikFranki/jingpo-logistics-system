@@ -5,7 +5,7 @@ import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Candidate, type CancelPreview, type RouteCode, type TaskDetail, type TaskItem } from '../api'
-import { apiError, delayText, formatTime, StatusTag, stageText, taskStatusText, TaskShipmentTag, type Shared, useNetwork, StationName } from '../shared'
+import { apiError, delayText, formatTime, formatTimeWithSeconds, StatusTag, stageText, taskStatusText, TaskShipmentTag, type Shared, useNetwork, StationName } from '../shared'
 
 const { Text } = Typography
 
@@ -198,7 +198,8 @@ function TaskDetailPage({ revision, busy, mutate }: Shared) {
   }
   const disabledActionReason = (action: string) => {
     const rule = detail?.allowed_actions.find(item => item.action === action)
-    return rule && !rule.enabled ? rule.reason : undefined
+    if (!rule || rule.enabled || !rule.reason) return undefined
+    return rule.reason.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g, formatTimeWithSeconds)
   }
 
   return <>{holder}<PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button></Space>}>

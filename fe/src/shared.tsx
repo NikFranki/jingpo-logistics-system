@@ -32,6 +32,11 @@ export function formatTime(value?: string | null) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
 }
 
+export function formatTimeWithSeconds(value: string) {
+  const parts = chinaDateTimeParts(new Date(value))
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
+}
+
 export function chinaDatePickerValue(value?: string | null) {
   if (!value) return undefined
   const parts = chinaDateTimeParts(new Date(value))

@@ -3,7 +3,7 @@ import hashlib
 from sqlalchemy import select, delete, func
 
 from errors import NetworkError
-from models import PathPlan, PathPlanLeg, TransportRoute, OperationLog
+from models import LineService, PathPlan, PathPlanLeg, TransportRoute, OperationLog
 from network.service import station_body, require_station
 from planning.service import plan_body, plan_routes, validate_routes, time_and_replay, digest_request, anchor_station
 from network.coverage import planned_origin
@@ -97,6 +97,9 @@ def write_line(session, request, key, line_id=None):
                 raise NetworkError('LINE_VERSION_CONFLICT', '线路已变化，请刷新后重试')
             before = line_body(session, line)
             stations = request.station_ids if request.station_ids is not None else [int(i) for i in before['station_ids']]
+            if stations != [int(i) for i in before['station_ids']] and session.scalar(select(LineService.id).where(
+                    LineService.line_id == line.id, LineService.enabled.is_(True)).limit(1)):
+                raise NetworkError('LINE_SERVICES_REQUIRE_UPDATE', '先停用该线路的班次规则，再调整站点顺序')
             timing = request.legs if request.legs is not None else [dict(travel_minutes=l['travel_minutes']) for l in before['legs']]
             transfer = request.transfer_overrides
             if transfer is None:

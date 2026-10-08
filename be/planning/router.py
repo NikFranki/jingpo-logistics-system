@@ -42,7 +42,7 @@ def update_plan(plan_id:int,request:PathPlanUpdateRequest,idempotency_key:Key,se
 def read_path(shipment_id:int,session:DB):
     return shipment_path_body(session,require_shipment(session,shipment_id))
 
-@router.get('/shipments/{shipment_id}/path-options',response_model=PathOptionsResponse)
+@router.get('/shipments/{shipment_id}/path-options',response_model=PathOptionsResponse,deprecated=True)
 def read_options(shipment_id:int,session:DB):
     shipment = require_shipment(session,shipment_id)
     return path_options_body(session, shipment)

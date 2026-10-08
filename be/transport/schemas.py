@@ -75,6 +75,8 @@ class TaskShipmentResponse(BaseModel):
 
 class TransportTaskResponse(BaseModel):
     scheduling_source: str = "LEGACY"
+    scheduled_trip_id: str | None = None
+    scheduled_trip_missed: bool = False
     planned_departure_at: datetime | None = None
     forecast_arrival_at: datetime | None = None
     forecast_departure_at: datetime | None = None
@@ -119,6 +121,8 @@ class TransportTaskDetailResponse(TransportTaskResponse):
 
 class TransportTaskListItemResponse(BaseModel):
     scheduling_source: str = "LEGACY"
+    scheduled_trip_id: str | None = None
+    scheduled_trip_missed: bool = False
     planned_departure_at: datetime | None = None
     forecast_arrival_at: datetime | None = None
     forecast_stale: bool = False

@@ -116,6 +116,7 @@ def main():
         report['completed_timings'] += 1
     # Explicit representative inter-region hub corridors, with illustrative driving/transfer buffers.
     hubs = [('HARBIN','BEIJING',1440),('BEIJING','SHANGHAI',1440),
+            ('SHANGHAI','SHENZHEN',1080),
             ('SHANGHAI','GUANGZHOU',1800),('GUANGZHOU','CHENGDU',1800),
             ('CHENGDU','XIAN',840),('XIAN','URUMQI',2880),('CHENGDU','LHASA',2880),
             ('SHANGHAI','FUZHOU',720),('NANJING','WUHAN',600),

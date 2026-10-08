@@ -160,6 +160,7 @@ def build_task_response(
         "id": str(task.id),
         "task_no": task.task_no,
         "scheduling_source": task.scheduling_source,
+        "scheduled_trip_id": str(task.scheduled_trip_id) if task.scheduled_trip_id else None,
         "planned_departure_at": task.planned_departure_at.isoformat() if task.planned_departure_at else None,
         "schedule_revision": task.schedule_revision,
         "delay_monitoring_enabled": task.delay_monitoring_enabled,

@@ -1,5 +1,6 @@
+from datetime import date, time
 from typing import Annotated, Self
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 from network.schemas import NetworkCode, NetworkName, StationResponse
 
 Id = Annotated[int, Field(gt=0, strict=True)]
@@ -97,3 +98,133 @@ class LineListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class LineServiceStopInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    station_id: Id
+    arrival_day_offset: int | None = Field(default=None, ge=0, le=30, strict=True)
+    arrival_time: time | None = None
+    departure_day_offset: int | None = Field(default=None, ge=0, le=30, strict=True)
+    departure_time: time | None = None
+
+
+class LineServiceCreateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    code: NetworkCode
+    name: NetworkName
+    valid_from: date
+    valid_until: date | None = None
+    weekdays: list[StrictInt] = Field(min_length=1, max_length=7)
+    timezone: str = 'Asia/Shanghai'
+    capacity_snapshot: dict[str, StrictInt] = Field(default_factory=dict)
+    enabled: bool = True
+    stops: list[LineServiceStopInput] = Field(min_length=2, max_length=101)
+
+    @field_validator('capacity_snapshot')
+    @classmethod
+    def nonnegative_capacity(cls, value):
+        if any(amount < 0 for amount in value.values()):
+            raise ValueError('Capacity snapshot values must be nonnegative')
+        return value
+
+
+class LineServiceUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_version: int = Field(gt=0, strict=True)
+    name: NetworkName | None = None
+    valid_from: date | None = None
+    valid_until: date | None = None
+    weekdays: list[StrictInt] | None = Field(default=None, min_length=1, max_length=7)
+    timezone: str | None = None
+    capacity_snapshot: dict[str, StrictInt] | None = None
+    enabled: bool | None = None
+    stops: list[LineServiceStopInput] | None = Field(default=None, min_length=2, max_length=101)
+
+    @field_validator('capacity_snapshot')
+    @classmethod
+    def nonnegative_capacity(cls, value):
+        if value is not None and any(amount < 0 for amount in value.values()):
+            raise ValueError('Capacity snapshot values must be nonnegative')
+        return value
+
+    @model_validator(mode='after')
+    def require_changes(self) -> Self:
+        changes = self.model_dump(exclude_unset=True)
+        changes.pop('expected_version')
+        if not changes or any(value is None for key, value in changes.items() if key != 'valid_until'):
+            raise ValueError('Provide at least one non-null change')
+        return self
+
+
+class LineServiceStopResponse(BaseModel):
+    position: int
+    station_id: str
+    arrival_day_offset: int | None
+    arrival_time: str | None
+    departure_day_offset: int | None
+    departure_time: str | None
+
+
+class LineServiceResponse(BaseModel):
+    id: str
+    line_id: str
+    code: str
+    name: str
+    valid_from: date
+    valid_until: date | None
+    weekdays: list[int]
+    timezone: str
+    capacity_snapshot: dict[str, int]
+    enabled: bool
+    version: int
+    stops: list[LineServiceStopResponse]
+
+
+class GenerateTripsRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    from_date: date
+    to_date: date
+
+
+class ScheduledTripResponse(BaseModel):
+    id: str
+    line_id: str
+    line_version: int
+    service_id: str
+    service_code: str | None
+    service_name: str | None
+    service_date: date
+    service_version: int
+    status: str
+    stops: list[dict]
+    capacity_snapshot: dict[str, int]
+
+
+class ScheduledTripListResponse(BaseModel):
+    items: list[ScheduledTripResponse]
+    created: int
+    from_date: date
+    to_date: date
+
+
+class ServiceOptionResponse(BaseModel):
+    trip_id: str
+    line_id: str
+    line_version: int
+    service_id: str
+    service_code: str
+    service_name: str
+    service_date: date
+    origin_station_id: str
+    destination_station_id: str
+    departure_at: str
+    arrival_at: str
+    capacity_snapshot: dict[str, int]
+    legs: list[dict]
+
+
+class ServiceOptionsResponse(BaseModel):
+    origin_station_id: str
+    destination_station_id: str
+    items: list[ServiceOptionResponse]

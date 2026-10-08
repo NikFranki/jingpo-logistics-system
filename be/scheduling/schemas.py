@@ -28,9 +28,10 @@ class SchedulePreviewRequest(BaseModel):
     origin_station_id: Id | None = None
     line_id: Id | None = None
     expected_line_version: int | None = Field(default=None, gt=0, strict=True)
-    plan_id: Id | None = None
-    expected_plan_version: int | None = Field(default=None, gt=0, strict=True)
-    route_ids: list[Id] | None = Field(default=None, max_length=100)
+    scheduled_trip_id: Id | None = None
+    plan_id: Id | None = Field(default=None, gt=0, strict=True, deprecated=True)
+    expected_plan_version: int | None = Field(default=None, gt=0, strict=True, deprecated=True)
+    route_ids: list[Id] | None = Field(default=None, max_length=100, deprecated=True)
     first_departure_at: datetime | None = None
     planned_origin_arrival_at: datetime | None = None
     legs: list[LegTime] | None = Field(default=None, max_length=100)
@@ -48,10 +49,14 @@ class SchedulePreviewRequest(BaseModel):
                 raise ValueError('Line version fields disagree')
             self.expected_plan_version = self.expected_line_version
             self.expected_line_version = None
+        if self.scheduled_trip_id is not None and (self.plan_id is not None or self.route_ids is not None):
+            raise ValueError('Choose a scheduled trip instead of a line or route_ids')
+        if self.scheduled_trip_id is not None and self.first_departure_at is not None:
+            raise ValueError('The selected scheduled trip determines departure times')
         if self.plan_id is not None and self.route_ids is not None:
-            raise ValueError('Choose a plan or route_ids')
+            raise ValueError('Choose a transport line or deprecated route_ids')
         if self.plan_id is None and self.expected_plan_version is not None:
-            raise ValueError('expected_plan_version requires plan_id')
+            raise ValueError('expected_plan_version requires line_id')
         return self
 
 
@@ -92,6 +97,7 @@ class PreviewNotice(BaseModel):
 class SchedulePreviewResponse(BaseModel):
     line_id: str | None = None
     line_version: int | None = None
+    scheduled_trip_id: str | None = None
     shipment_id: str
     path_version: int
     schedule_version: int
@@ -101,8 +107,8 @@ class SchedulePreviewResponse(BaseModel):
     frozen_task_id: str | None
     frozen_task_revision: int | None
     anchor_arrival_at: datetime | None
-    source_plan_id: str | None
-    source_plan_version: int | None
+    source_plan_id: str | None = Field(deprecated=True)
+    source_plan_version: int | None = Field(deprecated=True)
     legs: list[PreviewLeg]
     warnings: list[PreviewNotice]
     missing: list[dict]
@@ -150,6 +156,11 @@ class ScheduleResponse(BaseModel):
     reason: str | None
     path_version: int
     version: int
+    line_id: str | None = None
+    line_version: int | None = None
+    scheduled_trip_id: str | None = None
+    source_plan_id: str | None = Field(default=None, deprecated=True)
+    source_plan_version: int | None = Field(default=None, deprecated=True)
     origin_station_id: str | None
     destination_station_id: str
     legs: list[ScheduleLeg]
@@ -162,8 +173,11 @@ class ScheduleHistoryItem(BaseModel):
     reason: str
     occurred_at: datetime
     legs: list[ScheduleLeg]
-    source_plan_id: str | None
-    source_plan_version: int | None
+    line_id: str | None = None
+    line_version: int | None = None
+    scheduled_trip_id: str | None = None
+    source_plan_id: str | None = Field(default=None, deprecated=True)
+    source_plan_version: int | None = Field(default=None, deprecated=True)
 
 
 class ScheduleHistoryResponse(BaseModel):

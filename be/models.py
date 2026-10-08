@@ -1,6 +1,6 @@
 # 此模块负责映射数据库表
 
-from datetime import datetime
+from datetime import date, datetime, time
 from uuid import UUID
 
 from sqlalchemy import (
@@ -9,6 +9,8 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Date,
+    Time,
     Identity,
     SmallInteger,
     String,
@@ -35,7 +37,7 @@ class OperationLog(Base):
         ),
         CheckConstraint(
             "resource_type IN "
-            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN')",
+            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN', 'LINE_SERVICE', 'SCHEDULED_TRIP')",
             name="ck_logs_resource_type",
         ),
         CheckConstraint(
@@ -313,6 +315,7 @@ class Shipment(StructuredAddressFields, Base):
     )
 
 class TransportTask(Base):
+    scheduled_trip_id: Mapped[int | None] = mapped_column(ForeignKey("scheduled_trips.id", name="fk_transport_tasks_scheduled_trip", ondelete="RESTRICT"))
     scheduling_source: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
     planned_departure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     planned_travel_minutes: Mapped[int | None] = mapped_column(Integer)
@@ -516,6 +519,68 @@ class PathPlanLeg(Base):
     route_id: Mapped[int] = mapped_column(ForeignKey("transport_routes.id"))
 
 
+class LineService(Base):
+    __tablename__ = "line_services"
+    __table_args__ = (
+        UniqueConstraint("line_id", "code", name="uq_line_services_line_code"),
+        CheckConstraint("valid_until IS NULL OR valid_until >= valid_from", name="ck_line_services_valid_dates"),
+        CheckConstraint("jsonb_typeof(weekdays) = 'array'", name="ck_line_services_weekdays_array"),
+        CheckConstraint("jsonb_typeof(capacity_snapshot) = 'object'", name="ck_line_services_capacity_object"),
+        CheckConstraint("version > 0", name="ck_line_services_version"),
+        Index("ix_line_services_line_enabled", "line_id", "enabled"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    line_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id", ondelete="RESTRICT"))
+    code: Mapped[str] = mapped_column(String(32))
+    name: Mapped[str] = mapped_column(String(100))
+    valid_from: Mapped[date] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    weekdays: Mapped[list] = mapped_column(JSONB)
+    timezone: Mapped[str] = mapped_column(String(64), server_default="Asia/Shanghai")
+    capacity_snapshot: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, server_default="1")
+
+
+class LineServiceStop(Base):
+    __tablename__ = "line_service_stops"
+    __table_args__ = (
+        UniqueConstraint("service_id", "position", name="uq_line_service_stops_position"),
+        CheckConstraint("position >= 0", name="ck_line_service_stops_position"),
+        CheckConstraint("arrival_day_offset BETWEEN 0 AND 30", name="ck_line_service_arrival_day"),
+        CheckConstraint("departure_day_offset BETWEEN 0 AND 30", name="ck_line_service_departure_day"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("line_services.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    station_id: Mapped[int] = mapped_column(ForeignKey("stations.id", ondelete="RESTRICT"))
+    arrival_day_offset: Mapped[int | None] = mapped_column(SmallInteger)
+    arrival_time: Mapped[time | None] = mapped_column(Time)
+    departure_day_offset: Mapped[int | None] = mapped_column(SmallInteger)
+    departure_time: Mapped[time | None] = mapped_column(Time)
+
+
+class ScheduledTrip(Base):
+    __tablename__ = "scheduled_trips"
+    __table_args__ = (
+        UniqueConstraint("service_id", "service_date", "service_version", name="uq_scheduled_trips_service_version_date"),
+        CheckConstraint("status IN ('PLANNED','CANCELLED','COMPLETED')", name="ck_scheduled_trips_status"),
+        CheckConstraint("jsonb_typeof(stops_snapshot) = 'array'", name="ck_scheduled_trips_stops_array"),
+        CheckConstraint("jsonb_typeof(capacity_snapshot) = 'object'", name="ck_scheduled_trips_capacity_object"),
+        Index("ix_scheduled_trips_date_status", "service_date", "status"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("line_services.id", ondelete="RESTRICT"))
+    service_date: Mapped[date] = mapped_column(Date)
+    service_version: Mapped[int] = mapped_column(Integer)
+    line_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id", ondelete="RESTRICT"))
+    line_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), server_default="PLANNED")
+    stops_snapshot: Mapped[list] = mapped_column(JSONB)
+    capacity_snapshot: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ShipmentPathLeg(Base):
     travel_reference_minutes: Mapped[int | None] = mapped_column(Integer)
     origin_transfer_reference_minutes: Mapped[int | None] = mapped_column(Integer)
@@ -564,6 +629,7 @@ class ShipmentScheduleVersion(Base):
     path_version: Mapped[int] = mapped_column(Integer)
     origin_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
+    scheduled_trip_id: Mapped[int | None] = mapped_column(ForeignKey("scheduled_trips.id", name="fk_schedule_versions_scheduled_trip", ondelete="RESTRICT"))
     source_plan_id: Mapped[int | None] = mapped_column(ForeignKey("path_plans.id"))
     source_plan_version: Mapped[int | None] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(500))

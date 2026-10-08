@@ -3,7 +3,8 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, func
-from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, OperationLog, PathPlan, PathPlanLeg, ShipmentPathLeg, ShipmentPathVersion)
+from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, OperationLog, PathPlan, PathPlanLeg,
+                    ShipmentPathLeg, ShipmentPathVersion, ShipmentScheduleVersion)
 from logistics_types import ShipmentStage, TaskStatus
 from errors import (NetworkError, ShipmentNotFoundError, IdempotencyKeyReusedError)
 from network.service import require_enabled_route
@@ -116,7 +117,7 @@ def write_plan(session, request, key, plan_id=None):
             if plan is None:
                 raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "路径方案不存在", 404)
             if plan.version != request.expected_version:
-                conflict("方案版本已变化，请刷新后重新确认", "PATH_VERSION_CONFLICT")
+                conflict("运输线路版本已变化，请刷新后重新确认", "LINE_VERSION_CONFLICT")
             before = plan_body(session,plan)
             travel_by_route = {l.route_id:l.travel_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))}
             changes = request.model_dump(exclude_unset=True)
@@ -220,9 +221,19 @@ def shipment_path_body(session, shipment):
         except NetworkError as error:
             status = "BLOCKED" if remaining else "NEEDS_PLANNING"
             code, reason = (error.code, error.message) if remaining else (
-                "PATH_NOT_BOUND", "尚未绑定完整路径，请配置方案或一次性选择完整路径")
+                "PATH_NOT_BOUND", "尚未安排完整运输线路，请从已启用线路中选择")
             next_route = None
-    return {"version":shipment.path_version,"status":status,"anchor_station_id":str(anchor) if anchor else None,
+    version = session.scalar(select(ShipmentPathVersion).where(
+        ShipmentPathVersion.shipment_id == shipment.id,
+        ShipmentPathVersion.version == shipment.path_version)) if shipment.path_version else None
+    schedule_version = session.scalar(select(ShipmentScheduleVersion).where(
+        ShipmentScheduleVersion.shipment_id == shipment.id,
+        ShipmentScheduleVersion.version == shipment.schedule_version)) if shipment.schedule_version else None
+    return {"version":shipment.path_version,
+        "line_id":str(version.source_plan_id) if version and version.source_plan_id else None,
+        "line_version":version.source_plan_version if version else None,
+        "scheduled_trip_id":str(schedule_version.scheduled_trip_id) if schedule_version and schedule_version.scheduled_trip_id else None,
+        "status":status,"anchor_station_id":str(anchor) if anchor else None,
         "destination_station_id":str(shipment.destination_station_id),
         "next_route_id":str(next_route.id) if next_route else None,"next_route_code":next_route.code if next_route else None,
         "reason_code":code,"reason":reason,"legs":items}
@@ -284,7 +295,7 @@ def auto_bind_path(session, shipment, occurred_at):
     matches = matching_plans(session,shipment)
     if len(matches) == 1:
         plan = session.get(PathPlan,int(matches[0]['id']))
-        save_path(session,shipment,plan_routes(session,plan),occurred_at,"自动匹配唯一可用路径方案",plan)
+        save_path(session,shipment,plan_routes(session,plan),occurred_at,"自动匹配唯一可用运输线路",plan)
 
 
 def write_shipment_path(session, shipment_id, request, key):
@@ -306,10 +317,10 @@ def write_shipment_path(session, shipment_id, request, key):
         plan = None
         if request.plan_id is not None:
             plan = session.get(PathPlan,request.plan_id)
-            if plan is None: raise NetworkError("NETWORK_RESOURCE_NOT_FOUND","路径方案不存在",404)
-            if not plan.enabled: conflict("路径方案已停用")
+            if plan is None: raise NetworkError("NETWORK_RESOURCE_NOT_FOUND","运输线路不存在",404)
+            if not plan.enabled: conflict("运输线路已停用")
             if plan.version != request.expected_plan_version:
-                conflict("方案版本已变化，请刷新后重新确认", "PATH_VERSION_CONFLICT")
+                conflict("运输线路版本已变化，请刷新后重新确认", "LINE_VERSION_CONFLICT")
             routes = plan_routes(session,plan)
         else:
             routes = routes_for_ids(session,request.route_ids)
@@ -340,6 +351,7 @@ def path_history(session, shipment_id, page, page_size):
         .order_by(ShipmentPathVersion.version.desc()).offset((page-1)*page_size).limit(page_size))
     total = session.scalar(select(func.count(ShipmentPathVersion.id)).where(ShipmentPathVersion.shipment_id==shipment_id)) or 0
     items = [{"version":r.version,"destination_station_id":str(r.destination_station_id),
+        "line_id":str(r.source_plan_id) if r.source_plan_id else None,"line_version":r.source_plan_version,
         "source_plan_id":str(r.source_plan_id) if r.source_plan_id else None,"source_plan_version":r.source_plan_version,
         "reason":r.reason,"occurred_at":r.occurred_at,"legs":r.legs} for r in rows]
     return items,total

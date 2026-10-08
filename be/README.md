@@ -2,11 +2,13 @@
 
 ## 统一运输线路
 
-`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐；预览支持 line_id/expected_line_version。旧 routes 是内部运输分段，path-plans 是旧完整线路接口，两类管理接口已标记弃用并保留兼容。
+`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐；计划预览、确认结果、计划历史和运单线路历史统一使用 `line_id/line_version`。旧 `plan_id/source_plan_id`、手动 `route_ids`、`/path-plans` 与 `/path-options` 仅作过渡兼容并标记弃用；数据库仍保留原表和历史关联，不做破坏性删除。
 
 开发库已备份升级 c52d09a13f84，目录 2,347 条（启用 2,346），现有 44 个城市站的 1,892 个有向组合全部有线路。耗时为明确标注的演示值。初始化其他环境用 `python -m lines.seed` 和 `python -m lines.seed_national`，先迁移并备份。契约、部署与实际检查见 [统一线路说明](../docs/技术方案/v7/be/unified-transport-lines.md)。
 
 ## 订单时间窗与运输任务共享
+
+运输线路支持多个重复班次规则和跨日逐站时刻。按服务日期生成不可变的计划车次快照；运单按起终站、可交运与送达时间窗筛选可搭乘车次，确认后生成每段运输任务并关联车次。详情见 [线路班次与计划车次](../docs/技术方案/v7/be/line-services.md)。
 
 订单可选填写货物最早可在计划始发站交运的时间、最晚到达目的站的时间。创建运单时复制时间窗；计划预览会寻找同线路段、起点就绪且最终可按时到达的既有任务，采用其计划时间供用户审核，无须订单与运输任务时间完全相等。未设置时间窗的旧订单继续按精确时间匹配。接口、规则和迁移见 [时间窗专项说明](../docs/技术方案/v7/be/order-delivery-windows.md)。
 

@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     UI[运输线路管理\n站点顺序、分段耗时、中转耗时] --> L[lines 模块\n统一管理接口]
-    L --> P[(path_plans/path_plan_legs\n完整线路与版本)]
+    L --> P[(完整线路配置与版本\n当前由既有表保存)]
     L --> R[(transport_routes\n可复用运输分段)]
     A[运单起终站] --> O[线路候选与推荐]
     P --> O
@@ -19,7 +19,7 @@ flowchart LR
 
 | 概念 | 后端处理 |
 | --- | --- |
-| 运输线路 | 复用完整路径数据，包含有序站点和版本；不再要求客户端先建分段、再组装方案 |
+| 运输线路 | 唯一面向业务的可复用线路，包含有序站点和版本；不要求客户端先建分段、再组装线路 |
 | 运输分段 | 相邻站点的运输关系，内部复用；旧任务继续引用原分段 ID |
 | 分段参考时间 | 新增 PathPlanLeg.travel_override_minutes，每条线路可有自己的参考值，空时沿用原分段参考值 |
 | 中转参考时间 | 优先线路中转覆盖值，其次站点值；公共线路编辑不会改写已确认运单的耗时快照 |
@@ -61,7 +61,9 @@ legs 数量必须为站点数减一，中转覆盖只能指向中间站。省略
 
 线路响应的 ID 为字符串，包括 stations、station_ids、legs 中的 segment_id、各级站点 ID，以及 transfer_overrides.station_id；请求使用正整数。返回 total_reference_minutes 为全程运输＋中转参考总分钟数；参考缺失时为 null。usable 表示拓扑与站点可用，不代表时间已填齐。
 
-预览响应新增 line_id/line_version，保留 source_plan_id/source_plan_version 兼容。旧 plan_id 与新 line_id 指向同一完整线路；传两者时必须一致，版本字段也必须一致。旧 route_ids 是内部运输分段 ID，不是新的线路 ID，客户端不能混用。
+预览、已确认运输计划、运输计划历史、运单线路安排和线路历史均以 line_id/line_version 为正式字段。旧 source_plan_id/source_plan_version、plan_id/expected_plan_version 与手动 route_ids 仅为兼容字段，并在 OpenAPI 标记弃用。`/path-plans` 管理接口和运单 `/path-options` 也已标记弃用；新客户端统一使用 `/transport-lines`、`/line-options` 和带 line_id 的计划接口。兼容字段会在客户端迁移完成后另行下线。
+
+数据库当前仍复用既有完整线路表和运单线路版本历史，不因产品概念改名而删表或改写历史。`route_ids` 指内部运输分段 ID，不能当作线路 ID 使用。
 
 code 冲突 409 NETWORK_CODE_CONFLICT；版本变化 409 LINE_VERSION_CONFLICT；配置错误 422 INVALID_TRANSPORT_LINE；没有可用启用线路 409 SCHEDULE_LINE_REQUIRED。已有初始预览的时间/线路发生变化需重新预览再确认，不能把停用线路作为默认候选。起终站相同允许零段计划。
 

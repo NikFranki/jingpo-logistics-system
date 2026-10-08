@@ -12,6 +12,8 @@ const ShipmentDetailPage = lazy(() => import('./pages/ShipmentsPage').then(modul
 const TasksPage = lazy(() => import('./pages/TasksPage'))
 const TaskDetailPage = lazy(() => import('./pages/TasksPage').then(module => ({ default: module.TaskDetailPage })))
 const NetworkPage = lazy(() => import('./NetworkPage'))
+const TransportLinesPage = lazy(() => import('./TransportLinesPage'))
+const LineServicesPage = lazy(() => import('./LineServicesPage'))
 
 export default function App() {
   const location = useLocation()
@@ -46,11 +48,10 @@ export default function App() {
     { path: '/tasks', name: '运输任务', icon: <SwapOutlined /> },
     { path: '/network', name: '网络配置', icon: <AppstoreOutlined />, children: [
       { path: '/network/stations', name: '站点管理' },
-      { path: '/network/routes', name: '线路管理' },
-      { path: '/network/path-plans', name: '路径方案' },
+      { path: '/network/transport-lines', name: '运输线路' },
     ] },
   ]
-  const activePath = location.pathname.startsWith('/network/stations') ? '/network/stations' : location.pathname.startsWith('/network/routes') ? '/network/routes' : location.pathname.startsWith('/network/path-plans') ? '/network/path-plans' : location.pathname.startsWith('/network') ? '/network/path-plans' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : '/orders'
+  const activePath = location.pathname.startsWith('/network/stations') ? '/network/stations' : location.pathname.startsWith('/network') ? '/network/transport-lines' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : '/orders'
   return <>{contextHolder}<ProLayout
     title="JINGPO 鲸破"
     logo={<TruckOutlined />}
@@ -71,10 +72,12 @@ export default function App() {
         <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/tasks" element={<TasksPage revision={revision} mutate={mutate} />} />
         <Route path="/tasks/:taskId" element={<TaskDetailPage revision={revision} busy={busy} mutate={mutate} />} />
-        <Route path="/network" element={<Navigate to="/network/path-plans" replace />} />
-        <Route path="/network/path-plans" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="paths" />} />
+        <Route path="/network" element={<Navigate to="/network/transport-lines" replace />} />
+        <Route path="/network/path-plans" element={<Navigate to="/network/transport-lines" replace />} />
+        <Route path="/network/routes" element={<Navigate to="/network/transport-lines" replace />} />
+        <Route path="/network/transport-lines" element={<TransportLinesPage revision={revision} busy={busy} mutate={mutate} />} />
+        <Route path="/network/transport-lines/:lineId/services" element={<LineServicesPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/network/stations" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="stations" />} />
-        <Route path="/network/routes" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="routes" />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Routes>
     </Suspense>

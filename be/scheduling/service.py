@@ -13,7 +13,8 @@ from uuid import uuid5, NAMESPACE_URL
 
 from sqlalchemy import select, func
 from errors import NetworkError, ShipmentNotFoundError
-from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentPathLeg, ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg)
+from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentPathLeg,
+                    ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg, ScheduledTrip, LineService)
 from planning.service import (active_task, current_legs, leg_state, plan_routes, routes_for_ids,
                               validate_routes, save_path, time_and_replay)
 from network.coverage import planned_origin
@@ -109,9 +110,13 @@ def forecast(session, task, now=None, cache=None, visiting=None):
                     readiness.append(max(now, entry.planned_origin_arrival_at))
                 else:
                     unknown = True
-            if not unknown:
+            trip_missed = bool(task.scheduled_trip_id and
+                now.replace(second=0, microsecond=0) > task.planned_departure_at)
+            if not unknown and not trip_missed:
                 departure = max([task.planned_departure_at, now, *readiness])
                 arrival = departure + duration
+            elif trip_missed:
+                stale = True
     visiting.remove(task.id)
     result = departure, arrival, stale
     cache[task.id] = result
@@ -127,6 +132,9 @@ def task_extra(session, task, now=None, cache=None):
                 'PREDECESSOR_NOT_ARRIVED' if entry.predecessor_association_id else 'FIRST_ARRIVAL_REQUIRED'})
     return {'scheduling_source': task.scheduling_source, 'planned_departure_at':
             task.planned_departure_at.isoformat() if task.planned_departure_at else None,
+            'scheduled_trip_id': str(task.scheduled_trip_id) if task.scheduled_trip_id else None,
+            'scheduled_trip_missed': bool(task.scheduled_trip_id and task.planned_departure_at and
+                now.replace(second=0, microsecond=0) > task.planned_departure_at and task.status in UNSTARTED),
             'schedule_revision': task.schedule_revision, 'forecast_departure_at': departure.isoformat() if departure else None,
             'forecast_arrival_at': arrival.isoformat() if arrival else None, 'forecast_stale': stale,
             'waiting_members': waiting}
@@ -135,6 +143,8 @@ def task_extra(session, task, now=None, cache=None):
 def departure_problem(session, task, now):
     if task.scheduling_source != 'PLAN':
         return None
+    if task.scheduled_trip_id and now.replace(second=0, microsecond=0) > task.planned_departure_at:
+        return 'SCHEDULED_TRIP_MISSED', '已错过该班次，请重新审核并改排后续班次'
     entries = members(session, task.id)
     if not entries or any(e.association_state != 'ACTIVE' for e in entries):
         return 'TASK_PREDECESSOR_NOT_ARRIVED', '仍有运单未实际到达本段起点'
@@ -210,12 +220,16 @@ def context(session, shipment):
 
 
 def shared_candidate(session, route, departure, arrival, shipment_id, now, not_before=None,
-                     arrive_by=None, use_window=False):
+                     arrive_by=None, use_window=False, scheduled_trip_id=None):
     if departure < now:
         return None
     query = select(TransportTask).where(TransportTask.route_id == route.id,
         TransportTask.scheduling_source == 'PLAN', TransportTask.status.in_(UNSTARTED),
         TransportTask.delay_monitoring_enabled == route.delay_monitoring_enabled)
+    if scheduled_trip_id is not None:
+        query = query.where(TransportTask.scheduled_trip_id == scheduled_trip_id)
+    else:
+        query = query.where(TransportTask.scheduled_trip_id.is_(None))
     if use_window:
         query = query.where(TransportTask.planned_departure_at >= (not_before or now))
         if arrive_by is not None:
@@ -232,6 +246,25 @@ def shared_candidate(session, route, departure, arrival, shipment_id, now, not_b
     return None
 
 
+def scheduled_trip_segments(session, trip, origin_station_id, destination_station_id):
+    stops = trip.stops_snapshot
+    starts = [i for i, stop in enumerate(stops) if int(stop['station_id']) == origin_station_id]
+    ends = [i for i, stop in enumerate(stops) if int(stop['station_id']) == destination_station_id]
+    start = starts[0] if starts else None
+    end = next((i for i in ends if start is not None and i > start), None)
+    if start is None or end is None:
+        error('SCHEDULED_TRIP_ROUTE_MISMATCH', '该班次不经过运单起点和目的站')
+    segments = []
+    for index in range(start, end):
+        stop = stops[index]
+        next_stop = stops[index + 1]
+        if not stop.get('outbound_route_id') or not stop.get('departure_at') or not next_stop.get('arrival_at'):
+            error('SCHEDULED_TRIP_INVALID', '班次时刻快照缺少线路或到发时间')
+        segments.append({'route_id': int(stop['outbound_route_id']),
+            'planned_departure_at': stop['departure_at'], 'planned_arrival_at': next_stop['arrival_at']})
+    return routes_for_ids(session, [segment['route_id'] for segment in segments]), segments
+
+
 def make_preview(session, shipment, request, now=None):
     now = now or business_time.server_now()
     pair, frozen_task, anchor = context(session, shipment)
@@ -242,12 +275,30 @@ def make_preview(session, shipment, request, now=None):
             error(code, '页面数据已变化，请刷新后重新预览')
     proposed_origin = anchor or request.origin_station_id or planned_origin(session, shipment)
     plan = None
-    if request.plan_id is not None:
+    scheduled_trip = None
+    trip_segments = None
+    if request.scheduled_trip_id is not None:
+        if proposed_origin is None:
+            error('SCHEDULE_ORIGIN_REQUIRED', '首次入站前请明确计划起点')
+        scheduled_trip = session.get(ScheduledTrip, request.scheduled_trip_id)
+        if scheduled_trip is None or scheduled_trip.status != 'PLANNED':
+            error('SCHEDULED_TRIP_UNAVAILABLE', '所选班次已取消或不存在')
+        plan = session.get(PathPlan, scheduled_trip.line_id)
+        service = session.get(LineService, scheduled_trip.service_id)
+        if not service or not service.enabled or service.version != scheduled_trip.service_version or not plan or not plan.enabled:
+            error('SCHEDULED_TRIP_UNAVAILABLE', '班次或运输线路已停用/更新，请重新选择有效班次')
+        if request.expected_plan_version is not None and request.expected_plan_version != scheduled_trip.line_version:
+            error('PREVIEW_STALE', '班次线路版本与预览不一致')
+        routes, trip_segments = scheduled_trip_segments(session, scheduled_trip, proposed_origin,
+                                                         shipment.destination_station_id)
+        if not routes:
+            error('SCHEDULED_TRIP_ROUTE_MISMATCH', '班次没有可执行的运输分段')
+    elif request.plan_id is not None:
         plan = session.get(PathPlan, request.plan_id)
         if plan is None:
-            error('NETWORK_RESOURCE_NOT_FOUND', '方案不存在', 404)
+            error('NETWORK_RESOURCE_NOT_FOUND', '运输线路不存在', 404)
         if not plan.enabled or (request.expected_plan_version is not None and request.expected_plan_version != plan.version):
-            error('PREVIEW_STALE', '方案已停用或版本已变化')
+            error('PREVIEW_STALE', '运输线路已停用或版本已变化')
         routes = plan_routes(session, plan)
     elif request.route_ids is not None:
         routes = routes_for_ids(session, request.route_ids)
@@ -286,8 +337,8 @@ def make_preview(session, shipment, request, now=None):
         if not source or not source.enabled or not source.allows_first_arrival:
             error('INVALID_TRANSPORT_PATH', '计划首站必须允许首次入站')
     validate_routes(session, routes, anchor, shipment.destination_station_id)
-    overrides = {l.position: l.origin_transfer_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan else {}
-    travel_overrides = {l.position: l.travel_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan else {}
+    overrides = {l.position: l.origin_transfer_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan and scheduled_trip is None else {}
+    travel_overrides = {l.position: l.travel_override_minutes for l in session.scalars(select(PathPlanLeg).where(PathPlanLeg.plan_id == plan.id))} if plan and scheduled_trip is None else {}
     anchor_arrival = None
     completed_predecessor = None
     for leg in current_legs(session, shipment.id):
@@ -305,6 +356,8 @@ def make_preview(session, shipment, request, now=None):
     windowed = shipment.earliest_handover_at is not None or shipment.latest_delivery_at is not None
     if request.legs is not None and [l.route_id for l in request.legs] != [r.id for r in routes]:
         error('INVALID_SCHEDULE_TIMES', '时间段必须与完整未来路线一一对应', 422)
+    if scheduled_trip is not None and request.legs is not None:
+        error('INVALID_SCHEDULE_TIMES', '已选择班次，不能单独修改分段时刻', 422)
     previous_arrival = anchor_arrival
     for i, route in enumerate(routes):
         travel_reference = travel_overrides.get(i) if travel_overrides.get(i) is not None else route.travel_minutes
@@ -323,13 +376,19 @@ def make_preview(session, shipment, request, now=None):
         if reference_departure:
             round_up = bool(reference_departure.second or reference_departure.microsecond)
             reference_departure = reference_departure.replace(second=0, microsecond=0) + (timedelta(minutes=1) if round_up else timedelta())
-        if request.legs is not None:
+        if trip_segments is not None:
+            departure = datetime.fromisoformat(trip_segments[i]['planned_departure_at'])
+            arrival = datetime.fromisoformat(trip_segments[i]['planned_arrival_at'])
+        elif request.legs is not None:
             departure, arrival = request.legs[i].planned_departure_at, request.legs[i].planned_arrival_at
         else:
             departure = request.first_departure_at if i == 0 and request.first_departure_at is not None else reference_departure
             arrival = departure + timedelta(minutes=travel_reference) if departure is not None and travel_reference else None
         shared = None
-        if windowed and request.legs is None and departure is not None:
+        if scheduled_trip is not None and departure is not None and arrival is not None:
+            shared = shared_candidate(session, route, departure, arrival, shipment.id, now,
+                scheduled_trip_id=scheduled_trip.id)
+        elif windowed and request.legs is None and departure is not None:
             not_before = max(departure, reference_departure or now)
             if i == 0 and shipment.earliest_handover_at is not None:
                 not_before = max(not_before, shipment.earliest_handover_at)
@@ -357,7 +416,7 @@ def make_preview(session, shipment, request, now=None):
         else:
             missing.append({'position': i, 'message': '请补全本段出发和到达时间'})
             travel, gap = None, 0
-        if shared is None and departure and arrival:
+        if shared is None and departure and arrival and scheduled_trip is None:
             shared = shared_candidate(session, route, departure, arrival, shipment.id, now)
         if i == len(routes) - 1 and shipment.latest_delivery_at is not None and arrival is not None and arrival > shipment.latest_delivery_at:
             missing.append({'position': i, 'message': '预计到达晚于订单最晚送达时间'})
@@ -385,8 +444,11 @@ def make_preview(session, shipment, request, now=None):
         'frozen_task_id': str(frozen_task.id) if frozen_task else None,
         'frozen_task_revision': frozen_task.schedule_revision if frozen_task else None,
         'anchor_arrival_at': anchor_arrival.isoformat() if anchor_arrival else None,
-        'line_id': str(plan.id) if plan else None, 'line_version': plan.version if plan else None,
-        'source_plan_id': str(plan.id) if plan else None, 'source_plan_version': plan.version if plan else None,
+        'line_id': str(plan.id) if plan else None,
+        'line_version': scheduled_trip.line_version if scheduled_trip else (plan.version if plan else None),
+        'scheduled_trip_id': str(scheduled_trip.id) if scheduled_trip else None,
+        'source_plan_id': str(plan.id) if plan else None,
+        'source_plan_version': scheduled_trip.line_version if scheduled_trip else (plan.version if plan else None),
         'configuration': configuration, 'legs': rows, 'warnings': warnings, 'missing': missing,
         'replacements': replacements, 'planned_origin_arrival_at': request.planned_origin_arrival_at.isoformat() if request.planned_origin_arrival_at else None,
         'can_confirm': not missing and not any(e['shared'] for e in replacements)}
@@ -397,9 +459,14 @@ def preview_schedule(session, shipment_id, request):
     evaluated_at = business_time.server_now()
     value = make_preview(session, shipment, request, evaluated_at)
     normalized = request.model_dump(mode='json')
-    normalized.update(origin_station_id=int(value['anchor_station_id']), plan_id=int(value['source_plan_id']) if value['source_plan_id'] else None,
-        expected_plan_version=value['source_plan_version'], route_ids=None if value['source_plan_id'] else [int(r['route_id']) for r in value['legs']],
-        legs=[{'route_id': int(r['route_id']), 'planned_departure_at': r['planned_departure_at'], 'planned_arrival_at': r['planned_arrival_at']} for r in value['legs']])
+    normalized.update(origin_station_id=int(value['anchor_station_id']),
+        line_id=int(value['line_id']) if value['line_id'] and not value['scheduled_trip_id'] else None,
+        expected_line_version=value['line_version'] if not value['scheduled_trip_id'] else None,
+        scheduled_trip_id=int(value['scheduled_trip_id']) if value['scheduled_trip_id'] else None,
+        route_ids=None if value['line_id'] else [int(r['route_id']) for r in value['legs']],
+        legs=None if value['scheduled_trip_id'] else [
+            {'route_id': int(r['route_id']), 'planned_departure_at': r['planned_departure_at'],
+             'planned_arrival_at': r['planned_arrival_at']} for r in value['legs']])
     value['preview_token'] = sign('schedule', {'shipment_id': shipment_id, 'request': normalized,
         'evaluated_at': evaluated_at.isoformat(), 'fingerprint': digest(value)})
     return value
@@ -457,6 +524,7 @@ def confirm_schedule(session, shipment_id, request, key):
         session.flush()
         routes = routes_for_ids(session, [int(r['route_id']) for r in value['legs']])
         plan = session.get(PathPlan, int(value['source_plan_id'])) if value['source_plan_id'] else None
+        scheduled_trip = session.get(ScheduledTrip, int(value['scheduled_trip_id'])) if value['scheduled_trip_id'] else None
         if shipment.last_scanned_station_id is None:
             shipment.planned_origin_station_id = int(value['anchor_station_id'])
         save_path(session, shipment, routes, clock, request.reason, plan)
@@ -479,7 +547,9 @@ def confirm_schedule(session, shipment_id, request, key):
             if task is None:
                 task = TransportTask(route_id=leg.route_id, scheduling_source='PLAN', planned_departure_at=departure,
                     expected_arrival_at=arrival, planned_travel_minutes=row['planned_travel_minutes'],
-                    delay_monitoring_enabled=route.delay_monitoring_enabled, status='WAITING_PREDECESSOR' if predecessor else 'WAITING_CARGO')
+                    delay_monitoring_enabled=route.delay_monitoring_enabled,
+                    scheduled_trip_id=scheduled_trip.id if scheduled_trip else None,
+                    status='WAITING_PREDECESSOR' if predecessor else 'WAITING_CARGO')
                 session.add(task); session.flush(); session.refresh(task)
             else:
                 task.schedule_revision += 1
@@ -512,7 +582,8 @@ def confirm_schedule(session, shipment_id, request, key):
                 'travel_reference_minutes': leg.travel_reference_minutes, 'transfer_reference_minutes': leg.origin_transfer_reference_minutes})
         origin = int(snapshot[0]['origin_station_id']) if snapshot else int(value['anchor_station_id'])
         session.add(ShipmentScheduleVersion(shipment_id=shipment_id, version=shipment.schedule_version, path_version=shipment.path_version,
-            origin_station_id=origin, destination_station_id=shipment.destination_station_id, source_plan_id=plan.id if plan else None,
+            origin_station_id=origin, destination_station_id=shipment.destination_station_id,
+            scheduled_trip_id=scheduled_trip.id if scheduled_trip else None, source_plan_id=plan.id if plan else None,
             source_plan_version=plan.version if plan else None, reason=request.reason, legs=snapshot, operation_id=parent.id, occurred_at=clock))
         if not future and shipment.stage == 'AT_STATION' and shipment.last_scanned_station_id == shipment.destination_station_id:
             shipment.schedule_status = 'COMPLETED'
@@ -547,6 +618,11 @@ def schedule_body(session, shipment):
     return {'shipment_id': str(shipment.id), 'scheduling_mode': shipment.scheduling_mode,
         'status': shipment.schedule_status, 'reason': shipment.schedule_reason,
         'path_version': shipment.path_version, 'version': shipment.schedule_version,
+        'line_id': str(version.source_plan_id) if version and version.source_plan_id else None,
+        'line_version': version.source_plan_version if version else None,
+        'scheduled_trip_id': str(version.scheduled_trip_id) if version and version.scheduled_trip_id else None,
+        'source_plan_id': str(version.source_plan_id) if version and version.source_plan_id else None,
+        'source_plan_version': version.source_plan_version if version else None,
         'origin_station_id': str(version.origin_station_id) if version else (str(planned_origin(session, shipment)) if planned_origin(session, shipment) else None),
         'destination_station_id': str(shipment.destination_station_id), 'legs': rows,
         'configuration_risks': configuration_risks, 'server_time': now.isoformat()}
@@ -558,7 +634,11 @@ def schedule_history(session, shipment_id, page, page_size):
     versions = session.scalars(select(ShipmentScheduleVersion).where(ShipmentScheduleVersion.shipment_id == shipment_id)
         .order_by(ShipmentScheduleVersion.version.desc()).offset((page-1)*page_size).limit(page_size))
     return {'items': [{'version': v.version, 'path_version': v.path_version, 'reason': v.reason,
-        'occurred_at': v.occurred_at.isoformat(), 'legs': v.legs, 'source_plan_id': str(v.source_plan_id) if v.source_plan_id else None,
+        'occurred_at': v.occurred_at.isoformat(), 'legs': v.legs,
+        'line_id': str(v.source_plan_id) if v.source_plan_id else None,
+        'line_version': v.source_plan_version,
+        'scheduled_trip_id': str(v.scheduled_trip_id) if v.scheduled_trip_id else None,
+        'source_plan_id': str(v.source_plan_id) if v.source_plan_id else None,
         'source_plan_version': v.source_plan_version} for v in versions], 'total': total, 'page': page, 'page_size': page_size}
 
 

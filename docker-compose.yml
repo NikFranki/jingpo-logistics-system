@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: jingpo_logistics
+      POSTGRES_USER: jingpo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jingpo-local-only}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jingpo -d jingpo_logistics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  be:
+    build: ./be
+    environment:
+      DATABASE_URL: postgresql+psycopg://jingpo:${POSTGRES_PASSWORD:-jingpo-local-only}@db:5432/jingpo_logistics
+      CORS_ORIGINS: http://localhost:8080
+      LOG_LEVEL: INFO
+      SCHEDULE_SIGNING_KEY: ${SCHEDULE_SIGNING_KEY:-local-demo-schedule-key-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  fe:
+    build: ./fe
+    ports:
+      - "8080:80"
+    depends_on:
+      be:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
