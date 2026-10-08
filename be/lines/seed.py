@@ -2,7 +2,7 @@
 from uuid import uuid5, NAMESPACE_URL
 from sqlalchemy import select
 from db import SessionLocal
-from models import TransportRoute, PathPlan
+from models import TransportRoute, TransportLine
 from lines.schemas import LineCreateRequest, LineUpdateRequest
 from lines.service import write_line, line_body
 
@@ -31,7 +31,7 @@ def main():
                 continue
             stations = [routes[0].origin_station_id] + [r.destination_station_id for r in routes]
             actual_code = f'L_SEG_{routes[0].id}' if len(routes) == 1 else code
-            line = session.scalar(select(PathPlan).where(PathPlan.code == actual_code))
+            line = session.scalar(select(TransportLine).where(TransportLine.code == actual_code))
             definition = dict(name=name, station_ids=stations,
                 legs=[dict(travel_minutes=v) for v in durations],
                 transfer_overrides=[dict(station_id=s, minutes=transfer) for s in stations[1:-1]])

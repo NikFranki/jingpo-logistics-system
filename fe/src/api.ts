@@ -15,8 +15,6 @@ export type PathLegState = 'PENDING' | 'RESERVED' | 'IN_TRANSIT' | 'ARRIVED'
 export type TransportPathStatus = 'WAITING_FIRST_ARRIVAL' | 'NEEDS_PLANNING' | 'READY' | 'RESERVED' | 'IN_TRANSIT' | 'COMPLETED' | 'BLOCKED'
 export type PathLeg = { id: string; position: number; route_id: string; route_code: string; origin_station_id: string; destination_station_id: string; state: PathLegState; task_id: string | null }
 export type ShipmentTransportPath = { version: number; status: TransportPathStatus; anchor_station_id: string | null; destination_station_id: string; next_route_id: string | null; next_route_code: string | null; reason_code: string | null; reason: string | null; legs: PathLeg[] }
-export type PathPlan = { id: string; code: string; name: string; enabled: boolean; version: number; origin_station_id: string; destination_station_id: string; usable: boolean; reason: string | null; route_ids: string[]; transfer_overrides?: TransferOverride[] }
-export type PathOptions = { path: ShipmentTransportPath; plans: PathPlan[] }
 export type TransportLineLeg = { position: number; segment_id: string; origin_station_id: string; destination_station_id: string; travel_minutes: number | null }
 export type TransportLine = { id: string; code: string; name: string; version: number; enabled: boolean; usable: boolean; reason: string | null; origin_station_id: string; destination_station_id: string; station_ids: string[]; stations: Station[]; legs: TransportLineLeg[]; transfer_overrides: TransferOverride[]; total_reference_minutes: number | null }
 export type TransportLinePage = Page<TransportLine>
@@ -47,8 +45,6 @@ export type DestinationChangePage = Page<DestinationChange>
 export type Station = { id: string; code: string; name: string; enabled: boolean; allows_first_arrival: boolean; allows_delivery: boolean; transfer_minutes?: number | null }
 export type TransportRoute = { id: string; code: string; origin: Station; destination: Station; enabled: boolean; delay_monitoring_enabled: boolean; travel_minutes?: number | null }
 export type TransferOverride = { station_id: number; minutes: number }
-export type PathPlanInput = { code: string; name: string; route_ids: number[]; enabled: boolean; transfer_overrides?: TransferOverride[] }
-export type PathPlanUpdate = { expected_version: number; name?: string; route_ids?: number[]; enabled?: boolean; transfer_overrides?: TransferOverride[] }
 export type ShipmentPathUpdate = { expected_version: number; expected_anchor_station_id: number; reason: string } & ({ line_id: number; expected_line_version: number } | { plan_id: number; expected_plan_version: number } | { route_ids: number[] })
 export type TransportLineInput = { code: string; name: string; station_ids: number[]; legs: { travel_minutes?: number | null }[]; transfer_overrides?: TransferOverride[]; enabled: boolean }
 export type TransportLineUpdate = Partial<Omit<TransportLineInput, 'code'>> & { expected_version: number }
@@ -189,9 +185,6 @@ export const api = {
   createLineTimetable: (lineId: string, body: LineTimetableInput, key?: string) => write<LineTimetable>(`/api/v1/transport-lines/${lineId}/services`, 'POST', body, key),
   updateLineTimetable: (lineId: string, timetableId: string, body: Partial<LineTimetableInput> & { expected_version: number }, key?: string) => write<LineTimetable>(`/api/v1/transport-lines/${lineId}/services/${timetableId}`, 'PATCH', body, key),
   shipmentScheduledTrips: (shipmentId: string, from_date: string, to_date: string) => request<ScheduledTripOptions>(`/api/v1/shipments/${shipmentId}/service-options${query({ from_date, to_date })}`),
-  pathPlans: (params: { enabled?: boolean; origin_station_id?: number; destination_station_id?: number } = {}) => request<PathPlan[]>(`/api/v1/path-plans${query(params)}`),
-  createPathPlan: (body: PathPlanInput, key?: string) => write<PathPlan>('/api/v1/path-plans', 'POST', body, key),
-  updatePathPlan: (id: string, body: PathPlanUpdate, key?: string) => write<PathPlan>(`/api/v1/path-plans/${id}`, 'PATCH', body, key),
   orders: (params: { page?: number; page_size?: number; order_no?: string; shipment_no?: string; stage?: string } = {}) => request<Page<Order>>(`/api/v1/orders${query(params)}`),
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
@@ -201,7 +194,6 @@ export const api = {
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),
   shipment: (id: string) => request<ShipmentDetail>(`/api/v1/shipments/${id}`),
   shipmentPath: (id: string) => request<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`),
-  shipmentPathOptions: (id: string) => request<PathOptions>(`/api/v1/shipments/${id}/path-options`),
   shipmentLineOptions: (id: string) => request<ShipmentLineOptions>(`/api/v1/shipments/${id}/line-options`),
   updateShipmentPath: (id: string, body: ShipmentPathUpdate, key?: string) => write<ShipmentTransportPath>(`/api/v1/shipments/${id}/path`, 'PUT', body, key),
   shipmentPathHistory: (id: string, page = 1, page_size = 20) => request<PathHistoryPage>(`/api/v1/shipments/${id}/path-history${query({ page, page_size })}`),

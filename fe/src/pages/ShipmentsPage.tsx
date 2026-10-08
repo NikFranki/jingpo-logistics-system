@@ -17,6 +17,12 @@ const pathLegStateText: Record<string, string> = { PENDING: '待运输', RESERVE
 const scheduleStatusText: Record<string, string> = { NOT_CONFIRMED: '待审核', CONFIRMED: '已确认', NEEDS_RECONFIRMATION: '需要重新审核', BLOCKED: '计划受阻', COMPLETED: '运输计划已完成' }
 const associationStateText: Record<string, string> = { PLANNED: '未来待执行', ACTIVE: '当前执行段', RELEASED: '已解除' }
 
+function fullAddress(address: ShipmentDetail, side: 'sender' | 'recipient') {
+  const region = [address[`${side}_province_name`], address[`${side}_city_name`], address[`${side}_district_name`]].filter(Boolean).join('')
+  const detail = address[`${side}_address`]
+  return `${region}${region && detail ? ' ' : ''}${detail}`
+}
+
 function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
   const actionRef = useRef<ActionType | undefined>(undefined)
   const [loadError, setLoadError] = useState<string>()
@@ -69,7 +75,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
-  const [scheduleAutoPreview, setScheduleAutoPreview] = useState(false)
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
@@ -108,7 +113,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   useEffect(() => {
     if (searchParams.get('schedule') !== '1' || !detail || detail.scheduling_mode !== 'REVIEWED') return
     setScheduleOpen(true)
-    setScheduleAutoPreview(true)
     const next = new URLSearchParams(searchParams)
     next.delete('schedule')
     setSearchParams(next, { replace: true })
@@ -241,8 +245,8 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
       {detail.stage === 'AT_STATION' && detail.last_scanned_station_id && <Alert style={{ marginBottom: 16 }} type="info" showIcon message={<>当前所在站：<Text strong><StationName id={detail.last_scanned_station_id} /></Text></>} />}
       <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
         <Descriptions.Item label="运单阶段">{stageText[detail.stage]}</Descriptions.Item><Descriptions.Item label="订单编号">{detail.order_id}</Descriptions.Item>
-        <Descriptions.Item label="运单目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item><Descriptions.Item label="当前配送地址"><span className="jp-wrap-anywhere">{detail.recipient_address}</span></Descriptions.Item>
-        <Descriptions.Item label="发件地址"><span className="jp-wrap-anywhere">{detail.sender_address}</span></Descriptions.Item><Descriptions.Item label="创建时间">{formatTime(detail.created_at)}</Descriptions.Item>
+        <Descriptions.Item label="运单目的站"><StationName id={detail.destination_station_id} /></Descriptions.Item><Descriptions.Item label="出发地址"><span className="jp-wrap-anywhere">{fullAddress(detail, 'sender')}</span></Descriptions.Item>
+        <Descriptions.Item label="收件地址"><span className="jp-wrap-anywhere">{fullAddress(detail, 'recipient')}</span></Descriptions.Item><Descriptions.Item label="创建时间">{formatTime(detail.created_at)}</Descriptions.Item>
       </Descriptions>
       {detail.scheduling_mode === 'REVIEWED' ? <section style={{ marginTop: 24 }}>
         <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
@@ -421,7 +425,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
         </>}
       </Modal>
-      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} autoPreview={scheduleAutoPreview} onClose={() => { setScheduleOpen(false); setScheduleAutoPreview(false) }} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1); setScheduleAutoPreview(false) }} />}
+      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}

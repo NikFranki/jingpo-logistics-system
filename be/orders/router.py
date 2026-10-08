@@ -1,5 +1,5 @@
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_URL
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from errors import (
     IdempotencyKeyReusedError,
     OrderNotEditableError,
     OrderNotFoundError,
+    NetworkError,
 )
 from orders.schemas import (
     OrderCreateRequest,
@@ -102,6 +103,22 @@ def create_order(
             request=request,
             idempotency_key=idempotency_key,
         )
+        try:
+            create_shipment(
+                session=session,
+                order_id=int(response_body["id"]),
+                idempotency_key=uuid5(NAMESPACE_URL, f"jingpo:auto-shipment:{idempotency_key}"),
+                scheduling_mode="REVIEWED",
+                scheduling_mode_explicit=True,
+            )
+            response_body["status"] = "SHIPMENT_CREATED"
+        except NetworkError as error:
+            if error.code not in {
+                "DESTINATION_ADDRESS_REQUIRED",
+                "DESTINATION_NOT_FOUND",
+                "DESTINATION_CONFLICT",
+            }:
+                raise
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,

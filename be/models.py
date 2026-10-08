@@ -22,7 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 
 from db import Base
@@ -37,7 +37,7 @@ class OperationLog(Base):
         ),
         CheckConstraint(
             "resource_type IN "
-            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN', 'LINE_SERVICE', 'SCHEDULED_TRIP')",
+            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN', 'TRANSPORT_LINE', 'LINE_SERVICE', 'SCHEDULED_TRIP')",
             name="ck_logs_resource_type",
         ),
         CheckConstraint(
@@ -486,13 +486,13 @@ class TrackingEvent(Base):
     )
 
 
-class PathPlan(Base):
-    __tablename__ = "path_plans"
+class TransportLine(Base):
+    __tablename__ = "transport_lines"
     __table_args__ = (
-        CheckConstraint("code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'", name="ck_path_plans_code"),
-        CheckConstraint("length(btrim(name)) > 0", name="ck_path_plans_name"),
-        CheckConstraint("version > 0", name="ck_path_plans_version"),
-        CheckConstraint("origin_station_id <> destination_station_id", name="ck_path_plans_endpoints"),
+        CheckConstraint("code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'", name="ck_transport_lines_code"),
+        CheckConstraint("length(btrim(name)) > 0", name="ck_transport_lines_name"),
+        CheckConstraint("version > 0", name="ck_transport_lines_version"),
+        CheckConstraint("origin_station_id <> destination_station_id", name="ck_transport_lines_endpoints"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True)
@@ -503,20 +503,25 @@ class PathPlan(Base):
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
 
 
-class PathPlanLeg(Base):
+class TransportLineLeg(Base):
     travel_override_minutes: Mapped[int | None] = mapped_column(Integer)
     origin_transfer_override_minutes: Mapped[int | None] = mapped_column(Integer)
-    __tablename__ = "path_plan_legs"
+    __tablename__ = "transport_line_legs"
     __table_args__ = (
-        UniqueConstraint("plan_id", "position", name="uq_path_plan_legs_position"),
-        CheckConstraint("position >= 0", name="ck_path_plan_legs_position"),
-        CheckConstraint("origin_transfer_override_minutes BETWEEN 0 AND 525600", name="ck_path_plan_legs_transfer"),
-        CheckConstraint("travel_override_minutes BETWEEN 1 AND 525600", name="ck_path_plan_legs_travel"),
+        UniqueConstraint("line_id", "position", name="uq_transport_line_legs_position"),
+        CheckConstraint("position >= 0", name="ck_transport_line_legs_position"),
+        CheckConstraint("origin_transfer_override_minutes BETWEEN 0 AND 525600", name="ck_transport_line_legs_transfer"),
+        CheckConstraint("travel_override_minutes BETWEEN 1 AND 525600", name="ck_transport_line_legs_travel"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    plan_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id"))
+    line_id: Mapped[int] = mapped_column(ForeignKey("transport_lines.id"))
+    plan_id = synonym("line_id")
     position: Mapped[int] = mapped_column(Integer)
     route_id: Mapped[int] = mapped_column(ForeignKey("transport_routes.id"))
+
+
+PathPlan = TransportLine
+PathPlanLeg = TransportLineLeg
 
 
 class LineService(Base):
@@ -530,7 +535,7 @@ class LineService(Base):
         Index("ix_line_services_line_enabled", "line_id", "enabled"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    line_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id", ondelete="RESTRICT"))
+    line_id: Mapped[int] = mapped_column(ForeignKey("transport_lines.id", ondelete="RESTRICT"))
     code: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(100))
     valid_from: Mapped[date] = mapped_column(Date)
@@ -573,7 +578,7 @@ class ScheduledTrip(Base):
     service_id: Mapped[int] = mapped_column(ForeignKey("line_services.id", ondelete="RESTRICT"))
     service_date: Mapped[date] = mapped_column(Date)
     service_version: Mapped[int] = mapped_column(Integer)
-    line_id: Mapped[int] = mapped_column(ForeignKey("path_plans.id", ondelete="RESTRICT"))
+    line_id: Mapped[int] = mapped_column(ForeignKey("transport_lines.id", ondelete="RESTRICT"))
     line_version: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(16), server_default="PLANNED")
     stops_snapshot: Mapped[list] = mapped_column(JSONB)
@@ -609,8 +614,10 @@ class ShipmentPathVersion(Base):
     shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
     version: Mapped[int] = mapped_column(Integer)
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
-    source_plan_id: Mapped[int | None] = mapped_column(ForeignKey("path_plans.id"))
-    source_plan_version: Mapped[int | None] = mapped_column(Integer)
+    source_line_id: Mapped[int | None] = mapped_column(ForeignKey("transport_lines.id"))
+    source_line_version: Mapped[int | None] = mapped_column(Integer)
+    source_plan_id = synonym("source_line_id")
+    source_plan_version = synonym("source_line_version")
     reason: Mapped[str] = mapped_column(String(500))
     legs: Mapped[list] = mapped_column(JSONB)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -630,8 +637,10 @@ class ShipmentScheduleVersion(Base):
     origin_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     scheduled_trip_id: Mapped[int | None] = mapped_column(ForeignKey("scheduled_trips.id", name="fk_schedule_versions_scheduled_trip", ondelete="RESTRICT"))
-    source_plan_id: Mapped[int | None] = mapped_column(ForeignKey("path_plans.id"))
-    source_plan_version: Mapped[int | None] = mapped_column(Integer)
+    source_line_id: Mapped[int | None] = mapped_column(ForeignKey("transport_lines.id"))
+    source_line_version: Mapped[int | None] = mapped_column(Integer)
+    source_plan_id = synonym("source_line_id")
+    source_plan_version = synonym("source_line_version")
     reason: Mapped[str] = mapped_column(String(500))
     legs: Mapped[list] = mapped_column(JSONB)
     operation_id: Mapped[int] = mapped_column(ForeignKey("operation_logs.id"))

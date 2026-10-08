@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import ValidationError
 from db import get_db
 from errors import IdempotencyKeyReusedError, NetworkError
-from models import PathPlan
+from models import TransportLine
 from planning.router import require_shipment
 from lines.schemas import (LineCreateRequest, LineUpdateRequest, LineResponse, LineOptionsResponse,
     LineListResponse, LineServiceCreateRequest, LineServiceUpdateRequest, LineServiceResponse,
@@ -25,19 +25,19 @@ def read_lines(session: DB, enabled: bool | None = None, origin_station_id: int 
                destination_station_id: int | None = None,
                page: Annotated[int, Query(ge=1)] = 1,
                page_size: Annotated[int, Query(ge=1, le=100)] = 20):
-    query = select(PathPlan)
-    for field, value in [(PathPlan.enabled, enabled), (PathPlan.origin_station_id, origin_station_id),
-                         (PathPlan.destination_station_id, destination_station_id)]:
+    query = select(TransportLine)
+    for field, value in [(TransportLine.enabled, enabled), (TransportLine.origin_station_id, origin_station_id),
+                         (TransportLine.destination_station_id, destination_station_id)]:
         if value is not None:
             query = query.where(field == value)
     total = session.scalar(select(func.count()).select_from(query.subquery()))
-    rows = session.scalars(query.order_by(PathPlan.id).offset((page - 1) * page_size).limit(page_size))
+    rows = session.scalars(query.order_by(TransportLine.id).offset((page - 1) * page_size).limit(page_size))
     return dict(items=[line_body(session, p) for p in rows], total=total, page=page, page_size=page_size)
 
 
 @router.get('/transport-lines/{line_id}', response_model=LineResponse)
 def read_line(line_id: int, session: DB):
-    line = session.get(PathPlan, line_id)
+    line = session.get(TransportLine, line_id)
     if line is None:
         raise NetworkError('TRANSPORT_LINE_NOT_FOUND', '运输线路不存在', 404)
     return line_body(session, line)

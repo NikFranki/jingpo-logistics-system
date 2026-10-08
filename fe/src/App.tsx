@@ -77,7 +77,7 @@ export default function App() {
         <Route path="/network/routes" element={<Navigate to="/network/transport-lines" replace />} />
         <Route path="/network/transport-lines" element={<TransportLinesPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/network/transport-lines/:lineId/services" element={<LineServicesPage revision={revision} busy={busy} mutate={mutate} />} />
-        <Route path="/network/stations" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} view="stations" />} />
+        <Route path="/network/stations" element={<NetworkPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Routes>
     </Suspense>

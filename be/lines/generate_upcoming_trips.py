@@ -11,7 +11,7 @@ from business_time import server_now
 from db import SessionLocal
 from lines.schemas import GenerateTripsRequest
 from lines.service_schedules import generate_trips
-from models import (LineService, PathPlan, ScheduledTrip, ShipmentScheduleVersion,
+from models import (LineService, TransportLine, ScheduledTrip, ShipmentScheduleVersion,
                     TransportTask)
 
 TIMEZONE = ZoneInfo("Asia/Shanghai")
@@ -41,8 +41,8 @@ def run(days=7, from_date=None, retention_days=30):
     end_date = start_date + timedelta(days=days - 1)
     with SessionLocal() as session:
         services = list(session.scalars(select(LineService).join(
-            PathPlan, PathPlan.id == LineService.line_id).where(
-            LineService.enabled.is_(True), PathPlan.enabled.is_(True)).order_by(
+            TransportLine, TransportLine.id == LineService.line_id).where(
+            LineService.enabled.is_(True), TransportLine.enabled.is_(True)).order_by(
                 LineService.id)))
 
     trip_slots = 0

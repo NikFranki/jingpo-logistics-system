@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 
 from business_time import server_now
 from errors import IdempotencyKeyReusedError, NetworkError
-from models import (LineService, LineServiceStop, OperationLog, PathPlan, ScheduledTrip,
+from models import (LineService, LineServiceStop, OperationLog, TransportLine, ScheduledTrip,
                     Shipment, TransportRoute)
 from network.coverage import planned_origin
 from planning.service import (anchor_station, plan_routes, routes_for_ids, time_and_replay,
@@ -120,7 +120,7 @@ def materialize_trips(session, line, service, from_date, to_date):
 
 
 def list_services(session, line_id):
-    if session.get(PathPlan, line_id) is None:
+    if session.get(TransportLine, line_id) is None:
         raise NetworkError("TRANSPORT_LINE_NOT_FOUND", "运输线路不存在", 404)
     services = session.scalars(select(LineService).where(LineService.line_id == line_id)
                                .order_by(LineService.code, LineService.id))
@@ -136,7 +136,7 @@ def write_service(session, line_id, request, key, service_id=None):
         now, replay = time_and_replay(session, key, request_hash)
         if replay:
             return replay.response_body
-        line = session.scalar(select(PathPlan).where(PathPlan.id == line_id).with_for_update())
+        line = session.scalar(select(TransportLine).where(TransportLine.id == line_id).with_for_update())
         if line is None:
             raise NetworkError("TRANSPORT_LINE_NOT_FOUND", "运输线路不存在", 404)
         current = None
@@ -215,7 +215,7 @@ def generate_trips(session, line_id, service_id, request, key, compact_response=
             raise NetworkError("LINE_SERVICE_NOT_FOUND", "线路班次不存在", 404)
         if not service.enabled:
             fail("LINE_SERVICE_DISABLED", "已停用的班次不能生成车次", 409)
-        line = session.get(PathPlan, line_id)
+        line = session.get(TransportLine, line_id)
         if not line.enabled:
             fail("TRANSPORT_LINE_DISABLED", "已停用的运输线路不能生成车次", 409)
         from_date = date.fromisoformat(body["from_date"])
@@ -261,9 +261,9 @@ def shipment_service_options(session, shipment_id, from_date, to_date):
     now = server_now()
     earliest = max(shipment.earliest_handover_at or now, now)
     trips = session.scalars(select(ScheduledTrip).join(LineService, LineService.id == ScheduledTrip.service_id)
-        .join(PathPlan, PathPlan.id == ScheduledTrip.line_id).where(
+        .join(TransportLine, TransportLine.id == ScheduledTrip.line_id).where(
         ScheduledTrip.status == "PLANNED", LineService.enabled.is_(True),
-        LineService.version == ScheduledTrip.service_version, PathPlan.enabled.is_(True),
+        LineService.version == ScheduledTrip.service_version, TransportLine.enabled.is_(True),
         ScheduledTrip.service_date >= from_date - timedelta(days=30),
         ScheduledTrip.service_date <= to_date).order_by(ScheduledTrip.service_date, ScheduledTrip.id))
     options = []

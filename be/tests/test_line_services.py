@@ -26,7 +26,7 @@ class LineServiceTests(unittest.TestCase):
     route = helpers.V3NetworkTests.route
 
     def setUp(self):
-        columns = {column['name'] for column in inspect(engine).get_columns('path_plan_legs')}
+        columns = {column['name'] for column in inspect(engine).get_columns('transport_line_legs')}
         if 'travel_override_minutes' not in columns:
             self.skipTest('test database is missing unified transport-line columns')
         helpers.V3NetworkTests.setUp(self)

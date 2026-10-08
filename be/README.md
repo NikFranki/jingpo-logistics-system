@@ -2,9 +2,11 @@
 
 ## 统一运输线路
 
-`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐；计划预览、确认结果、计划历史和运单线路历史统一使用 `line_id/line_version`。旧 `plan_id/source_plan_id`、手动 `route_ids`、`/path-plans` 与 `/path-options` 仅作过渡兼容并标记弃用；数据库仍保留原表和历史关联，不做破坏性删除。
+`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。线路存放在 `transport_lines` / `transport_line_legs`；班次规则和车次快照存放在 `line_services`、`line_service_stops`、`scheduled_trips`。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐。旧路径方案管理接口与 `/path-options` 已下线，`path_plans` / `path_plan_legs` 已迁移删除；已有运单路径、班次和任务历史保留。
 
 开发库已备份升级 c52d09a13f84，目录 2,347 条（启用 2,346），现有 44 个城市站的 1,892 个有向组合全部有线路。耗时为明确标注的演示值。初始化其他环境用 `python -m lines.seed` 和 `python -m lines.seed_national`，先迁移并备份。契约、部署与实际检查见 [统一线路说明](../docs/技术方案/v7/be/unified-transport-lines.md)。
+
+2026-10-08 已备份并将线路/分段从 `path_plans`、`path_plan_legs` 迁入 `transport_lines`、`transport_line_legs`；线路 ID、线路分段 ID、班次、车次及运单历史引用均保留。开发库已升级至 `9a76c4e1b205`，后端已重启并通过就绪检查。备份与数据核对见 [统一线路说明](../docs/技术方案/v7/be/unified-transport-lines.md)。
 
 ## 订单时间窗与运输任务共享
 
@@ -50,7 +52,7 @@ V7 迁移：停止后端并 `pg_dump -Fc` 备份后，执行 `python -m alembic 
 
 以下为 V6/LEGACY 流程说明；V7 新运单使用上方的审核确认流程。当前开发库为 V7。
 
-配置一次完整路径方案，多张运单可复用。首次入站后按首站/目的站唯一匹配时自动绑定，多个方案只选择一次，无方案提示配置；中转后直接采用下一段。已绑定路径保存独立版本，不随方案编辑而变化。
+这是 V6 的旧运单路径流程说明；其路径数据现由 `transport_lines` / `transport_line_legs` 保存，路径方案管理接口已下线。首次入站自动匹配、已绑定运单路径版本和历史记录仍为兼容的旧运单执行逻辑；新计划使用线路班次审核流程。
 
 ```mermaid
 flowchart LR
@@ -63,9 +65,9 @@ flowchart LR
 
 ### 主要契约
 
-- `GET/POST /api/v1/path-plans`，`PATCH /api/v1/path-plans/{id}`：完整方案创建、查询、版本校验和启停；有序 `route_ids` 必须连续且最终站允许派送。
+- 路径配置请使用 `/api/v1/transport-lines`；旧 `path-plans` 管理接口已下线。
 - `GET/PUT /api/v1/shipments/{id}/path`：当前完整路径与未来修改。PUT 要求 expected_version、expected_anchor_station_id、reason，以及 route_ids 或 plan_id/expected_plan_version。
-- `GET /api/v1/shipments/{id}/path-options`：从接续站到运单目的站的可用方案。
+- 线路候选请使用 `/api/v1/shipments/{id}/line-options`。
 - `GET /api/v1/shipments/{id}/path-history?page=1&page_size=20`：路径布局版本，区别于实际物流轨迹。
 - 运单详情新增 path_version、transport_path 和 UPDATE_PATH 资格；运输中从本段终点修改未来路径，已完成/运输段保留，待发车任务先取消。
 - `POST /api/v1/transport-tasks/create` 可省略 route_code，提供每张运单的 expected_path_versions，自动取共同下一段；不同下一段需先分组。原显式线路请求仍校验下一段，无法任意改线路。

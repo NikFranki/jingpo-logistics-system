@@ -6,7 +6,7 @@ from collections import deque
 from uuid import uuid5, NAMESPACE_URL
 from sqlalchemy import select, func
 from db import SessionLocal
-from models import Station, StationServiceArea, TransportRoute, PathPlan, PathPlanLeg
+from models import Station, StationServiceArea, TransportRoute, TransportLine, TransportLineLeg
 from lines.schemas import LineCreateRequest, LineUpdateRequest
 from lines.service import write_line, line_body
 
@@ -75,7 +75,7 @@ def save(definition, report):
         report['unchanged'] += 1
         return
     with SessionLocal() as session:
-        existing = session.scalar(select(PathPlan).where(PathPlan.code == definition['code']))
+        existing = session.scalar(select(TransportLine).where(TransportLine.code == definition['code']))
         if existing:
             report['unchanged'] += 1
             return
@@ -102,7 +102,7 @@ def main():
         # Complete existing direct-line reference fields without changing real segments or manual values.
         timing_updates = []
         for route in routes:
-            line = session.scalar(select(PathPlan).where(PathPlan.code == f'L_SEG_{route.id}'))
+            line = session.scalar(select(TransportLine).where(TransportLine.code == f'L_SEG_{route.id}'))
             if line is None:
                 continue
             body = line_body(session, line)
@@ -139,8 +139,8 @@ def main():
     with SessionLocal() as session:
         edges = {}
         covered = set()
-        for line in session.scalars(select(PathPlan).where(PathPlan.enabled.is_(True),
-                    PathPlan.origin_station_id.in_(stations),PathPlan.destination_station_id.in_(stations))):
+        for line in session.scalars(select(TransportLine).where(TransportLine.enabled.is_(True),
+                    TransportLine.origin_station_id.in_(stations),TransportLine.destination_station_id.in_(stations))):
             body = line_body(session,line)
             if not body['usable']:
                 continue
@@ -157,11 +157,11 @@ def main():
     with SessionLocal() as session:
         profiles = {}
         metadata = {}
-        rows = session.execute(select(PathPlan.id,PathPlan.code,PathPlan.version,PathPlan.enabled,
-            TransportRoute.origin_station_id,TransportRoute.destination_station_id,PathPlanLeg.position,
-            func.coalesce(PathPlanLeg.travel_override_minutes,TransportRoute.travel_minutes),
-            PathPlanLeg.origin_transfer_override_minutes).join(PathPlanLeg,PathPlanLeg.plan_id==PathPlan.id)
-            .join(TransportRoute,TransportRoute.id==PathPlanLeg.route_id).order_by(PathPlan.id,PathPlanLeg.position))
+        rows = session.execute(select(TransportLine.id,TransportLine.code,TransportLine.version,TransportLine.enabled,
+            TransportRoute.origin_station_id,TransportRoute.destination_station_id,TransportLineLeg.position,
+            func.coalesce(TransportLineLeg.travel_override_minutes,TransportRoute.travel_minutes),
+            TransportLineLeg.origin_transfer_override_minutes).join(TransportLineLeg,TransportLineLeg.line_id==TransportLine.id)
+            .join(TransportRoute,TransportRoute.id==TransportLineLeg.route_id).order_by(TransportLine.id,TransportLineLeg.position))
         for ident,code,version,enabled,a,b,position,travel,transfer in rows:
             metadata[ident] = code,version,enabled
             profiles.setdefault(ident,[]).append((a,b,travel,0 if position==0 else transfer))

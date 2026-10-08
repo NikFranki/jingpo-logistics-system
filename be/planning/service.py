@@ -394,13 +394,3 @@ def candidate_route_paths(session, origin, destination, limit=5):
                 queue.append((target, nodes, next_path))
     return found
 
-
-def path_options_body(session, shipment):
-    actual = anchor_station(session, shipment)
-    origin = actual or planned_origin(session, shipment)
-    result = match_origin(session, shipment) if origin is None else None
-    return dict(path=shipment_path_body(session, shipment), plans=matching_plans(session, shipment),
-                planning_origin_station_id=str(origin) if origin else None,
-                origin_match_status=result['status'] if result else 'MATCHED',
-                origin_match_reason=result['reason'] if result else None,
-                route_candidates=candidate_route_paths(session, origin, shipment.destination_station_id))

@@ -139,7 +139,7 @@ export function AddressRegionFields({ prefix, label, regionRequired = true }: Pr
                 : current.level === 'CITY' && Boolean(current.has_districts))
               if (searchValue && hasChildren) {
                 const parentPath = path.map(option => String(option.value))
-                const childrenLoaded = current.children ? Promise.resolve() : loadData(path)
+                const childrenLoaded = current.children ? Promise.resolve() : Promise.resolve(loadData(path))
                 void childrenLoaded.then(() => {
                   setSelectedPath(parentPath)
                   form.setFieldValue(regionField, [])
