@@ -73,7 +73,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const [eventSaving, setEventSaving] = useState(false)
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
-  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
@@ -111,7 +110,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
 
   useEffect(() => {
     if (searchParams.get('schedule') !== '1' || !detail || detail.scheduling_mode !== 'REVIEWED') return
-    setScheduleOpen(true)
     const next = new URLSearchParams(searchParams)
     next.delete('schedule')
     setSearchParams(next, { replace: true })
@@ -250,7 +248,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
       {detail.scheduling_mode === 'REVIEWED' ? <section style={{ marginTop: 24 }}>
         <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
           <Text strong>全程运输计划</Text>
-          <Button type="primary" disabled={busy || ['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) || detail.schedule?.status === 'COMPLETED'} onClick={() => setScheduleOpen(true)}>{detail.schedule?.version ? '调整未来安排' : '预览并审核计划'}</Button>
         </Space>
         {detail.schedule ? <>
           <Alert type={detail.schedule.status === 'BLOCKED' || detail.schedule.status === 'NEEDS_RECONFIRMATION' ? 'warning' : detail.schedule.status === 'COMPLETED' ? 'success' : 'info'} showIcon message={`${scheduleStatusText[detail.schedule.status] ?? detail.schedule.status} · 计划版本 v${detail.schedule.version}`} description={<>
@@ -270,6 +267,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
             { title: '等待条件', width: 200, render: (_, leg) => <>{leg.ready_at ? `就绪时间 ${formatTime(leg.ready_at)}` : ''}{leg.waiting_members.length > 0 && <Text type="secondary" style={{ display: 'block' }}>等待运单：{leg.waiting_members.map(member => member.shipment_no ?? member.shipment_id).join('、')}</Text>}</> },
           ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未确认运输计划；先预览路线和逐站时间。" />}
         </> : <Alert type="warning" showIcon message="后端没有返回运输计划状态" description="请确认服务已升级至 V7，然后刷新运单。" />}
+        {detail.schedule?.status !== 'COMPLETED' && !['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) && <SchedulePlanner shipment={detail} routes={network.routes} enabled={!busy} busy={busy} mutate={mutate} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       </section> : <section style={{ marginTop: 24 }}>
         <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
           <Text strong>完整路径与当前进度</Text>
@@ -424,7 +422,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           <Alert type="warning" showIcon message="这只更改物流安排，不会移动货物或修改订单、收件地址。" style={{ marginTop: 16 }} />
         </>}
       </Modal>
-      {detail.scheduling_mode === 'REVIEWED' && <SchedulePlanner shipment={detail} routes={network.routes} open={scheduleOpen} busy={busy} mutate={mutate} onClose={() => setScheduleOpen(false)} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       <Modal
         title={'确认' + (eventToConfirm ? actionText[eventToConfirm] : '操作')}
         open={Boolean(eventToConfirm)}
