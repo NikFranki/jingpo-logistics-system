@@ -1,7 +1,7 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space, Spin, Tag, Typography } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type DestinationMatch, type Order, type OrderDetail, type OrderInput } from '../api'
@@ -147,7 +147,7 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
   }, [orderId, revision, retry])
 
   const title = detail?.order_no ?? '订单详情'
-  return <PageContainer title={title} subTitle="查看订单信息，创建或打开关联运单。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>返回订单列表</Button>{detail && !detail.shipment && <Button onClick={() => setEditOrderOpen(true)}>编辑订单</Button>}{detail && !detail.shipment && <Button type="primary" loading={busy} onClick={() => setShipmentOpen(true)}>创建运单</Button>}{detail?.shipment && <Button type="primary" onClick={() => navigate(`/shipments/${detail.shipment!.id}`)}>查看运单</Button>}</Space>}>
+  return <PageContainer title={title} subTitle="查看订单信息，创建或打开关联运单。" breadcrumb={{ items: [{ title: <Link to="/orders">订单列表</Link> }, { title }] }} extra={<Space wrap>{detail && !detail.shipment && <Button onClick={() => setEditOrderOpen(true)}>编辑订单</Button>}{detail && !detail.shipment && <Button type="primary" loading={busy} onClick={() => setShipmentOpen(true)}>创建运单</Button>}{detail?.shipment && <Button type="primary" onClick={() => navigate(`/shipments/${detail.shipment!.id}`)}>查看运单</Button>}</Space>}>
     {loadError && <Alert type="error" showIcon message="订单详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
       <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>

@@ -12,6 +12,7 @@ type Props = { revision: number; busy: boolean; mutate: Mutate }
 export default function NetworkPage({ revision, busy, mutate }: Props) {
   const [stations, setStations] = useState<Station[]>([])
   const [search, setSearch] = useState('')
+  const [stationFilter, setStationFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [modalOpen, setModalOpen] = useState(false)
@@ -33,9 +34,9 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
   useEffect(() => { void refresh() }, [revision, refresh])
 
   const rows = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase()
+    const query = stationFilter.trim().toLocaleLowerCase()
     return query ? stations.filter(station => station.name.toLocaleLowerCase().includes(query)) : stations
-  }, [stations, search])
+  }, [stations, stationFilter])
 
   const openCreate = () => {
     setEditingStation(undefined)
@@ -71,9 +72,14 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
 
   return <><PageContainer title="站点管理" subTitle="维护物流站点、站点能力和默认中转参考时长。" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增站点</Button></Space>}>
     {error && <Alert type="error" showIcon message="站点配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
+    <Card style={{ marginBottom: 16 }}>
+      <Form layout="inline" onFinish={() => setStationFilter(search.trim())} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>
+        <Form.Item label="站点名称" style={{ margin: 0 }}><Input value={search} onChange={event => setSearch(event.target.value)} onPressEnter={() => setStationFilter(search.trim())} allowClear placeholder="请输入站点名称" style={{ width: 320, maxWidth: '60vw' }} /></Form.Item>
+        <Space style={{ marginLeft: 'auto' }}><Button onClick={() => { setSearch(''); setStationFilter('') }}>重置</Button><Button type="primary" htmlType="submit">查询</Button></Space>
+      </Form>
+    </Card>
     <Card title="站点列表">
-      <Input.Search aria-label="按站点名称搜索" placeholder="按站点名称搜索" allowClear value={search} onChange={event => setSearch(event.target.value)} style={{ width: 320, maxWidth: '100%', marginBottom: 12 }} />
-      <Table<Station> rowKey="id" loading={loading} columns={columns} dataSource={rows} pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 个站点` }} scroll={{ x: 1000 }} locale={{ emptyText: search ? '没有匹配的站点。' : '还没有站点，先新增一个站点。' }} />
+      <Table<Station> rowKey="id" loading={loading} columns={columns} dataSource={rows} pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 个站点` }} scroll={{ x: 1000 }} locale={{ emptyText: stationFilter ? '没有匹配的站点。' : '还没有站点，先新增一个站点。' }} />
     </Card>
     <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>站点编码创建后不可修改。停用受在途任务、在站运单和未签收目的运单约束。</Text>
   </PageContainer>

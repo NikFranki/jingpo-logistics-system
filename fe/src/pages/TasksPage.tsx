@@ -1,7 +1,7 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Form, Modal, Space, Spin, Table, Typography, message } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Candidate, type CancelPreview, type RouteCode, type TaskDetail, type TaskItem } from '../api'
@@ -137,7 +137,6 @@ function TasksPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
 
 function TaskDetailPage({ revision, busy, mutate }: Shared) {
   const { taskId = '' } = useParams()
-  const navigate = useNavigate()
   const [detail, setDetail] = useState<TaskDetail>()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string>()
@@ -202,7 +201,7 @@ function TaskDetailPage({ revision, busy, mutate }: Shared) {
     return rule.reason.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g, formatTimeWithSeconds)
   }
 
-  return <>{holder}<PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" extra={<Space wrap><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回运输任务</Button></Space>}>
+  return <>{holder}<PageContainer title={detail?.task_no ?? '运输任务详情'} subTitle="查看运输安排、执行任务，或在发车前取消错误安排。" breadcrumb={{ items: [{ title: <Link to="/tasks">运输任务列表</Link> }, { title: detail?.task_no ?? '运输任务详情' }] }}>
     {loadError && <Alert type="error" showIcon message="运输任务详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
       {detail.status === 'ARRIVED' && <Alert style={{ marginBottom: 16 }} type="success" showIcon message={<>任务已到达：<Text strong><StationName id={detail.destination_station_id} /></Text></>} />}

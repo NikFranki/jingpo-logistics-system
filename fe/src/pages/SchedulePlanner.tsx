@@ -136,7 +136,7 @@ export function SchedulePlanner({ shipment, routes, open, busy, mutate, onClose,
               const stationIds = trip.legs.length ? [trip.legs[0].origin_station_id, ...trip.legs.map(leg => leg.destination_station_id)] : []
               return <Radio key={trip.trip_id} value={trip.trip_id} style={{ width: '100%', marginInlineEnd: 0, padding: '10px 12px', border: '1px solid #d9e2ef', borderRadius: 8 }}>
                 <div style={{ display: 'grid', gap: 4, width: '100%' }}>
-                  <div><Text strong>{trip.service_name}</Text>{index === 0 && <Tag color="blue" style={{ marginInlineStart: 8 }}>最近发车</Tag>}</div>
+                  <div><Text strong>{formatTime(trip.departure_at).slice(0, 10)} · {trip.service_name}</Text>{index === 0 && <Tag color="blue" style={{ marginInlineStart: 8 }}>最近发车</Tag>}</div>
                   <Text type="secondary">{formatTime(trip.departure_at)} → {formatTime(trip.arrival_at)}</Text>
                   <div style={{ display: 'grid', gap: 3, marginTop: 4 }}>
                     {stationIds.map((stationId, position) => {
