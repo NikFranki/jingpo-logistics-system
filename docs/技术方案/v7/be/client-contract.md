@@ -100,7 +100,7 @@ ID 和版本用 JSON 数字，返回 ID 用字符串。时间带时区且精确�
 | 409 SCHEDULE_WARNING_NOT_ACKNOWLEDGED | 展示当前警告，要求明确审核后提交 |
 | 409 TASK_MEMBERSHIP_CONFLICT | 刷新任务名单、revision 和取消影响，重新确认 |
 | 409 SHARED_TASK_REVIEW_REQUIRED | 展示共享安排，先任务级取消审核 |
-| 409 TASK_NOT_READY / TASK_PREDECESSOR_NOT_ARRIVED | 展示就绪时间或等待成员，不能强制发车 |
+| 409 TASK_PREDECESSOR_NOT_ARRIVED | 展示等待成员；未实际就绪时不能发车。已就绪的计划任务允许提前发车 |
 | 422 | 定位输入字段、缺项和时间顺序问题 |
 | 503 | 演示时钟未初始化，等待后端就绪 |
 

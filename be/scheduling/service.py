@@ -124,6 +124,7 @@ def forecast(session, task, now=None, cache=None, visiting=None):
 
 
 def task_extra(session, task, now=None, cache=None):
+    now = now or business_time.server_now()
     departure, arrival, stale = forecast(session, task, now, cache)
     waiting = []
     for entry in members(session, task.id):
@@ -148,9 +149,6 @@ def departure_problem(session, task, now):
     entries = members(session, task.id)
     if not entries or any(e.association_state != 'ACTIVE' for e in entries):
         return 'TASK_PREDECESSOR_NOT_ARRIVED', '仍有运单未实际到达本段起点'
-    earliest = max([task.planned_departure_at, *[e.ready_at or now for e in entries]])
-    if now < earliest:
-        return 'TASK_NOT_READY', '尚未到已确认发车或中转就绪时间：' + earliest.isoformat()
     return None
 
 

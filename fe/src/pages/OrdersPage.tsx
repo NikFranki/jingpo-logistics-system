@@ -103,7 +103,6 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
       <AddressRegionFields prefix="sender" label="卖家" />
       <ProFormText name="recipient_name" label="买家姓名" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} />
       <AddressRegionFields prefix="recipient" label="买家" />
-      <Text type="secondary">配送区域固定为 Z，订单号由后端生成。</Text>
     </ModalForm>
   </PageContainer>
 }

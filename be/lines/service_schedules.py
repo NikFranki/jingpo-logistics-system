@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from business_time import server_now
 from errors import IdempotencyKeyReusedError, NetworkError
 from models import (LineService, LineServiceStop, OperationLog, PathPlan, ScheduledTrip,
-                    Shipment, Station, TransportRoute)
+                    Shipment, TransportRoute)
 from network.coverage import planned_origin
 from planning.service import (anchor_station, plan_routes, routes_for_ids, time_and_replay,
                               validate_routes)

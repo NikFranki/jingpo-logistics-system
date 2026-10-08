@@ -98,12 +98,6 @@ export default function LineServicesPage({ revision, busy, mutate }: Props) {
     if (result) setServices(current => current.map(item => item.id === result.id ? result : item))
   }
 
-  const generateUpcoming = (service: LineTimetable) => {
-    const from = dayjs().format('YYYY-MM-DD')
-    const to = dayjs().add(30, 'day').format('YYYY-MM-DD')
-    return mutate(`generate-line-trips:${service.id}:${from}:${to}`, key => api.generateScheduledTrips(lineId, service.id, from, to, key), '未来 31 天车次已生成')
-  }
-
   const edit = (service: LineTimetable) => {
     setEditing(service)
     form.setFieldsValue({
@@ -145,15 +139,12 @@ export default function LineServicesPage({ revision, busy, mutate }: Props) {
       </div>
     })}</div> },
     { title: '启用', width: 80, render: (_, service) => <Switch checked={service.enabled} disabled={busy} onChange={value => void toggle(service, value)} /> },
-    { title: '操作', width: 200, render: (_, service) => <Space><Button type="link" disabled={busy} onClick={() => edit(service)}>编辑</Button><Button type="link" disabled={busy || !service.enabled} onClick={() => void generateUpcoming(service)}>生成近期车次</Button></Space> },
+    { title: '操作', width: 100, render: (_, service) => <Button type="link" disabled={busy} onClick={() => edit(service)}>编辑</Button> },
   ]
 
-  const canCalculate = line?.legs.every(leg => leg.travel_minutes != null) ?? false
   return <PageContainer title="线路每日班次" subTitle={line ? `${line.code} · ${line.name} · ${line.stations.map(item => item.name).join(' → ')}` : '正在读取运输线路'} extra={<Space><Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/network/transport-lines')}>返回线路</Button><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button></Space>}>
     {error && <Alert type="error" showIcon message="线路班次操作失败" description={error} style={{ marginBottom: 16 }} />}
     <Card title="班次规则" extra={<Text type="secondary">每天重复 · 上海时区</Text>}>
-      <Alert type={canCalculate ? 'success' : 'warning'} showIcon message={canCalculate ? '后端预置的默认班次会显示在下表，例如每日 08:00；你也可以继续新增或编辑班次。' : '该线路缺少分段参考运输时长，后端初始化时没有生成默认 08:00 班次。请先补齐线路耗时，或按实际到发时刻手动新增班次；下表展示当前已有规则。'} style={{ marginBottom: 12 }} />
-      <Alert type={canCalculate ? 'info' : 'warning'} showIcon message={canCalculate ? '默认按首站 08:00 发车，并根据线路运输耗时和中转时长计算；新增或编辑时可逐站调整。' : '线路参考运输时长不完整：新增或编辑班次时需填写各站到达和发车时间。'} style={{ marginBottom: 16 }} />
       <Button type="primary" icon={<PlusOutlined />} disabled={!line || busy} onClick={create} style={{ marginBottom: 16 }}>新增每日班次</Button>
       <Table<LineTimetable> rowKey="id" loading={loading} columns={columns} dataSource={services} pagination={{ pageSize: 10, showSizeChanger: true }} scroll={{ x: 1150 }} locale={{ emptyText: '该线路还没有班次规则。' }} />
       <Text type="secondary">已启用的每日班次数：{services.filter(service => service.enabled).length}。载运率需运力口径与实际占用统计支持，当前不展示。</Text>

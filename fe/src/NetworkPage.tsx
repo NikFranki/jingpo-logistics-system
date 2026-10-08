@@ -1,5 +1,5 @@
 import { fuzzySelectFilter } from './fuzzySearch'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -24,8 +24,8 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   const [routePage, setRoutePage] = useState(1)
   const [stationPageSize, setStationPageSize] = useState(10)
   const [routePageSize, setRoutePageSize] = useState(10)
-  const [stationTotal, setStationTotal] = useState(0)
-  const [routeTotal, setRouteTotal] = useState(0)
+  const [stationSearch, setStationSearch] = useState('')
+  const [routeSearch, setRouteSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [pathPlanError, setPathPlanError] = useState<string>()
@@ -45,18 +45,12 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
     setLoading(true)
     try {
       if (view === 'stations') {
-        const result = await api.stationPage({ page: stationPage, page_size: stationPageSize })
-        setStationRows(result.items)
-        setStationTotal(result.total)
+        setStationRows(await api.stations())
       } else {
         const [allStations, allRoutes] = await Promise.all([api.stations(), api.routes()])
         setStations(allStations)
         setRoutes(allRoutes)
-        if (view === 'routes') {
-          const result = await api.routePage({ page: routePage, page_size: routePageSize })
-          setRouteRows(result.items)
-          setRouteTotal(result.total)
-        }
+        if (view === 'routes') setRouteRows(allRoutes)
       }
       setError(undefined)
     } catch (reason) {
@@ -71,8 +65,17 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
       }
     }
     setLoading(false)
-  }, [view, stationPage, stationPageSize, routePage, routePageSize])
+  }, [view])
   useEffect(() => { void refresh() }, [revision, refresh])
+
+  const filteredStationRows = useMemo(() => {
+    const query = stationSearch.trim().toLocaleLowerCase()
+    return query ? stationRows.filter(station => station.name.toLocaleLowerCase().includes(query)) : stationRows
+  }, [stationRows, stationSearch])
+  const filteredRouteRows = useMemo(() => {
+    const query = routeSearch.trim().toLocaleLowerCase()
+    return query ? routeRows.filter(route => `${route.origin.name} ${route.destination.name}`.toLocaleLowerCase().includes(query)) : routeRows
+  }, [routeRows, routeSearch])
 
   const openCreateStation = () => {
     setEditingStation(undefined)
@@ -186,10 +189,12 @@ export default function NetworkPage({ revision, busy, mutate, view = 'paths' }: 
   return <><PageContainer title={title} subTitle={description} extra={<Space wrap><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button>{view === 'stations' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateStation}>新增站点</Button>}{view === 'routes' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreateRoute}>新增线路</Button>}{view === 'paths' && <Button type="primary" icon={<PlusOutlined />} onClick={openCreatePathPlan}>新增完整路径方案</Button>}</Space>}>
     {error && view !== 'paths' && <Alert type="error" showIcon message="网络配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
     {view === 'stations' && <Card title="站点列表">
-      <Table<Station> rowKey="id" loading={loading} columns={[...stationColumns.slice(0, 2), { title: '默认中转参考', dataIndex: 'transfer_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟` }, ...stationColumns.slice(2)]} dataSource={stationRows} pagination={{ current: stationPage, pageSize: stationPageSize, total: stationTotal, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 个站点`, onChange: (page, pageSize) => { setStationPage(page); setStationPageSize(pageSize) } }} scroll={{ x: 1000 }} locale={{ emptyText: '还没有站点，先新增一个站点。' }} />
+      <Input.Search aria-label="按站点名称搜索" placeholder="按站点名称搜索" allowClear value={stationSearch} onChange={event => { setStationSearch(event.target.value); setStationPage(1) }} style={{ width: 320, maxWidth: '100%', marginBottom: 12 }} />
+      <Table<Station> rowKey="id" loading={loading} columns={[...stationColumns.slice(0, 2), { title: '默认中转参考', dataIndex: 'transfer_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟` }, ...stationColumns.slice(2)]} dataSource={filteredStationRows} pagination={{ current: stationPage, pageSize: stationPageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 个站点`, onChange: (page, pageSize) => { setStationPage(page); setStationPageSize(pageSize) } }} scroll={{ x: 1000 }} locale={{ emptyText: stationSearch ? '没有匹配的站点。' : '还没有站点，先新增一个站点。' }} />
     </Card>}
     {view === 'routes' && <Card title="运输线路列表">
-      <Table<TransportRoute> rowKey="id" loading={loading} columns={[...routeColumns.slice(0, 2), { title: '参考运输时长', dataIndex: 'travel_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟`, sorter: (a, b) => (a.travel_minutes ?? -1) - (b.travel_minutes ?? -1) }, ...routeColumns.slice(2)]} dataSource={routeRows} pagination={{ current: routePage, pageSize: routePageSize, total: routeTotal, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条线路`, onChange: (page, pageSize) => { setRoutePage(page); setRoutePageSize(pageSize) } }} scroll={{ x: 900 }} locale={{ emptyText: '还没有线路，先配置站点再新增线路。' }} />
+      <Input.Search aria-label="按起点或终点站名称搜索线路" placeholder="按起点或终点站名称搜索" allowClear value={routeSearch} onChange={event => { setRouteSearch(event.target.value); setRoutePage(1) }} style={{ width: 360, maxWidth: '100%', marginBottom: 12 }} />
+      <Table<TransportRoute> rowKey="id" loading={loading} columns={[...routeColumns.slice(0, 2), { title: '参考运输时长', dataIndex: 'travel_minutes', width: 150, render: value => value === null || value === undefined ? '未设置' : `${value} 分钟`, sorter: (a, b) => (a.travel_minutes ?? -1) - (b.travel_minutes ?? -1) }, ...routeColumns.slice(2)]} dataSource={filteredRouteRows} pagination={{ current: routePage, pageSize: routePageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条线路`, onChange: (page, pageSize) => { setRoutePage(page); setRoutePageSize(pageSize) } }} scroll={{ x: 900 }} locale={{ emptyText: routeSearch ? '没有匹配的线路。' : '还没有线路，先配置站点再新增线路。' }} />
     </Card>}
     {view === 'paths' && <Card title="完整路径方案">
       {pathPlanError && <Alert type="error" showIcon message="路径方案读取失败" description={pathPlanError} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 12 }} />}

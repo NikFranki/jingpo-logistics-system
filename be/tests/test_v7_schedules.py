@@ -13,7 +13,7 @@ from errors import NetworkError
 from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
 from scheduling.service import preview_schedule, confirm_schedule, schedule_body, preview_cancel
 from transport.schemas import TransportTaskCancelRequest
-from transport.service import depart_transport_task, arrive_transport_task, cancel_transport_task
+from transport.service import depart_transport_task, arrive_transport_task, cancel_transport_task, get_transport_task
 from network.schemas import RouteUpdateRequest
 from network.service import write_network
 import test_v3_network as helpers
@@ -72,6 +72,19 @@ class V7ScheduleTests(unittest.TestCase):
         self.assertEqual(result.exception.code, 'PREVIEW_EXPIRED')
         self.assertEqual(self.counts(), before)
 
+    def test_plan_task_can_depart_and_arrive_before_scheduled_times(self):
+        shipment = self.shipment()
+        preview = self.preview(shipment, first_departure_at=self.clock+timedelta(hours=2))
+        reviewed = self.confirm(shipment, preview)
+        task_id = int(reviewed['legs'][0]['task_id'])
+        detail = self.call(get_transport_task, task_id)
+        self.assertTrue(next(action for action in detail['allowed_actions'] if action['action'] == 'DEPART')['enabled'])
+        departed = self.call(depart_transport_task, task_id, uuid4(), detail['schedule_revision'])
+        self.assertEqual(departed['status'], 'IN_TRANSIT')
+        arrived = self.call(arrive_transport_task, task_id, uuid4())
+        self.assertEqual(arrived['status'], 'ARRIVED')
+        self.assertLess(arrived['arrived_at'], reviewed['legs'][0]['planned_arrival_at'])
+
     def test_preview_is_read_only_confirm_all_legs_and_arrival_activates_same_id(self):
         shipment = self.shipment(); before = self.counts()
         preview = self.preview(shipment); self.preview(shipment)
@@ -90,6 +103,14 @@ class V7ScheduleTests(unittest.TestCase):
         self.server_clock.return_value += timedelta(minutes=10); self.call(depart_transport_task, b, uuid4(), 1)
         self.call(arrive_transport_task, b, uuid4())
         self.assertEqual(self.state(shipment)['status'], 'COMPLETED')
+
+    def test_plan_task_detail_includes_schedule_metadata(self):
+        shipment = self.shipment()
+        reviewed = self.confirm(shipment)
+        task_id = int(reviewed['legs'][0]['task_id'])
+        detail = self.call(get_transport_task, task_id)
+        self.assertEqual(detail['scheduled_trip_id'], None)
+        self.assertEqual(detail['planned_departure_at'], reviewed['legs'][0]['planned_departure_at'])
 
     def test_prearrival_waits_then_activates_first_existing_task(self):
         shipment = self.shipment(False)

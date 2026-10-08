@@ -78,18 +78,18 @@ stateDiagram-v2
     [*] --> PENDING_DEPARTURE: 确认后当前货物已在起点
     WAITING_CARGO --> PENDING_DEPARTURE: 所有成员已实际入站
     WAITING_PREDECESSOR --> PENDING_DEPARTURE: 所有成员前段到达并激活
-    PENDING_DEPARTURE --> IN_TRANSIT: 时间及真实位置校验后发车
+PENDING_DEPARTURE --> IN_TRANSIT: 就绪成员和真实位置校验后发车
     IN_TRANSIT --> ARRIVED: 确认实际到达
     WAITING_CARGO --> CANCELLED: 取消未执行安排
     WAITING_PREDECESSOR --> CANCELLED: 取消未执行安排
     PENDING_DEPARTURE --> CANCELLED: 发车前取消
 ```
 
-若共享成员包含不同等待原因，存在前序未到达成员时显示 WAITING_PREDECESSOR，否则有首站未到成员显示 WAITING_CARGO；详情逐成员返回等待原因。中转处理尚未完成时可以为 PENDING_DEPARTURE，但 DEPART 禁用并给出最早就绪时间。
+若共享成员包含不同等待原因，存在前序未到达成员时显示 WAITING_PREDECESSOR，否则有首站未到成员显示 WAITING_CARGO；详情逐成员返回等待原因。货物未实际到达起点或前段未实际到达时，DEPART 禁用并说明等待成员。计划发车时间仅作审核和预测基准，不再阻止提前发车；到站操作也不要求等待计划到达时刻。
 
 首次实际入站激活该运单首段 PLANNED 关联；前段到达时，先释放其 ACTIVE，再激活已存在的下一段 PLANNED，并令 ready_at=实际到达+已批准的中转间隔。无需生成新任务、改变任务编号或增加计划版本。若其他共享成员未就绪，则整趟继续等待。
 
-发车必须满足全部关联 ACTIVE、前序 ARRIVED、货物实际在起点、演示时间不早于 planned_departure_at 及全部 ready_at。等待状态禁止发车/到达。计划时间已过也不能绕过位置和前序校验；实际到达时间通过操作记录保存，不按预计时间自动推进。
+发车必须满足全部关联 ACTIVE、前序 ARRIVED、货物实际在起点。允许早于 planned_departure_at 发车及早于 expected_arrival_at 确认到达，实际时间由服务器操作记录保存；未实际就绪时仍禁止发车，绑定固定班次且已错过计划发车时间时仍需重新审核改排。等待状态禁止发车/到达，不按预计时间自动推进。
 
 首站实际与计划起点不符时保留入站事实，计划 BLOCKED、关联继续 PLANNED，提示重新规划。线路后续停用阻止新增安排，但已确认生成的任务沿用旧任务可继续规则；计划详情提示配置风险，用户可确认调整。目的站更正须检查未来预留，不能因为只有 PLANNED 就忽略其影响。
 
