@@ -25,10 +25,10 @@ from models import (
     TransportRoute,
     TransportTask,
     TrackingEvent,
-    ShipmentPathLeg,
+    ShipmentScheduleLeg,
 )
 from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
-from planning.service import auto_bind_path, next_path_leg
+from scheduling.path_service import auto_bind_path, next_path_leg
 from network.service import require_enabled_route
 
 def list_candidate_shipments(
@@ -65,16 +65,16 @@ def list_candidate_shipments(
     )
 
     arrived = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
-        TaskShipment.path_leg_id == ShipmentPathLeg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
-    first_leg = select(ShipmentPathLeg.id).where(
-        ShipmentPathLeg.shipment_id == Shipment.id, ShipmentPathLeg.superseded_at.is_(None), ~arrived
-        ).order_by(ShipmentPathLeg.position).limit(1).correlate(Shipment).scalar_subquery()
-    follows_path = select(ShipmentPathLeg.id).where(
-        ShipmentPathLeg.id == first_leg, ShipmentPathLeg.route_id == route.id).exists()
-    future_leg, future_route = aliased(ShipmentPathLeg), aliased(TransportRoute)
+        TaskShipment.schedule_leg_id == ShipmentScheduleLeg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+    first_leg = select(ShipmentScheduleLeg.id).where(
+        ShipmentScheduleLeg.shipment_id == Shipment.id, ShipmentScheduleLeg.superseded_at.is_(None), ~arrived
+        ).order_by(ShipmentScheduleLeg.position).limit(1).correlate(Shipment).scalar_subquery()
+    follows_schedule = select(ShipmentScheduleLeg.id).where(
+        ShipmentScheduleLeg.id == first_leg, ShipmentScheduleLeg.route_id == route.id).exists()
+    future_leg, future_route = aliased(ShipmentScheduleLeg), aliased(TransportRoute)
     future_origin, future_destination = aliased(Station), aliased(Station)
     completed_future = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
-        TaskShipment.path_leg_id == future_leg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+        TaskShipment.schedule_leg_id == future_leg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
     blocked_future = select(future_leg.id).join(future_route,future_leg.route_id == future_route.id).join(
         future_origin,future_route.origin_station_id == future_origin.id).join(
         future_destination,future_route.destination_station_id == future_destination.id).where(
@@ -86,7 +86,7 @@ def list_candidate_shipments(
         Shipment.last_scanned_station_id == origin_station.id,
         Shipment.destination_station_id != origin_station.id,
         ~occupied,
-        follows_path,
+        follows_schedule,
         ~blocked_future,
     )
 
@@ -303,7 +303,7 @@ def create_transport_task(
                 TaskShipment(
                     task_id=task.id,
                     shipment_id=shipment.id,
-                    path_leg_id=path_legs[shipment.id].id,
+                    schedule_leg_id=path_legs[shipment.id].id,
                 )
                 for shipment in shipments
             ]

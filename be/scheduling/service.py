@@ -13,12 +13,12 @@ from uuid import uuid5, NAMESPACE_URL
 
 from sqlalchemy import select, func
 from errors import NetworkError, ShipmentNotFoundError
-from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentPathLeg,
+from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, ShipmentScheduleLeg,
                     ShipmentScheduleVersion, OperationLog, PathPlan, PathPlanLeg, ScheduledTrip, LineService)
-from planning.service import (active_task, current_legs, leg_state, plan_routes, routes_for_ids,
+from scheduling.path_service import (active_task, current_legs, leg_state, plan_routes, routes_for_ids,
                               validate_routes, save_path, time_and_replay)
 from network.coverage import planned_origin
-from planning.service import candidate_route_paths
+from scheduling.path_service import candidate_route_paths
 from scheduling.schemas import SchedulePreviewRequest
 
 _SECRET = os.getenv('SCHEDULE_SIGNING_KEY', '').encode() or secrets.token_bytes(32)
@@ -175,9 +175,9 @@ def sub_log(session, parent, action, entry, body):
 def activate_next(session, shipment, now, parent):
     if shipment.scheduling_mode != 'REVIEWED':
         return
-    pending = list(session.scalars(select(TaskShipment).join(ShipmentPathLeg, TaskShipment.path_leg_id == ShipmentPathLeg.id)
+    pending = list(session.scalars(select(TaskShipment).join(ShipmentScheduleLeg, TaskShipment.schedule_leg_id == ShipmentScheduleLeg.id)
         .where(TaskShipment.shipment_id == shipment.id, TaskShipment.association_state == 'PLANNED',
-               ShipmentPathLeg.superseded_at.is_(None)).order_by(ShipmentPathLeg.position)))
+               ShipmentScheduleLeg.superseded_at.is_(None)).order_by(ShipmentScheduleLeg.position)))
     if shipment.last_scanned_station_id == shipment.destination_station_id and not pending:
         shipment.schedule_status = 'COMPLETED'
         shipment.schedule_reason = None
@@ -538,7 +538,7 @@ def confirm_schedule(session, shipment_id, request, key):
         future = [leg for leg in all_legs if leg not in prefix]
         predecessor = None
         if prefix:
-            predecessor = session.scalar(select(TaskShipment).where(TaskShipment.path_leg_id == prefix[-1].id).order_by(TaskShipment.id.desc()).limit(1))
+            predecessor = session.scalar(select(TaskShipment).where(TaskShipment.schedule_leg_id == prefix[-1].id).order_by(TaskShipment.id.desc()).limit(1))
         for leg, row in zip(future, value['legs']):
             leg.travel_reference_minutes = row['travel_reference_minutes']
             leg.origin_transfer_reference_minutes = row['transfer_reference_minutes']
@@ -554,7 +554,7 @@ def confirm_schedule(session, shipment_id, request, key):
                 session.add(task); session.flush(); session.refresh(task)
             else:
                 task.schedule_revision += 1
-            entry = TaskShipment(task_id=task.id, shipment_id=shipment_id, path_leg_id=leg.id, association_state='PLANNED',
+            entry = TaskShipment(task_id=task.id, shipment_id=shipment_id, schedule_leg_id=leg.id, association_state='PLANNED',
                 schedule_version=shipment.schedule_version, predecessor_association_id=predecessor.id if predecessor else None,
                 approved_transfer_minutes=row['approved_transfer_minutes'], planned_origin_arrival_at=normalized.planned_origin_arrival_at if predecessor is None else None)
             if shipment.stage == 'AT_STATION' and predecessor is None and route.origin_station_id == shipment.last_scanned_station_id:
@@ -569,10 +569,10 @@ def confirm_schedule(session, shipment_id, request, key):
         session.flush()
         snapshot = []
         for leg in all_legs:
-            entry = session.scalar(select(TaskShipment).where(TaskShipment.path_leg_id == leg.id).order_by(TaskShipment.id.desc()).limit(1))
+            entry = session.scalar(select(TaskShipment).where(TaskShipment.schedule_leg_id == leg.id).order_by(TaskShipment.id.desc()).limit(1))
             task = session.get(TransportTask, entry.task_id) if entry else None
             route = session.get(TransportRoute, leg.route_id)
-            snapshot.append({'path_leg_id': str(leg.id), 'position': leg.position, 'route_id': str(leg.route_id), 'route_code': route.code,
+            snapshot.append({'schedule_leg_id': str(leg.id), 'position': leg.position, 'route_id': str(leg.route_id), 'route_code': route.code,
                 'origin_station_id': str(route.origin_station_id), 'destination_station_id': str(route.destination_station_id),
                 'task_id': str(task.id) if task else None, 'association_id': str(entry.id) if entry else None,
                 'planned_departure_at': task.planned_departure_at.isoformat() if task and task.planned_departure_at else None,

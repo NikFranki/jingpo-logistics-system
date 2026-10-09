@@ -5,7 +5,7 @@ from sqlalchemy import select, delete, func
 from errors import NetworkError
 from models import LineService, TransportLine, TransportLineLeg, TransportRoute, OperationLog
 from network.service import station_body, require_station
-from planning.service import plan_body, plan_routes, validate_routes, time_and_replay, digest_request, anchor_station
+from scheduling.path_service import plan_body, plan_routes, validate_routes, time_and_replay, digest_request, anchor_station
 from network.coverage import planned_origin
 from lines.schemas import LineCreateRequest
 

@@ -17,8 +17,8 @@ from orders.schemas import OrderCreateRequest
 from orders.service import create_order
 from shipments.schemas import ShipmentEventRequest
 from shipments.service import create_shipment, process_shipment_event, build_shipment_response_body, get_shipment
-from planning.schemas import PathPlanCreateRequest
-from planning.service import write_plan
+from scheduling.path_schemas import PathPlanCreateRequest
+from scheduling.path_service import write_plan
 from transport.schemas import TransportTaskCreateRequest
 from transport.service import create_transport_task, depart_transport_task, arrive_transport_task, list_candidate_shipments, get_transport_task, calculate_task_delay
 

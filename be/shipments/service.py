@@ -29,7 +29,7 @@ from models import (
     TransportRoute,
 )
 
-from planning.service import shipment_path_body, auto_bind_path, invalidate_destination_path
+from scheduling.path_service import shipment_path_body, auto_bind_path, invalidate_destination_path
 from network.coverage import require_matched_destination, match_origin, planned_origin
 
 from shipments.schemas import (

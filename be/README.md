@@ -50,17 +50,16 @@ V7 迁移：停止后端并 `pg_dump -Fc` 备份后，执行 `python -m alembic 
 
 ## V6 完整运输路径（后端已实现，V7 继续复用）
 
-以下为 V6/LEGACY 流程说明；V7 新运单使用上方的审核确认流程。当前开发库为 V7。
+以下为 V6/LEGACY 运单兼容流程说明；V7 新运单使用上方的班次审核确认流程。当前开发库为 V7。
 
-这是 V6 的旧运单路径流程说明；其路径数据现由 `transport_lines` / `transport_line_legs` 保存，路径方案管理接口已下线。首次入站自动匹配、已绑定运单路径版本和历史记录仍为兼容的旧运单执行逻辑；新计划使用线路班次审核流程。
+这是旧运单线路安排的兼容说明；线路数据由 `transport_lines` / `transport_line_legs` 保存，旧路径方案管理接口已下线。首次入站自动匹配、已绑定运单线路版本和历史记录仍用于兼容旧运单；新运单使用线路班次审核流程。
 
 ```mermaid
 flowchart LR
-    N[站点/线路] --> P[planning 路径方案]
-    P --> S[运单路径和版本]
-    S --> T[按下一段创建批量任务]
+    N[运输线路] --> S[scheduling 排程与运单线路安排]
+    S --> T[创建或激活运输任务]
     T --> S
-    S --> H[未来修改保留冻结前缀与历史]
+    S --> H[版本、冻结前缀与历史]
 ```
 
 ### 主要契约
@@ -80,7 +79,7 @@ flowchart LR
 
 停用方案不修改绑定路径，停用未来线路会阻止新任务并提示重规划，已有任务仍可完成。更正目的站废弃旧未来段，保留已到达前缀并重新匹配。所有写入要求 Idempotency-Key，版本与接续站冲突后刷新再确认。
 
-代码入口为 `planning/schemas.py`、`planning/service.py`、`planning/router.py`；通过 shipments/transport/network 集成自动绑定、下一段校验和停用保护。详细规则见 [V6 PRD](../docs/prd/v6/JINGPO-logistics-system-v6.md)、[spec](../docs/技术方案/v6/be/spec.md)、[验收记录](../docs/技术方案/v6/be/plan.md)。
+兼容代码入口为 `scheduling/path_schemas.py`、`scheduling/path_service.py`、`scheduling/path_router.py`；不再有独立 `planning` 模块。它通过 shipments/transport/network 集成旧运单自动绑定、下一段校验和停用保护。详细规则见 [V6 PRD](../docs/prd/v6/JINGPO-logistics-system-v6.md)、[spec](../docs/技术方案/v6/be/spec.md)、[验收记录](../docs/技术方案/v6/be/plan.md)。
 
 ### 从 V5 升级
 

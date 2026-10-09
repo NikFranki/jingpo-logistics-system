@@ -122,7 +122,7 @@ class ScheduleLeg(BaseModel):
     planned_travel_minutes: int | None = None
     approved_transfer_minutes: int | None = None
     planned_origin_arrival_at: datetime | None = None
-    path_leg_id: str
+    schedule_leg_id: str
     position: int
     route_id: str
     route_code: str

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, aliased
 
 from errors import IdempotencyKeyReusedError, NetworkError
 from logistics_types import TaskStatus
-from models import OperationLog, Shipment, Station, TransportRoute, TransportTask, ShipmentPathLeg, TaskShipment
+from models import OperationLog, Shipment, Station, TransportRoute, TransportTask, ShipmentScheduleLeg, TaskShipment
 
 
 def station_body(station: Station) -> dict:
@@ -89,12 +89,12 @@ def _station_changes(session: Session, station: Station, changes: dict):
             endpoints, TransportTask.status.in_([TaskStatus.PENDING_DEPARTURE, TaskStatus.IN_TRANSIT, TaskStatus.WAITING_CARGO, TaskStatus.WAITING_PREDECESSOR])).limit(1))
         routes = session.scalar(select(TransportRoute.id).where(endpoints, TransportRoute.enabled.is_(True)).limit(1))
         completed = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id==TransportTask.id).where(
-            TaskShipment.path_leg_id==ShipmentPathLeg.id,TransportTask.status==TaskStatus.ARRIVED).exists()
-        future_paths = session.scalar(select(ShipmentPathLeg.id).join(TransportRoute,
-            ShipmentPathLeg.route_id==TransportRoute.id).join(Shipment,ShipmentPathLeg.shipment_id==Shipment.id).where(
-            endpoints,ShipmentPathLeg.superseded_at.is_(None),Shipment.stage != "SIGNED",~completed).limit(1))
-        if inventory or tasks or routes or future_paths:
-            raise NetworkError("NETWORK_RESOURCE_IN_USE", "站点仍有在站运单、未完成任务、未来路径或启用线路，请先处理")
+            TaskShipment.schedule_leg_id==ShipmentScheduleLeg.id,TransportTask.status==TaskStatus.ARRIVED).exists()
+        future_legs = session.scalar(select(ShipmentScheduleLeg.id).join(TransportRoute,
+            ShipmentScheduleLeg.route_id==TransportRoute.id).join(Shipment,ShipmentScheduleLeg.shipment_id==Shipment.id).where(
+            endpoints,ShipmentScheduleLeg.superseded_at.is_(None),Shipment.stage != "SIGNED",~completed).limit(1))
+        if inventory or tasks or routes or future_legs:
+            raise NetworkError("NETWORK_RESOURCE_IN_USE", "站点仍有在站运单、未完成任务、未来计划段或启用线路，请先处理")
 
 
 def write_network(session: Session, kind: str, request, key: UUID, resource_id: int | None = None) -> dict:

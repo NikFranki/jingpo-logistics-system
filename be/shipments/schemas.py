@@ -10,7 +10,7 @@ from pydantic import (
     Field,
     model_validator,
 )
-from planning.schemas import ShipmentTransportPathResponse
+from scheduling.path_schemas import ShipmentTransportPathResponse
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 class AllowedActionResponse(BaseModel):

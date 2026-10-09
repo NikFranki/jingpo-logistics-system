@@ -17,7 +17,6 @@ from orders.router import router as orders_router
 from network.router import router as network_router
 from shipments.router import router as shipments_router
 from transport.router import router as transport_router
-from planning.router import router as planning_router
 from scheduling.router import router as scheduling_router
 from regions.router import router as regions_router
 from lines.router import router as lines_router
@@ -136,7 +135,6 @@ app.include_router(orders_router)
 app.include_router(network_router)
 app.include_router(shipments_router)
 app.include_router(transport_router)
-app.include_router(planning_router)
 app.include_router(scheduling_router)
 app.include_router(regions_router)
 app.include_router(lines_router)

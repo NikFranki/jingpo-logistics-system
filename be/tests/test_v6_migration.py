@@ -10,8 +10,8 @@ from models import Shipment,TransportTask,TaskShipment
 from transport.schemas import TransportTaskCreateRequest,TransportTaskResponse
 from transport.service import (build_create_task_request_hash,create_transport_task,
     depart_transport_task,arrive_transport_task)
-from planning.schemas import ShipmentPathUpdateRequest,PathPlanCreateRequest
-from planning.service import write_shipment_path,shipment_path_body,write_plan
+from scheduling.path_schemas import ShipmentPathUpdateRequest,PathPlanCreateRequest
+from scheduling.path_service import write_shipment_path,shipment_path_body,write_plan
 from shipments.schemas import ShipmentDetailResponse
 from errors import InvalidTaskShipmentError
 import test_v2_migration as helpers

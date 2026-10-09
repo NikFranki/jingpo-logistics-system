@@ -302,8 +302,8 @@ class V7ScheduleTests(unittest.TestCase):
     def test_reference_bounds_and_invalid_plan_overrides_are_rejected(self):
         from pydantic import ValidationError
         from network.schemas import StationCreateRequest, RouteCreateRequest
-        from planning.schemas import PathPlanCreateRequest
-        from planning.service import write_plan
+        from scheduling.path_schemas import PathPlanCreateRequest
+        from scheduling.path_service import write_plan
         for minutes in (-1, True, '10', 525601):
             with self.assertRaises(ValidationError): StationCreateRequest(code='BOUNDS', name='bounds', transfer_minutes=minutes)
         for minutes in (0, -1, True, '10', 525601):

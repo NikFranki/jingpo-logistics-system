@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import ValidationError
 from db import get_db
 from errors import IdempotencyKeyReusedError, NetworkError
-from models import TransportLine
-from planning.router import require_shipment
+from models import Shipment, TransportLine
 from lines.schemas import (LineCreateRequest, LineUpdateRequest, LineResponse, LineOptionsResponse,
     LineListResponse, LineServiceCreateRequest, LineServiceUpdateRequest, LineServiceResponse,
     GenerateTripsRequest, ScheduledTripListResponse, ServiceOptionsResponse)
@@ -64,7 +63,10 @@ def update_line(line_id: int, request: LineUpdateRequest, idempotency_key: Key, 
 
 @router.get('/shipments/{shipment_id}/line-options', response_model=LineOptionsResponse)
 def read_line_options(shipment_id: int, session: DB):
-    return line_options(session, require_shipment(session, shipment_id))
+    shipment = session.get(Shipment, shipment_id)
+    if shipment is None:
+        raise NetworkError('SHIPMENT_NOT_FOUND', '运单不存在', 404)
+    return line_options(session, shipment)
 
 
 @router.get('/transport-lines/{line_id}/services', response_model=list[LineServiceResponse])

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, func
 from models import (Shipment, Station, TransportRoute, TransportTask, TaskShipment, OperationLog, PathPlan, PathPlanLeg,
-                    ShipmentPathLeg, ShipmentPathVersion, ShipmentScheduleVersion)
+                    ShipmentScheduleLeg, ShipmentPathVersion, ShipmentScheduleVersion)
 from logistics_types import ShipmentStage, TaskStatus
 from errors import (NetworkError, ShipmentNotFoundError, IdempotencyKeyReusedError)
 from network.service import require_enabled_route
@@ -146,14 +146,14 @@ def write_plan(session, request, key, plan_id=None):
 
 
 def current_legs(session, shipment_id):
-    return list(session.scalars(select(ShipmentPathLeg).where(
-        ShipmentPathLeg.shipment_id == shipment_id,ShipmentPathLeg.superseded_at.is_(None))
-        .order_by(ShipmentPathLeg.position)))
+    return list(session.scalars(select(ShipmentScheduleLeg).where(
+        ShipmentScheduleLeg.shipment_id == shipment_id,ShipmentScheduleLeg.superseded_at.is_(None))
+        .order_by(ShipmentScheduleLeg.position)))
 
 
 def leg_task(session, leg):
     return session.execute(select(TaskShipment,TransportTask).join(TransportTask,TaskShipment.task_id==TransportTask.id)
-        .where(TaskShipment.path_leg_id==leg.id,
+        .where(TaskShipment.schedule_leg_id==leg.id,
                (TaskShipment.released_at.is_(None)) | (TransportTask.status==TaskStatus.ARRIVED))
         .order_by(TaskShipment.id.desc()).limit(1)).one_or_none()
 
@@ -258,11 +258,11 @@ def save_path(session, shipment, routes, occurred_at, reason, plan=None):
     if active is not None and active[1].status == TaskStatus.PENDING_DEPARTURE:
         conflict("待发车任务占用路径，请先取消任务", "PATH_TASK_OCCUPIED")
     # Legacy in-transit tasks have no path leg: attach their unchanged route as the frozen prefix.
-    if active is not None and active[1].status == TaskStatus.IN_TRANSIT and active[0].path_leg_id is None:
+    if active is not None and active[1].status == TaskStatus.IN_TRANSIT and active[0].schedule_leg_id is None:
         if old: conflict("旧任务与当前路径关联不一致")
-        leg = ShipmentPathLeg(shipment_id=shipment.id,position=0,route_id=active[1].route_id)
+        leg = ShipmentScheduleLeg(shipment_id=shipment.id,position=0,route_id=active[1].route_id)
         session.add(leg); session.flush()
-        active[0].path_leg_id = leg.id
+        active[0].schedule_leg_id = leg.id
         prefix.append(leg)
     frozen_ids = {leg.id for leg in prefix}
     for leg in old:
@@ -270,7 +270,7 @@ def save_path(session, shipment, routes, occurred_at, reason, plan=None):
             if leg_state(session,leg)[0] != 'PENDING': conflict("不能修改已执行或被任务占用的路径段")
             leg.superseded_at = occurred_at
     session.flush()
-    new = [ShipmentPathLeg(shipment_id=shipment.id,position=len(prefix)+i,route_id=r.id) for i,r in enumerate(routes)]
+    new = [ShipmentScheduleLeg(shipment_id=shipment.id,position=len(prefix)+i,route_id=r.id) for i,r in enumerate(routes)]
     session.add_all(new); session.flush()
     shipment.path_version += 1
     shipment.updated_at = datetime.now(timezone.utc)

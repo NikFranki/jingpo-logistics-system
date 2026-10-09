@@ -391,8 +391,8 @@ class TaskShipment(Base):
             "shipment_id",
             name="uq_task_shipments",
         ),
-        Index("uq_task_shipments_active_leg", "path_leg_id", unique=True,
-              postgresql_where=text("association_state IN ('PLANNED','ACTIVE') AND path_leg_id IS NOT NULL")),
+        Index("uq_task_shipments_active_schedule_leg", "schedule_leg_id", unique=True,
+              postgresql_where=text("association_state IN ('PLANNED','ACTIVE') AND schedule_leg_id IS NOT NULL")),
         Index(
             "uq_task_shipments_active",
             "shipment_id",
@@ -417,7 +417,7 @@ class TaskShipment(Base):
     shipment_id: Mapped[int] = mapped_column(
         ForeignKey("shipments.id"),
     )
-    path_leg_id: Mapped[int | None] = mapped_column(ForeignKey("shipment_path_legs.id"))
+    schedule_leg_id: Mapped[int | None] = mapped_column(ForeignKey("shipment_schedule_legs.id"))
     released_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
     )
@@ -586,13 +586,13 @@ class ScheduledTrip(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class ShipmentPathLeg(Base):
+class ShipmentScheduleLeg(Base):
     travel_reference_minutes: Mapped[int | None] = mapped_column(Integer)
     origin_transfer_reference_minutes: Mapped[int | None] = mapped_column(Integer)
-    __tablename__ = "shipment_path_legs"
+    __tablename__ = "shipment_schedule_legs"
     __table_args__ = (
-        CheckConstraint("position >= 0", name="ck_shipment_path_legs_position"),
-        Index("uq_shipment_path_legs_current", "shipment_id", "position", unique=True,
+        CheckConstraint("position >= 0", name="ck_shipment_schedule_legs_position"),
+        Index("uq_shipment_schedule_legs_current", "shipment_id", "position", unique=True,
               postgresql_where=text("superseded_at IS NULL")),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
