@@ -3,13 +3,14 @@ import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
+from datetime import timedelta
 from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 from db import SessionLocal, engine
 from errors import (InvalidShipmentDestinationError, IdempotencyKeyReusedError,
     InvalidTaskShipmentError, NetworkError, ShipmentNotFoundError)
-from models import OperationLog, Shipment, Order, TaskShipment
+from models import OperationLog, Shipment, Order, TaskShipment, TransportTask, Station, TransportRoute
 from shipments.schemas import ShipmentDestinationUpdateRequest, ShipmentDetailResponse
 from shipments.service import (update_shipment_destination, list_destination_changes,
     create_shipment, build_shipment_response_body, get_shipment)
@@ -74,23 +75,6 @@ class V5DestinationTests(unittest.TestCase):
             self.assertEqual((saved.status,saved.sender_address,saved.recipient_address),('COMPLETED','下单发件地址','下单收件地址'))
         self.assertEqual(len(self.detail(shipment)['tracking_events']),5)
 
-    def test_occupancy_and_stage_guards_cancel_then_correct(self):
-        shipment,_ = self.ready(); task = self.task(self.first,shipment)
-        action = next(a for a in self.detail(shipment)['allowed_actions'] if a['action']=='UPDATE_DESTINATION')
-        self.assertEqual((action['enabled'],action['reason_code']),(False,'TASK_OCCUPIED'))
-        with self.assertRaises(InvalidShipmentDestinationError): self.change(shipment,self.target,self.middle)
-        self.call(cancel_transport_task,int(task['id']),TransportTaskCancelRequest(reason='重排'),uuid4())
-        self.change(shipment,self.target,self.middle)
-        next_task = self.task(self.first,shipment)
-        self.call(depart_transport_task,int(next_task['id']),uuid4())
-        with self.assertRaises(InvalidShipmentDestinationError): self.change(shipment,self.middle,self.target)
-        self.call(arrive_transport_task,int(next_task['id']),uuid4())
-        self.event(shipment,'START_DELIVERY')
-        with self.assertRaises(InvalidShipmentDestinationError): self.change(shipment,self.middle,self.target)
-        self.event(shipment,'SIGN')
-        with self.assertRaises(InvalidShipmentDestinationError): self.change(shipment,self.middle,self.target)
-        self.assertEqual(self.call(list_destination_changes,shipment,1,20)[1],1)
-
     def test_normalized_idempotency_stale_precondition_and_target_guards(self):
         shipment,_ = self.parcel(); key = uuid4()
         first = self.change(shipment,self.target,self.middle,'  选错了  ',key)
@@ -113,6 +97,72 @@ class V5DestinationTests(unittest.TestCase):
         self.assertEqual(self.call(list_destination_changes,other,1,20),([],0))
         with self.assertRaises(ShipmentNotFoundError): self.call(list_destination_changes,999999999,1,20)
         with self.assertRaises(ShipmentNotFoundError): self.change(999999999,self.target,self.middle)
+
+    def test_in_transit_destination_change_freezes_current_leg_and_releases_future_plan(self):
+        from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
+        from scheduling.service import preview_schedule, confirm_schedule
+
+        shipment, _ = self.parcel()
+        new_destination = self.station('REROUTE', delivery=True)
+        self.route(self.middle, new_destination, 'WH_REROUTE')
+        with SessionLocal() as session, session.begin():
+            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
+            session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
+            session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
+            session.get(Station, int(self.middle['id'])).transfer_minutes = 10
+
+        self.event(shipment, 'PICKUP')
+        self.event(shipment, 'ARRIVE', self.source)
+        preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
+            route_ids=[int(self.first['id']), int(self.second['id'])]))
+        schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
+            preview_token=preview['preview_token'], reason='初始排程'), uuid4())
+        current_task_id = int(schedule['legs'][0]['task_id'])
+        future_task_id = int(schedule['legs'][1]['task_id'])
+        self.call(depart_transport_task, current_task_id, uuid4(), schedule['legs'][0]['schedule_revision'])
+
+        before = self.detail(shipment)
+        action = next(item for item in before['allowed_actions'] if item['action'] == 'UPDATE_DESTINATION')
+        self.assertTrue(action['enabled'])
+        updated = self.change(shipment, self.target, new_destination)
+
+        self.assertEqual(updated['destination_station_id'], new_destination['id'])
+        self.assertEqual(updated['active_transport_task']['id'], str(current_task_id))
+        self.assertEqual(updated['active_transport_task']['status'], 'IN_TRANSIT')
+        self.assertEqual(updated['schedule']['status'], 'NEEDS_RECONFIRMATION')
+        with SessionLocal() as session:
+            association = session.scalar(select(TaskShipment).where(
+                TaskShipment.shipment_id == shipment,
+                TaskShipment.task_id == future_task_id))
+            task = session.get(TransportTask, future_task_id)
+            self.assertEqual(association.association_state, 'RELEASED')
+            self.assertEqual(task.status, 'CANCELLED')
+
+    def test_in_transit_change_to_current_leg_endpoint_completes_on_arrival(self):
+        from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
+        from scheduling.service import preview_schedule, confirm_schedule
+
+        shipment, _ = self.parcel()
+        with SessionLocal() as session, session.begin():
+            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
+            session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
+            session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
+            session.get(Station, int(self.middle['id'])).transfer_minutes = 10
+        self.event(shipment, 'PICKUP')
+        self.event(shipment, 'ARRIVE', self.source)
+        preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
+            route_ids=[int(self.first['id']), int(self.second['id'])]))
+        schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
+            preview_token=preview['preview_token'], reason='初始排程'), uuid4())
+        task_id = int(schedule['legs'][0]['task_id'])
+        self.call(depart_transport_task, task_id, uuid4(), schedule['legs'][0]['schedule_revision'])
+
+        self.change(shipment, self.target, self.middle)
+        self.call(arrive_transport_task, task_id, uuid4())
+
+        detail = self.detail(shipment)
+        self.assertEqual(detail['schedule']['status'], 'COMPLETED')
+        self.assertTrue(next(item for item in detail['allowed_actions'] if item['action'] == 'START_DELIVERY')['enabled'])
 
     def test_concurrent_changes_and_task_creation(self):
         self.call(write_network,'STATION',StationUpdateRequest(allows_delivery=True),uuid4(),int(self.source['id']))

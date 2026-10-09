@@ -32,8 +32,9 @@ sequenceDiagram
 | 校验 | 结果 |
 | --- | --- |
 | 运单不存在 | 404 |
-| 阶段不属于 PENDING_PICKUP/PICKED_UP/AT_STATION | 409 |
-| 存在任何未释放 TaskShipment | 409，不依赖任务状态推断占用 |
+| 待揽收、已揽收、在站 | 只有不存在未释放任务关联时可更正 |
+| 运输中且存在 ACTIVE 的 IN_TRANSIT 任务 | 可更正；当前任务和当前路径段保持不变，本运单的 PLANNED 后续关联释放并重排 |
+| 运输中但没有 ACTIVE 的 IN_TRANSIT 任务、派送中、已签收 | 409 |
 | expected_destination_station_id 与当前不同 | 409，防止过期提交 |
 | 新站与当前相同 | 409，无写入，无更正历史 |
 | 新站不存在 | 404，沿用 NETWORK_RESOURCE_NOT_FOUND |
@@ -44,13 +45,13 @@ sequenceDiagram
 
 规范化 body 和 action/shipment_id 计算 hash；事务先锁时钟，与任务创建、网络配置、事件写操作一致，再查 key。已有同 key 同 hash 返回首次缓存，即使当前阶段/目的站已变化；不同 hash 拒绝。新 key 重复目标若当前未变化则按无变化拒绝，不制造第二次更正。
 
-更新仅 destination_station_id、updated_at（系统实际更新时间）；状态、扫描站、履约地址、订单、事件、任务关联不修改。记录 action=UPDATE_SHIPMENT_DESTINATION，resource_type=SHIPMENT，before_data 包含原目的站，after_data 包含新目的站及规范化 reason，occurred_at 使用演示时钟，response_body 为成功详情。更新与日志在同一事务，日志失败必须回滚目的站。
+更新 destination_station_id、updated_at（系统实际更新时间）及必要的运输安排状态；状态、扫描站、履约地址、订单和物流事件不因更正而伪造。运输中更正保留 ACTIVE 在途任务；逐条释放本运单未发车的后续关联并保留释放原因，共享任务上的其他运单不受影响；没有其他成员的未来任务取消。路径冻结当前在途段，运输计划标记 NEEDS_RECONFIRMATION，待当前段实际到站后从该站按新目的站重新安排。记录 action=UPDATE_SHIPMENT_DESTINATION，resource_type=SHIPMENT，before_data 包含原目的站，after_data 包含新目的站及规范化 reason，occurred_at 使用演示时钟，response_body 为成功详情。更新、任务关联释放和日志在同一事务，失败必须整体回滚。
 
 并发：两个相同原站前提的不同目标只有一个成功；更正与任务创建只允许符合顺序的合法结果，不能让有任务占用的运单被更正；更正与目标站停用/移除派送能力共用时钟锁，不能留下目的站失效的未签收运单。
 
 ## 3. 操作资格与历史
 
-运单详情 allowed_actions 新增 UPDATE_DESTINATION：允许阶段且没有未释放关联时启用。无目标站参数的资格不保证目标可用或路径可达，提交重新校验。不可用原因区分阶段与任务占用；已有动作规则保持。
+运单详情 allowed_actions 新增 UPDATE_DESTINATION：待揽收/已揽收/在站要求无未释放任务关联；运输中要求存在 ACTIVE 的 IN_TRANSIT 任务。无目标站参数的资格不保证目标可用或路径可达，提交重新校验。不可用原因区分阶段、任务占用和缺少当前在途任务；已有动作规则保持。
 
 `GET /api/v1/shipments/{id}/destination-changes?page=1&page_size=20`，page>=1，page_size=1..100。不存在运单404；无更正返回空分页。按成功更正日志 id 倒序读取，不从物流轨迹推断。
 

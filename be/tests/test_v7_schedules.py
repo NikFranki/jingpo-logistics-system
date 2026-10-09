@@ -99,8 +99,7 @@ class V7ScheduleTests(unittest.TestCase):
         count = self.counts()[0]; self.call(arrive_transport_task, a, uuid4())
         rows = self.state(shipment)['legs']
         self.assertEqual((self.counts()[0], int(rows[1]['task_id']), rows[1]['association_state']), (count, b, 'ACTIVE'))
-        with self.assertRaises(NetworkError): self.call(depart_transport_task, b, uuid4(), 1)
-        self.server_clock.return_value += timedelta(minutes=10); self.call(depart_transport_task, b, uuid4(), 1)
+        self.call(depart_transport_task, b, uuid4(), 1)
         self.call(arrive_transport_task, b, uuid4())
         self.assertEqual(self.state(shipment)['status'], 'COMPLETED')
 

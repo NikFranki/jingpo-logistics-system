@@ -94,7 +94,15 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
     <ModalForm<OrderFormValues> title="创建模拟订单" open={formOpen} onOpenChange={setFormOpen} initialValues={blankOrderForm} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '创建订单' } }} onFinish={async values => {
       const body = orderInput(values)
       const saved = await mutate(`create-order:${JSON.stringify(body)}`, key => api.createOrder(body, key), '订单已创建')
-      if (saved) { actionRef.current?.reload(); navigate(`/orders/${saved.id}`) }
+      if (saved) {
+        actionRef.current?.reload()
+        try {
+          const createdOrder = await api.order(saved.id)
+          navigate(createdOrder.shipment ? `/shipments/${createdOrder.shipment.id}` : `/orders/${saved.id}`)
+        } catch {
+          navigate(`/orders/${saved.id}`)
+        }
+      }
       return Boolean(saved)
     }}>
       <ProFormText name="product_name" label="商品名称" rules={[{ required: true }]} fieldProps={{ maxLength: 100 }} />

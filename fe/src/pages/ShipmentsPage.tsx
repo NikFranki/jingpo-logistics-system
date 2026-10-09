@@ -13,7 +13,6 @@ type ShipmentEvent = 'PICKUP' | 'ARRIVE' | 'START_DELIVERY' | 'SIGN'
 type PathForm = { line_id?: string; reason: string }
 const pathStatusText: Record<string, string> = { WAITING_FIRST_ARRIVAL: '等待首次入站', NEEDS_PLANNING: '待规划', READY: '可按下一段运输', RESERVED: '等待任务发车', IN_TRANSIT: '当前段运输中', COMPLETED: '路径已完成', BLOCKED: '未来路径受阻' }
 const pathLegStateText: Record<string, string> = { PENDING: '待运输', RESERVED: '待发车', IN_TRANSIT: '运输中', ARRIVED: '已到达' }
-const scheduleStatusText: Record<string, string> = { NOT_CONFIRMED: '待审核', CONFIRMED: '已确认', NEEDS_RECONFIRMATION: '需要重新审核', BLOCKED: '计划受阻', COMPLETED: '运输计划已完成' }
 const associationStateText: Record<string, string> = { PLANNED: '未来待执行', ACTIVE: '当前执行段', RELEASED: '已解除' }
 
 function fullAddress(address: ShipmentDetail, side: 'sender' | 'recipient') {
@@ -250,11 +249,6 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           <Text strong>全程运输计划</Text>
         </Space>
         {detail.schedule ? <>
-          <Alert type={detail.schedule.status === 'BLOCKED' || detail.schedule.status === 'NEEDS_RECONFIRMATION' ? 'warning' : detail.schedule.status === 'COMPLETED' ? 'success' : 'info'} showIcon message={`${scheduleStatusText[detail.schedule.status] ?? detail.schedule.status} · 计划版本 v${detail.schedule.version}`} description={<>
-            {detail.schedule.origin_station_id && <>计划起点：<StationName id={detail.schedule.origin_station_id} />。 </>}
-            {detail.schedule.reason && <>{detail.schedule.reason} </>}
-            <Text type="secondary">计划时间是审核基准；最新预测会随运输进度变化，实际发车和到达仍由操作记录。</Text>
-          </>} style={{ marginBottom: 12 }} />
           {detail.schedule.configuration_risks.map((risk, index) => <Alert key={index} type="warning" showIcon message={risk.message ?? '计划中的线路或站点配置已停用'} style={{ marginBottom: 8 }} />)}
           {detail.schedule.legs.length ? <Table rowKey="path_leg_id" size="small" pagination={false} dataSource={detail.schedule.legs} scroll={{ x: 1050 }} columns={[
             { title: '段', width: 56, render: (_, leg) => leg.position + 1 },
@@ -399,6 +393,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         confirmLoading={busy}
         okButtonProps={{ disabled: busy || !destinationAction?.enabled || network.stations.length === 0 }}
       >
+        {detail.stage === 'IN_TRANSIT' && <Alert type="warning" showIcon message="货物正在运输途中" description="当前运输段会照常送到原定站点；本次只调整后续路线，抵达后再按新目的站重新安排。" style={{ marginBottom: 16 }} />}
         {destinationModalStep === 'edit' ? <>
           {network.error && <Alert type="error" showIcon message="站点列表加载失败" description={network.error} style={{ marginBottom: 16 }} />}
           <Alert type="info" showIcon message="更正目的站不会改变货物位置或收件地址。请确认新站能够负责该地址的配送。" style={{ marginBottom: 16 }} />

@@ -1,5 +1,6 @@
 from typing import Annotated, Literal
 from uuid import UUID, uuid5, NAMESPACE_URL
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
@@ -10,6 +11,10 @@ from regions.addresses import address_body
 from logistics_types import ShipmentStage
 from shipments.schemas import ShipmentDetailResponse, ShipmentCreateRequest
 from shipments.service import create_shipment
+from lines.service_schedules import shipment_service_options
+from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
+from scheduling.service import preview_schedule, confirm_schedule
+import business_time
 
 from errors import (
     IdempotencyKeyReusedError,
@@ -37,6 +42,35 @@ router = APIRouter(
     prefix="/api/v1/orders",
     tags=["orders"],
 )
+
+
+def auto_schedule_shipment(session: Session, shipment_id: int, idempotency_key: UUID) -> None:
+    from_date = business_time.server_now().date()
+    options = shipment_service_options(
+        session, shipment_id, from_date, from_date + timedelta(days=29)
+    )
+    if not options["items"]:
+        return
+
+    preview = preview_schedule(
+        session,
+        shipment_id,
+        SchedulePreviewRequest(scheduled_trip_id=int(options["items"][0]["trip_id"])),
+    )
+    if not preview["can_confirm"]:
+        return
+
+    session.rollback()
+    confirm_schedule(
+        session,
+        shipment_id,
+        ScheduleConfirmRequest(
+            preview_token=preview["preview_token"],
+            reason="订单创建后自动安排最近可用班次",
+            acknowledged_warning_codes=[item["code"] for item in preview["warnings"]],
+        ),
+        uuid5(NAMESPACE_URL, f"jingpo:auto-schedule:{idempotency_key}"),
+    )
 
 
 def to_order_response(order: Order) -> OrderResponse:
@@ -104,7 +138,7 @@ def create_order(
             idempotency_key=idempotency_key,
         )
         try:
-            create_shipment(
+            shipment_body, _ = create_shipment(
                 session=session,
                 order_id=int(response_body["id"]),
                 idempotency_key=uuid5(NAMESPACE_URL, f"jingpo:auto-shipment:{idempotency_key}"),
@@ -112,6 +146,14 @@ def create_order(
                 scheduling_mode_explicit=True,
             )
             response_body["status"] = "SHIPMENT_CREATED"
+            try:
+                auto_schedule_shipment(
+                    session,
+                    int(shipment_body["id"]),
+                    uuid5(NAMESPACE_URL, f"jingpo:auto-schedule-key:{idempotency_key}"),
+                )
+            except NetworkError:
+                pass
         except NetworkError as error:
             if error.code not in {
                 "DESTINATION_ADDRESS_REQUIRED",

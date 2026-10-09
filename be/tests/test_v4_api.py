@@ -19,8 +19,6 @@ class V4ApiTests(unittest.TestCase):
         target=self.station(prefix+'_D',allows_delivery=True)
         status, route=self.request('/routes','POST',dict(code=prefix+'_R',origin_station_id=int(source['id']),destination_station_id=int(target['id']),delay_monitoring_enabled=True))
         self.assertEqual(status,201,route)
-        status,plan=self.request('/path-plans','POST',dict(code=prefix+'_PLAN',name='HTTP path',route_ids=[int(route['id'])]))
-        self.assertEqual(status,201,plan)
         status,order=self.request('/orders/create','POST',dict(product_name='V4',quantity=1,sender_name='s',sender_address='s',recipient_name='r',recipient_address='r'))
         self.assertEqual(status,201,order)
         status,parcel=self.request('/orders/'+order['id']+'/shipment','POST',{'destination_station_id':int(target['id'])})

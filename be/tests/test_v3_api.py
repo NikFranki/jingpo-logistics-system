@@ -100,12 +100,10 @@ class V3ApiTests(unittest.TestCase):
         code=prefix+'_SD'
         status,route=self.request('/routes','POST',{'code':code,'origin_station_id':int(source['id']),'destination_station_id':int(target['id']),'delay_monitoring_enabled':True})
         self.assertEqual(status,201,route)
-        status,plan=self.request('/path-plans','POST',dict(code=prefix+'_PLAN',name='HTTP path',route_ids=[int(route['id'])]))
-        self.assertEqual(status,201,plan)
         self.assertEqual(self.request('/routes/'+route['id'],'PATCH',{'destination_station_id':int(source['id'])})[0],422)
         status,order=self.request('/orders/create','POST',{'product_name':'HTTP 样本','quantity':1,'sender_name':'s','sender_address':'原发件地址','recipient_name':'r','recipient_address':'原收件地址'})
         self.assertEqual(status,201,order)
-        self.assertEqual(self.request('/orders/'+order['id']+'/shipment','POST',{})[0],422)
+        self.assertEqual(self.request('/orders/'+order['id']+'/shipment','POST',{})[0],409)
         status,shipment=self.request('/orders/'+order['id']+'/shipment','POST',{'destination_station_id':int(target['id'])})
         self.assertEqual(status,201,shipment)
         self.assertEqual(shipment['destination_station_id'],target['id'])

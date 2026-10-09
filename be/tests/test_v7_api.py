@@ -19,14 +19,11 @@ class V7ApiTests(unittest.TestCase):
         source = self.station(prefix+'_S', allows_first_arrival=True)
         middle = self.station(prefix+'_M', transfer_minutes=10)
         target = self.station(prefix+'_T', allows_delivery=True)
-        routes = []
-        for suffix, a, b in [('SM', source, middle), ('MT', middle, target)]:
-            status, route = self.request('/routes', 'POST', dict(code=prefix+'_'+suffix,
-                origin_station_id=int(a['id']), destination_station_id=int(b['id']), travel_minutes=60))
-            self.assertEqual(status, 201, route); routes.append(route)
-        status, plan = self.request('/path-plans', 'POST', dict(code=prefix+'_PLAN', name='V7计划',
-            route_ids=[int(r['id']) for r in routes], transfer_overrides=[dict(station_id=int(middle['id']), minutes=15)]))
-        self.assertEqual(status, 201, plan)
+        status, line = self.request('/transport-lines', 'POST', dict(code=prefix+'_LINE', name='V7线路',
+            station_ids=[int(source['id']), int(middle['id']), int(target['id'])],
+            legs=[dict(travel_minutes=60), dict(travel_minutes=60)],
+            transfer_overrides=[dict(station_id=int(middle['id']), minutes=15)]))
+        self.assertEqual(status, 201, line)
         _, order = self.request('/orders/create', 'POST', dict(product_name='V7', quantity=1,
             sender_name='s', sender_address='s', recipient_name='r', recipient_address='r'))
         status, parcel = self.request('/orders/'+order['id']+'/shipment', 'POST',
@@ -34,7 +31,7 @@ class V7ApiTests(unittest.TestCase):
         self.assertEqual(status, 201, parcel); self.assertEqual(parcel['scheduling_mode'], 'REVIEWED')
         base = '/shipments/'+parcel['id']
         status, preview = self.request(base+'/schedule/preview', 'POST', dict(origin_station_id=int(source['id']),
-            plan_id=int(plan['id']), expected_plan_version=1))
+            line_id=int(line['id']), expected_line_version=1))
         self.assertEqual(status, 200, preview); self.assertEqual(preview['legs'][1]['transfer_reference_minutes'], 15)
         key = str(uuid4()); body = dict(preview_token=preview['preview_token'], reason='已审核')
         status, confirmed = self.request(base+'/schedule/confirm', 'POST', body, key)
@@ -56,7 +53,7 @@ class V7ApiTests(unittest.TestCase):
         self.assertEqual(self.request(base+'/schedule')[1]['status'], 'NEEDS_RECONFIRMATION')
         for path in ('/shipments/0/schedule', base+'/schedule-history?page_size=101'):
             self.assertEqual(self.request(path)[0], 422)
-        self.assertEqual(self.request(base+'/schedule/preview', 'POST', dict(plan_id=True))[0], 422)
+        self.assertEqual(self.request(base+'/schedule/preview', 'POST', dict(line_id=True))[0], 422)
         self.assertEqual(self.request(base+'/schedule/confirm', 'POST', dict(preview_token='bad', reason='确认'))[0], 409)
         self.assertEqual(self.request(base+'/schedule/preview', 'POST', dict(origin_station_id=int(source['id']),
             first_departure_at='2026-10-01T17:30:01+08:00'))[0], 422)

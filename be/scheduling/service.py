@@ -173,13 +173,16 @@ def sub_log(session, parent, action, entry, body):
 
 
 def activate_next(session, shipment, now, parent):
-    if shipment.scheduling_mode != 'REVIEWED' or shipment.schedule_status in ('NEEDS_RECONFIRMATION', 'BLOCKED'):
+    if shipment.scheduling_mode != 'REVIEWED':
         return
     pending = list(session.scalars(select(TaskShipment).join(ShipmentPathLeg, TaskShipment.path_leg_id == ShipmentPathLeg.id)
         .where(TaskShipment.shipment_id == shipment.id, TaskShipment.association_state == 'PLANNED',
                ShipmentPathLeg.superseded_at.is_(None)).order_by(ShipmentPathLeg.position)))
     if shipment.last_scanned_station_id == shipment.destination_station_id and not pending:
         shipment.schedule_status = 'COMPLETED'
+        shipment.schedule_reason = None
+        return
+    if shipment.schedule_status in ('NEEDS_RECONFIRMATION', 'BLOCKED'):
         return
     if not pending:
         if shipment.schedule_version:

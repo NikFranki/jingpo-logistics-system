@@ -30,8 +30,6 @@ class ServerTimeApiTests(unittest.TestCase):
         target = self.station(prefix+'_D', allows_delivery=True)
         _, route = self.request('/routes', 'POST', dict(code=prefix+'_R',
             origin_station_id=int(source['id']), destination_station_id=int(target['id'])))
-        self.assertEqual(self.request('/path-plans', 'POST', dict(code=prefix+'_P', name='time path',
-            route_ids=[int(route['id'])]))[0], 201)
         _, order = self.request('/orders/create', 'POST', dict(product_name='time', quantity=1,
             sender_name='s', sender_address='s', recipient_name='r', recipient_address='r'))
         _, shipment = self.request('/orders/'+order['id']+'/shipment', 'POST',

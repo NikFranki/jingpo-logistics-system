@@ -149,23 +149,23 @@ export default function LineServicesPage({ revision, busy, mutate }: Props) {
       <Table<LineTimetable> rowKey="id" loading={loading} columns={columns} dataSource={services} pagination={{ pageSize: 10, showSizeChanger: true }} scroll={{ x: 1150 }} locale={{ emptyText: '该线路还没有班次规则。' }} />
       <Text type="secondary">已启用的每日班次数：{services.filter(service => service.enabled).length}。载运率需运力口径与实际占用统计支持，当前不展示。</Text>
       {line && <Modal title={editing ? '编辑每日班次' : '新增每日班次'} open={modalOpen} onCancel={closeModal} footer={null} width={900} destroyOnClose>
-      <Form form={form} layout="vertical" onFinish={values => void save(values)}>
-      <Form.List name="stops">{fields => <div style={{ display: 'grid', gap: 8 }}>{fields.map((field, index) => {
-          const station = line.stations[index]
-          const first = index === 0
-          const last = index === line.stations.length - 1
-          return <Card key={field.key} size="small" title={`${index + 1}. ${station.name}`}>
-            <Space wrap>
-              {!first && <><Form.Item name={[field.name, 'arrival_time']} label="到达时间" rules={[{ required: true, message: '请输入到达时间' }]}><TimePicker format="HH:mm" minuteStep={5} /></Form.Item><Form.Item name={[field.name, 'arrival_day_offset']} label="到达 + 天"><InputNumber min={0} max={30} precision={0} /></Form.Item></>}
-              {!last && <><Form.Item name={[field.name, 'departure_time']} label="发车时间" rules={[{ required: true, message: '请输入发车时间' }]}><TimePicker format="HH:mm" minuteStep={5} /></Form.Item><Form.Item name={[field.name, 'departure_day_offset']} label="发车 + 天"><InputNumber min={0} max={30} precision={0} /></Form.Item></>}
-            </Space>
-          </Card>
-        })}</div>}</Form.List>
-        <Space style={{ marginTop: 8 }}>
-          <Button type="primary" htmlType="submit" loading={busy}>{editing ? '保存班次' : '创建班次'}</Button>
-          <Button onClick={closeModal}>取消</Button>
-        </Space>
-      </Form>
+        <Form form={form} layout="vertical" onFinish={values => void save(values)}>
+          <Form.List name="stops">{fields => <div style={{ display: 'grid', gap: 8 }}>{fields.map((field, index) => {
+            const station = line.stations[index]
+            const first = index === 0
+            const last = index === line.stations.length - 1
+            return <Card key={field.key} size="small" title={`${index + 1}. ${station.name}`}>
+              <Space wrap>
+                {!first && <><Form.Item name={[field.name, 'arrival_time']} label="到达时间" rules={[{ required: true, message: '请输入到达时间' }]}><TimePicker format="HH:mm" minuteStep={5} /></Form.Item><Form.Item name={[field.name, 'arrival_day_offset']} label="到达 + 天"><InputNumber min={0} max={30} precision={0} /></Form.Item></>}
+                {!last && <><Form.Item name={[field.name, 'departure_time']} label="发车时间" rules={[{ required: true, message: '请输入发车时间' }]}><TimePicker format="HH:mm" minuteStep={5} /></Form.Item><Form.Item name={[field.name, 'departure_day_offset']} label="发车 + 天"><InputNumber min={0} max={30} precision={0} /></Form.Item></>}
+              </Space>
+            </Card>
+          })}</div>}</Form.List>
+          <Space style={{ marginTop: 8 }}>
+            <Button type="primary" htmlType="submit" loading={busy}>{editing ? '保存班次' : '创建班次'}</Button>
+            <Button onClick={closeModal}>取消</Button>
+          </Space>
+        </Form>
       </Modal>}
     </Card>
   </PageContainer>

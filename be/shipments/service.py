@@ -171,14 +171,24 @@ def build_shipment_response_body(
         "path_version": shipment.path_version,
         "transport_path": path,
         "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task)
-        + [build_destination_action(shipment.stage, has_arrangements),
+        + [build_destination_action(
+            shipment.stage,
+            has_arrangements,
+            bool(task and task.status == TaskStatus.IN_TRANSIT),
+        ),
            {"action": "UPDATE_PATH", "enabled": can_update_path,
             "reason_code": None if can_update_path else "INVALID_PATH_STATE",
             "reason": None if can_update_path else "首次入站后可安排路径，待发车任务需先取消"}],
     }
 
 
-def build_destination_action(stage: str, occupied: bool) -> dict:
+def build_destination_action(stage: str, occupied: bool, active_in_transit: bool = False) -> dict:
+    if stage == ShipmentStage.IN_TRANSIT:
+        if active_in_transit:
+            return {"action": "UPDATE_DESTINATION", "enabled": True,
+                    "reason_code": None, "reason": None}
+        return {"action": "UPDATE_DESTINATION", "enabled": False,
+                "reason_code": "ACTIVE_TASK_REQUIRED", "reason": "无法确认当前在途任务，暂不能更正目的站"}
     if stage not in DESTINATION_EDITABLE_STAGES:
         code, reason = "INVALID_STAGE", "当前阶段不允许更正目的站"
     elif occupied:
@@ -825,7 +835,16 @@ def update_shipment_destination(
             TaskShipment.association_state == "ACTIVE").limit(1))
         future_reserved = session.scalar(select(TaskShipment.id).where(TaskShipment.shipment_id==shipment_id,
             TaskShipment.association_state=='PLANNED').limit(1))
-        action = build_destination_action(shipment.stage, occupied is not None or future_reserved is not None)
+        active_pair = session.execute(select(TaskShipment, TransportTask).join(
+            TransportTask, TaskShipment.task_id == TransportTask.id).where(
+                TaskShipment.shipment_id == shipment_id,
+                TaskShipment.association_state == 'ACTIVE').with_for_update()).one_or_none()
+        active_in_transit = bool(active_pair and active_pair[1].status == TaskStatus.IN_TRANSIT)
+        action = build_destination_action(
+            shipment.stage,
+            occupied is not None or future_reserved is not None,
+            active_in_transit,
+        )
         if not action["enabled"]:
             raise InvalidShipmentDestinationError(action["reason"])
         if shipment.destination_station_id != request.expected_destination_station_id:
@@ -838,6 +857,25 @@ def update_shipment_destination(
         if not destination.enabled or not destination.allows_delivery:
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
         previous_destination = shipment.destination_station_id
+        if shipment.stage == ShipmentStage.IN_TRANSIT:
+            from scheduling.service import cancel_empty, members, recompute_task_state, release_entry
+
+            pending_entries = list(session.scalars(select(TaskShipment).where(
+                TaskShipment.shipment_id == shipment_id,
+                TaskShipment.association_state == 'PLANNED').with_for_update()))
+            affected_tasks = {}
+            release_reason = "目的站更正：" + request.reason[:494]
+            for entry in pending_entries:
+                task = session.scalar(select(TransportTask).where(
+                    TransportTask.id == entry.task_id).with_for_update())
+                release_entry(session, entry, clock, release_reason)
+                task.schedule_revision += 1
+                affected_tasks[task.id] = task
+            for task in affected_tasks.values():
+                if not members(session, task.id):
+                    cancel_empty(session, task, clock, release_reason)
+                else:
+                    recompute_task_state(session, task)
         shipment.destination_station_id = request.destination_station_id
         invalidate_destination_path(session, shipment, clock, "目的站更正：" + request.reason[:494])
         if shipment.scheduling_mode == 'REVIEWED':
