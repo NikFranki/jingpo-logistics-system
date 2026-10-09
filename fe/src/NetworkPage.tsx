@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { api, type Station, type StationInput } from './api'
 import type { Mutate } from './shared'
@@ -70,7 +70,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     { title: '操作', key: 'action', fixed: 'right', width: 100, render: (_, row) => <Space><Button type="link" size="small" disabled={busy} onClick={() => openEdit(row)}>编辑</Button>{row.enabled && <Popconfirm title="停用此站点？" description="若站点仍被运单或启用线路使用，后端会拒绝停用。" okText="停用" cancelText="取消" onConfirm={() => void changeStation(row, { enabled: false })}><Button type="link" danger size="small" disabled={busy}>停用</Button></Popconfirm>}</Space> },
   ]
 
-  return <><PageContainer title="站点管理" subTitle="维护物流站点、站点能力和默认中转参考时长。" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增站点</Button></Space>}>
+  return <><PageContainer title="站点管理" subTitle="维护物流站点、站点能力和默认中转参考时长。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增站点</Button>}>
     {error && <Alert type="error" showIcon message="站点配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => setStationFilter(search.trim())} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>

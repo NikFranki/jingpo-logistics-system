@@ -32,7 +32,7 @@ sequenceDiagram
 | 校验 | 结果 |
 | --- | --- |
 | 运单不存在 | 404 |
-| 待揽收、已揽收、在站 | 只有不存在未释放任务关联时可更正 |
+| 待揽收、已揽收、在站 | 没有任务时可更正；若关联任务均未发车，则更正时释放本运单的关联，其他共享成员保留 |
 | 运输中且存在 ACTIVE 的 IN_TRANSIT 任务 | 可更正；当前任务和当前路径段保持不变，本运单的 PLANNED 后续关联释放并重排 |
 | 运输中但没有 ACTIVE 的 IN_TRANSIT 任务、派送中、已签收 | 409 |
 | expected_destination_station_id 与当前不同 | 409，防止过期提交 |
@@ -51,7 +51,7 @@ sequenceDiagram
 
 ## 3. 操作资格与历史
 
-运单详情 allowed_actions 新增 UPDATE_DESTINATION：待揽收/已揽收/在站要求无未释放任务关联；运输中要求存在 ACTIVE 的 IN_TRANSIT 任务。无目标站参数的资格不保证目标可用或路径可达，提交重新校验。不可用原因区分阶段、任务占用和缺少当前在途任务；已有动作规则保持。
+运单详情 allowed_actions 新增 UPDATE_DESTINATION：待揽收/已揽收/在站允许无任务或所有关联任务均未发车；运输中要求存在 ACTIVE 的 IN_TRANSIT 任务。无目标站参数的资格不保证目标可用或路径可达，提交重新校验。不可用原因区分阶段、已发车占用和缺少当前在途任务；已有动作规则保持。
 
 `GET /api/v1/shipments/{id}/destination-changes?page=1&page_size=20`，page>=1，page_size=1..100。不存在运单404；无更正返回空分页。按成功更正日志 id 倒序读取，不从物流轨迹推断。
 

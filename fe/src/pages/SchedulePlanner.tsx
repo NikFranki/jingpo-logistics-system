@@ -8,9 +8,9 @@ import { apiError, formatTime, StationName } from '../shared'
 
 const { Text } = Typography
 type FormValues = { line_id?: string; scheduled_trip_id?: string }
-type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; enabled: boolean; busy: boolean; mutate: Mutate; onSaved: () => void }
+type Props = { shipment: ShipmentDetail; routes: TransportRoute[]; enabled: boolean; busy: boolean; mutate: Mutate; autoAssign?: boolean; onAutoAssignHandled?: () => void; onSaved: () => void }
 
-export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, onSaved }: Props) {
+export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, autoAssign = false, onAutoAssignHandled, onSaved }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [options, setOptions] = useState<ShipmentTransportPath>()
   const [lines, setLines] = useState<TransportLine[]>([])
@@ -21,10 +21,16 @@ export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, onSav
   const [previewFresh, setPreviewFresh] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [tripsLoading, setTripsLoading] = useState(false)
+  const [tripsResolvedFor, setTripsResolvedFor] = useState<string>()
+  const [autoPlanning, setAutoPlanning] = useState(false)
+  const [autoConfirmationPending, setAutoConfirmationPending] = useState(false)
+  const [autoReviewRequired, setAutoReviewRequired] = useState(false)
   const [error, setError] = useState<string>()
   const [acknowledged, setAcknowledged] = useState<string[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const previewRequest = useRef(0)
+  const autoConfirmedToken = useRef<string | undefined>(undefined)
   const selectedLineId = Form.useWatch('line_id', form)
   const selectedTripId = Form.useWatch('scheduled_trip_id', form)
   const routeById = useMemo(() => new Map(routes.map(route => [route.id, route])), [routes])
@@ -35,21 +41,48 @@ export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, onSav
     if (!enabled || !selectedLineId) { setTrips([]); setError(undefined); return }
     let active = true
     setLoading(true)
+    setTripsLoading(true)
+    setTripsResolvedFor(undefined)
     setTrips([])
     const from = dayjs().format('YYYY-MM-DD')
     const to = dayjs().add(30, 'day').format('YYYY-MM-DD')
     setError(undefined)
     api.shipmentScheduledTrips(shipment.id, from, to).then(result => {
       if (active) {
-        const matching = result.items.filter(item => String(item.line_id) === String(selectedLineId)).sort((left, right) => left.departure_at.localeCompare(right.departure_at))
+        const matchingLine = lines.find(line => String(line.id) === String(selectedLineId))
+        const frozenLeg = currentSchedule?.legs.find(leg => leg.task_status === 'IN_TRANSIT')
+        const transferMinutes = matchingLine?.transfer_overrides.find(item => String(item.station_id) === String(matchingLine.origin_station_id))?.minutes
+          ?? matchingLine?.stations.find(station => String(station.id) === String(matchingLine.origin_station_id))?.transfer_minutes
+          ?? 0
+        const readyAt = frozenLeg?.forecast_arrival_at ? dayjs(frozenLeg.forecast_arrival_at).add(transferMinutes, 'minute') : undefined
+        const matching = result.items.filter(item => String(item.line_id) === String(selectedLineId)
+          && (!readyAt || !dayjs(item.departure_at).isBefore(readyAt)))
+          .sort((left, right) => left.departure_at.localeCompare(right.departure_at))
         setTrips(matching)
+        setTripsResolvedFor(String(selectedLineId))
         const currentTripId = currentSchedule?.scheduled_trip_id ?? shipment.schedule?.scheduled_trip_id
         const preferredTrip = matching.find(trip => String(trip.trip_id) === String(currentTripId)) ?? matching[0]
         if (preferredTrip) form.setFieldValue('scheduled_trip_id', String(preferredTrip.trip_id))
       }
-    }).catch(reason => { if (active) { setTrips([]); setError(apiError(reason)) } }).finally(() => { if (active) setLoading(false) })
+    }).catch(reason => { if (active) { setTrips([]); setError(apiError(reason)) } }).finally(() => { if (active) { setLoading(false); setTripsLoading(false) } })
     return () => { active = false }
-  }, [enabled, shipment.id, selectedLineId, currentSchedule?.scheduled_trip_id, shipment.schedule?.scheduled_trip_id, form])
+  }, [enabled, shipment.id, selectedLineId, currentSchedule, shipment.schedule?.scheduled_trip_id, lines, form])
+
+  useEffect(() => {
+    if (autoAssign) {
+      setAutoPlanning(true)
+      setAutoReviewRequired(false)
+    }
+  }, [autoAssign])
+
+  useEffect(() => {
+    if (!autoPlanning || !enabled || loading || (selectedLineId && (tripsLoading || tripsResolvedFor !== String(selectedLineId)))) return
+    setModalOpen(true)
+    setAutoPlanning(false)
+    setAutoConfirmationPending(Boolean(selectedTripId))
+    if (!selectedTripId) setAutoReviewRequired(true)
+    onAutoAssignHandled?.()
+  }, [autoPlanning, enabled, loading, selectedLineId, selectedTripId, tripsLoading, tripsResolvedFor, onAutoAssignHandled])
 
   useEffect(() => {
     if (!enabled) return
@@ -117,8 +150,21 @@ export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, onSav
     if (!preview || !previewFresh || !preview.can_confirm || !allWarningsAcknowledged) return
     const reason = '按所选班次确认全程运输计划'
     const result = await mutate(`schedule-confirm:${shipment.id}:${preview.schedule_version}:${preview.preview_token}`, key => api.confirmShipmentSchedule(shipment.id, { preview_token: preview.preview_token, reason, acknowledged_warning_codes: acknowledged }, key), '全程运输计划已确认，全部分段任务已生成')
-    if (result) { setModalOpen(false); onSaved() }
+    if (result) { setAutoConfirmationPending(false); setModalOpen(false); onSaved() }
   }
+
+  useEffect(() => {
+    if (!autoConfirmationPending || !preview || !previewFresh || previewLoading) return
+    if (!preview.can_confirm || warningCodes.length || preview.replacements.length) {
+      setAutoConfirmationPending(false)
+      setAutoReviewRequired(true)
+      onAutoAssignHandled?.()
+      return
+    }
+    if (autoConfirmedToken.current === preview.preview_token) return
+    autoConfirmedToken.current = preview.preview_token
+    void confirm()
+  }, [autoConfirmationPending, preview, previewFresh, previewLoading, warningCodes.length, onAutoAssignHandled])
 
   const selectedTrip = trips.find(trip => String(trip.trip_id) === String(selectedTripId))
   const tripDetails = selectedTrip ? (() => {
@@ -152,8 +198,9 @@ export function SchedulePlanner({ shipment, routes, enabled, busy, mutate, onSav
         <Button type={currentSchedule?.status === 'CONFIRMED' ? 'default' : 'primary'} disabled={!enabled || loading} onClick={openPlanner}>{currentSchedule?.status === 'CONFIRMED' ? '修改班次' : '安排运输计划'}</Button>
       </Space>
     </Card>
-    <Modal title={currentSchedule?.status === 'CONFIRMED' ? '修改运输班次' : '安排运输计划'} open={modalOpen} onCancel={() => setModalOpen(false)} footer={null} width={920} destroyOnHidden styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}>
+    <Modal title={currentSchedule?.status === 'CONFIRMED' ? '修改运输班次' : '安排运输计划'} open={modalOpen} onCancel={() => { setAutoConfirmationPending(false); setModalOpen(false) }} footer={null} width={920} destroyOnHidden styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}>
       {error && <Alert type="error" showIcon message="计划操作失败" description={error} style={{ marginBottom: 16 }} />}
+      {autoReviewRequired && <Alert type="info" showIcon message="自动安排未能安全确认，请检查并手动选择线路或班次" style={{ marginBottom: 16 }} />}
       {loading && !lines.length && <Spin tip="正在加载运输线路和班次…" />}
       <Form form={form} layout="vertical" disabled={!enabled} onValuesChange={changed => {
         setError(undefined)

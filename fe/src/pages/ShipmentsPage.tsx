@@ -1,6 +1,7 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Select, Space, Spin, Table, Tabs, Tag, Timeline, Typography } from 'antd'
+import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Select, Space, Spin, Table, Tabs, Tag, Timeline, Tooltip, Typography } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
 import { ModalForm, PageContainer, ProFormDateTimePicker, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -73,6 +74,8 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const [addressOpen, setAddressOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
   const [destinationModalStep, setDestinationModalStep] = useState<'edit' | 'confirm'>()
+  const [autoAssignSchedule, setAutoAssignSchedule] = useState(false)
+  const autoScheduleAttempt = useRef<string | undefined>(undefined)
   const [destinationDraft, setDestinationDraft] = useState<{ destination_station_id: string; reason: string }>()
   const [destinationForm] = Form.useForm<{ destination_station_id: string; reason: string }>()
   const [taskForm] = Form.useForm<{ route_code: string; expected_arrival_at: string }>()
@@ -83,6 +86,15 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   const [pathForm] = Form.useForm<PathForm>()
   const selectedLineId = Form.useWatch('line_id', pathForm)
   const [messageApi, holder] = message.useMessage()
+
+  useEffect(() => {
+    if (!detail || detail.scheduling_mode !== 'REVIEWED' || detail.schedule?.status !== 'NEEDS_RECONFIRMATION'
+      || !['AT_STATION', 'IN_TRANSIT'].includes(detail.stage)) return
+    const attemptKey = `${detail.id}:${detail.destination_station_id}:${detail.schedule.version}`
+    if (autoScheduleAttempt.current === attemptKey) return
+    autoScheduleAttempt.current = attemptKey
+    setAutoAssignSchedule(true)
+  }, [detail])
 
   useEffect(() => {
     let active = true
@@ -178,6 +190,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
     )
     if (result) {
       setDetail(result)
+      setAutoAssignSchedule(result.stage === 'IN_TRANSIT' && result.scheduling_mode === 'REVIEWED')
       closeDestinationModal()
       setDestinationChangesPage(1)
       setRetry(value => value + 1)
@@ -261,7 +274,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
             { title: '等待条件', width: 200, render: (_, leg) => <>{leg.ready_at ? `就绪时间 ${formatTime(leg.ready_at)}` : ''}{leg.waiting_members.length > 0 && <Text type="secondary" style={{ display: 'block' }}>等待运单：{leg.waiting_members.map(member => member.shipment_no ?? member.shipment_id).join('、')}</Text>}</> },
           ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未确认运输计划；先预览路线和逐站时间。" />}
         </> : <Alert type="warning" showIcon message="后端没有返回运输计划状态" description="请确认服务已升级至 V7，然后刷新运单。" />}
-        {detail.schedule?.status !== 'COMPLETED' && !['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) && <SchedulePlanner shipment={detail} routes={network.routes} enabled={!busy} busy={busy} mutate={mutate} onSaved={() => { setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
+        {detail.schedule?.status !== 'COMPLETED' && !['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) && <SchedulePlanner shipment={detail} routes={network.routes} enabled={!busy} busy={busy} mutate={mutate} autoAssign={autoAssignSchedule} onAutoAssignHandled={() => setAutoAssignSchedule(false)} onSaved={() => { setAutoAssignSchedule(false); setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       </section> : <section style={{ marginTop: 24 }}>
         <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
           <Text strong>完整路径与当前进度</Text>
@@ -290,7 +303,9 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         <Space wrap>
           {detail.stage === 'PENDING_PICKUP' && <Button type="primary" disabled={busy || !actionEnabled('PICKUP')} onClick={() => runEvent('PICKUP')}>确认揽收</Button>}
           {detail.stage === 'PENDING_PICKUP' && <Button disabled={busy || !actionEnabled('UPDATE_ADDRESS')} onClick={() => setAddressOpen(true)}>编辑履约地址</Button>}
-          <Button disabled={busy || !destinationAction?.enabled} onClick={() => { destinationForm.resetFields(); setDestinationModalStep('edit') }}>更正目的站</Button>
+          <Button disabled={busy || !destinationAction?.enabled} onClick={() => { destinationForm.resetFields(); setDestinationModalStep('edit') }}>
+            更正目的站<Tooltip title="运输途中更正时，当前段仍到原定站点；系统会以该段终点自动安排后续线路和班次，也可以手动调整。"><QuestionCircleOutlined aria-label="更正目的站说明" tabIndex={0} style={{ marginInlineStart: 6, color: '#8c8c8c', cursor: 'help' }} /></Tooltip>
+          </Button>
         </Space>
         {destinationAction && !destinationAction.enabled && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>{destinationAction.reason ?? '当前运单暂不可更正目的站。'}</Text>}
         {!destinationAction && <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>后端未返回目的站更正资格，请刷新运单后重试。</Text>}
@@ -298,7 +313,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         {detail.stage === 'AT_STATION' && actionEnabled('START_DELIVERY') && <Space wrap><Button type="primary" disabled={busy} onClick={() => runEvent('START_DELIVERY')}>开始派送</Button><Text type="secondary">运单已到达目的站，可以交给末端配送。</Text></Space>}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && detail.active_transport_task && <Alert type="info" showIcon message="运单正在等待或进行站间运输" description={<Space wrap><span><StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></span><Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button></Space>} />}
         {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && actionEnabled('CREATE_TRANSPORT_TASK') && <Alert type="info" showIcon message="运单已准备好进入下一段运输" description={<Space wrap><span>下一段线路：<Text strong>{currentPath?.next_route_code ?? '尚未确定'}</Text>；到达目的站后才能开始派送。</span><Button type="primary" onClick={openNextTask}>按下一段创建运输任务</Button></Space>} />}
-        {detail.stage === 'AT_STATION' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && !actionEnabled('CREATE_TRANSPORT_TASK') && <Text type="secondary">{allowed(detail.allowed_actions, 'CREATE_TRANSPORT_TASK')?.reason ?? '当前运单暂不可创建运输任务。'}</Text>}
+        {detail.stage === 'AT_STATION' && detail.scheduling_mode !== 'REVIEWED' && !actionEnabled('START_DELIVERY') && !detail.active_transport_task && !actionEnabled('CREATE_TRANSPORT_TASK') && <Text type="secondary">{allowed(detail.allowed_actions, 'CREATE_TRANSPORT_TASK')?.reason ?? '当前运单暂不可创建运输任务。'}</Text>}
         {detail.stage === 'IN_TRANSIT' && detail.active_transport_task && <Alert type="info" showIcon message="运单在途，到达并入站后再继续操作。" description={<Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button>} />}
         {detail.stage === 'OUT_FOR_DELIVERY' && <Button type="primary" disabled={busy || !actionEnabled('SIGN')} onClick={() => runEvent('SIGN')}>确认买家签收</Button>}
         {detail.stage === 'SIGNED' && <Alert type="success" showIcon message="运单已签收，物流流程完成。" />}
@@ -394,6 +409,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         okButtonProps={{ disabled: busy || !destinationAction?.enabled || network.stations.length === 0 }}
       >
         {detail.stage === 'IN_TRANSIT' && <Alert type="warning" showIcon message="货物正在运输途中" description="当前运输段会照常送到原定站点；本次只调整后续路线，抵达后再按新目的站重新安排。" style={{ marginBottom: 16 }} />}
+        {detail.active_transport_task && detail.active_transport_task.status !== 'IN_TRANSIT' && <Alert type="warning" showIcon message="当前运输任务尚未发车" description="确认更正后会释放这票运单未发车的安排；其他运单共用的任务不受影响。" style={{ marginBottom: 16 }} />}
         {destinationModalStep === 'edit' ? <>
           {network.error && <Alert type="error" showIcon message="站点列表加载失败" description={network.error} style={{ marginBottom: 16 }} />}
           <Alert type="info" showIcon message="更正目的站不会改变货物位置或收件地址。请确认新站能够负责该地址的配送。" style={{ marginBottom: 16 }} />

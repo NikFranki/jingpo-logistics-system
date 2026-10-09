@@ -164,6 +164,37 @@ class V5DestinationTests(unittest.TestCase):
         self.assertEqual(detail['schedule']['status'], 'COMPLETED')
         self.assertTrue(next(item for item in detail['allowed_actions'] if item['action'] == 'START_DELIVERY')['enabled'])
 
+    def test_waiting_task_does_not_block_destination_change(self):
+        from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
+        from scheduling.service import preview_schedule, confirm_schedule
+
+        shipment, _ = self.parcel()
+        new_destination = self.station('WAITING_REROUTE', delivery=True)
+        self.route(self.source, new_destination, 'GZ_WAITING_REROUTE')
+        with SessionLocal() as session, session.begin():
+            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
+            session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
+            session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
+            session.get(Station, int(self.middle['id'])).transfer_minutes = 10
+        self.event(shipment, 'PICKUP')
+        self.event(shipment, 'ARRIVE', self.source)
+        preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
+            route_ids=[int(self.first['id']), int(self.second['id'])]))
+        schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
+            preview_token=preview['preview_token'], reason='初始排程'), uuid4())
+
+        before = self.detail(shipment)
+        self.assertEqual(before['stage'], 'AT_STATION')
+        self.assertTrue(next(item for item in before['allowed_actions'] if item['action'] == 'UPDATE_DESTINATION')['enabled'])
+        updated = self.change(shipment, self.target, new_destination)
+
+        self.assertEqual(updated['destination_station_id'], new_destination['id'])
+        self.assertIsNone(updated['active_transport_task'])
+        self.assertEqual(updated['schedule']['status'], 'NEEDS_RECONFIRMATION')
+        with SessionLocal() as session:
+            tasks = [session.get(TransportTask, int(leg['task_id'])) for leg in schedule['legs']]
+            self.assertTrue(all(task.status == 'CANCELLED' for task in tasks))
+
     def test_concurrent_changes_and_task_creation(self):
         self.call(write_network,'STATION',StationUpdateRequest(allows_delivery=True),uuid4(),int(self.source['id']))
         shipment,_ = self.parcel()
@@ -181,7 +212,7 @@ class V5DestinationTests(unittest.TestCase):
             except (InvalidShipmentDestinationError,InvalidTaskShipmentError): return None
         with ThreadPoolExecutor(max_workers=2) as executor:
             outcomes=list(executor.map(compete,['task','change']))
-        self.assertEqual(sum(o is not None for o in outcomes),1)
+        self.assertGreaterEqual(sum(o is not None for o in outcomes),1)
         current=self.detail(shipment)
         self.assertEqual(current['active_transport_task'] is None,current['destination_station_id']==self.source['id'])
 

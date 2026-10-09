@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { useNavigate } from 'react-router-dom'
 import { api, type Station, type TransportLine, type TransportLineInput, type TransportLineUpdate } from './api'
@@ -104,7 +104,7 @@ export default function TransportLinesPage({ revision, busy, mutate }: Props) {
     { title: '操作', width: 190, render: (_, line) => <Space><Button type="link" disabled={busy} onClick={() => navigate(`/network/transport-lines/${line.id}/services`)}>每日班次</Button><Button type="link" disabled={busy} onClick={() => openEdit(line)}>编辑线路</Button></Space> },
   ]
 
-  return <PageContainer title="运输线路" subTitle="维护站点顺序与分段耗时，并为每条线路配置每日班次；运单按日期选择具体发车计划。" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增运输线路</Button></Space>}>
+  return <PageContainer title="运输线路" subTitle="维护站点顺序与分段耗时，并为每条线路配置每日班次；运单按日期选择具体发车计划。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增运输线路</Button>}>
     {error && <Alert type="error" showIcon message="运输线路或班次操作失败" description={error} action={<Button size="small" onClick={() => { setError(undefined); void refresh() }}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => { setPage(1); setStationSearch(stationQuery.trim()) }} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>

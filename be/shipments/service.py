@@ -175,6 +175,7 @@ def build_shipment_response_body(
             shipment.stage,
             has_arrangements,
             bool(task and task.status == TaskStatus.IN_TRANSIT),
+            has_unstarted_arrangements(session, shipment.id),
         ),
            {"action": "UPDATE_PATH", "enabled": can_update_path,
             "reason_code": None if can_update_path else "INVALID_PATH_STATE",
@@ -182,7 +183,22 @@ def build_shipment_response_body(
     }
 
 
-def build_destination_action(stage: str, occupied: bool, active_in_transit: bool = False) -> dict:
+def has_unstarted_arrangements(session: Session, shipment_id: int) -> bool:
+    statuses = list(session.scalars(select(TransportTask.status).join(
+        TaskShipment, TaskShipment.task_id == TransportTask.id).where(
+            TaskShipment.shipment_id == shipment_id,
+            TaskShipment.association_state.in_(['ACTIVE', 'PLANNED']))))
+    return bool(statuses) and all(status in {
+        TaskStatus.WAITING_CARGO, TaskStatus.WAITING_PREDECESSOR, TaskStatus.PENDING_DEPARTURE,
+    } for status in statuses)
+
+
+def build_destination_action(
+    stage: str,
+    occupied: bool,
+    active_in_transit: bool = False,
+    unstarted_arrangements: bool = False,
+) -> dict:
     if stage == ShipmentStage.IN_TRANSIT:
         if active_in_transit:
             return {"action": "UPDATE_DESTINATION", "enabled": True,
@@ -191,7 +207,7 @@ def build_destination_action(stage: str, occupied: bool, active_in_transit: bool
                 "reason_code": "ACTIVE_TASK_REQUIRED", "reason": "无法确认当前在途任务，暂不能更正目的站"}
     if stage not in DESTINATION_EDITABLE_STAGES:
         code, reason = "INVALID_STAGE", "当前阶段不允许更正目的站"
-    elif occupied:
+    elif occupied and not unstarted_arrangements:
         code, reason = "TASK_OCCUPIED", "运单已被运输任务占用，请先取消待发车任务"
     else:
         code, reason = None, None
@@ -684,7 +700,7 @@ def process_shipment_event(
 def build_allowed_actions(stage: str, can_deliver: bool, can_create_task: bool = False) -> list[dict]:
     rules = [
         ("CREATE_TRANSPORT_TASK", can_create_task,
-         "Transport requires an unoccupied shipment at an enabled origin with an available outgoing route"),
+         "创建任务需要运单未被占用、当前位置为启用站点，且存在可用的后续线路"),
         (
             "UPDATE_ADDRESS",
             stage == "PENDING_PICKUP",
@@ -830,20 +846,24 @@ def update_shipment_destination(
             Shipment.id == shipment_id).with_for_update())
         if shipment is None:
             raise ShipmentNotFoundError
-        occupied = session.scalar(select(TaskShipment.id).where(
-            TaskShipment.shipment_id == shipment_id,
-            TaskShipment.association_state == "ACTIVE").limit(1))
-        future_reserved = session.scalar(select(TaskShipment.id).where(TaskShipment.shipment_id==shipment_id,
-            TaskShipment.association_state=='PLANNED').limit(1))
         active_pair = session.execute(select(TaskShipment, TransportTask).join(
             TransportTask, TaskShipment.task_id == TransportTask.id).where(
                 TaskShipment.shipment_id == shipment_id,
                 TaskShipment.association_state == 'ACTIVE').with_for_update()).one_or_none()
         active_in_transit = bool(active_pair and active_pair[1].status == TaskStatus.IN_TRANSIT)
+        open_entries = list(session.execute(select(TaskShipment, TransportTask).join(
+            TransportTask, TaskShipment.task_id == TransportTask.id).where(
+                TaskShipment.shipment_id == shipment_id,
+                TaskShipment.association_state.in_(['ACTIVE', 'PLANNED'])).with_for_update()))
+        occupied = bool(open_entries)
+        unstarted_arrangements = bool(open_entries) and all(
+            task.status in {TaskStatus.WAITING_CARGO, TaskStatus.WAITING_PREDECESSOR, TaskStatus.PENDING_DEPARTURE}
+            for _, task in open_entries)
         action = build_destination_action(
             shipment.stage,
-            occupied is not None or future_reserved is not None,
+            occupied,
             active_in_transit,
+            unstarted_arrangements,
         )
         if not action["enabled"]:
             raise InvalidShipmentDestinationError(action["reason"])
@@ -857,17 +877,17 @@ def update_shipment_destination(
         if not destination.enabled or not destination.allows_delivery:
             raise NetworkError("INVALID_NETWORK_CONFIGURATION", "目的站必须启用且允许派送")
         previous_destination = shipment.destination_station_id
-        if shipment.stage == ShipmentStage.IN_TRANSIT:
+        if open_entries:
             from scheduling.service import cancel_empty, members, recompute_task_state, release_entry
 
-            pending_entries = list(session.scalars(select(TaskShipment).where(
-                TaskShipment.shipment_id == shipment_id,
-                TaskShipment.association_state == 'PLANNED').with_for_update()))
+            entries_to_release = (
+                [entry for entry, _ in open_entries if entry.association_state == 'PLANNED']
+                if active_in_transit else [entry for entry, _ in open_entries]
+            )
             affected_tasks = {}
             release_reason = "目的站更正：" + request.reason[:494]
-            for entry in pending_entries:
-                task = session.scalar(select(TransportTask).where(
-                    TransportTask.id == entry.task_id).with_for_update())
+            for entry in entries_to_release:
+                task = session.get(TransportTask, entry.task_id)
                 release_entry(session, entry, clock, release_reason)
                 task.schedule_revision += 1
                 affected_tasks[task.id] = task
