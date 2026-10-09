@@ -28,8 +28,6 @@ class ServerTimeApiTests(unittest.TestCase):
         prefix = 'TIME_' + uuid4().hex[:8].upper()
         source = self.station(prefix+'_S', allows_first_arrival=True)
         target = self.station(prefix+'_D', allows_delivery=True)
-        _, route = self.request('/routes', 'POST', dict(code=prefix+'_R',
-            origin_station_id=int(source['id']), destination_station_id=int(target['id'])))
         _, order = self.request('/orders/create', 'POST', dict(product_name='time', quantity=1,
             sender_name='s', sender_address='s', recipient_name='r', recipient_address='r'))
         _, shipment = self.request('/orders/'+order['id']+'/shipment', 'POST',
@@ -52,27 +50,10 @@ class ServerTimeApiTests(unittest.TestCase):
 
         event({'event_type': 'PICKUP'})
         event({'event_type': 'ARRIVE', 'station_id': source['id']})
-        _, task = self.request('/transport-tasks/create', 'POST', dict(route_code=route['code'],
-            expected_arrival_at=(datetime.now(timezone.utc)+timedelta(hours=1)).isoformat(),
-            shipment_ids=[int(shipment['id'])]))
-        for action, field in (('depart', 'departed_at'), ('arrive', 'arrived_at')):
-            before = datetime.now(timezone.utc)
-            status, result = self.request('/transport-tasks/'+task['id']+'/'+action, 'POST')
-            after = datetime.now(timezone.utc)
-            self.assertEqual(status, 200, result)
-            instant = datetime.fromisoformat(result[field])
-            self.assertLessEqual(before, instant)
-            self.assertLessEqual(instant, after)
-            self.assertIn('server_time', result)
-            self.assertNotIn('simulation_time', result)
-            current = self.request(base)[1]
-            self.assertEqual(datetime.fromisoformat(current['tracking_events'][0]['occurred_at']), instant)
-        event({'event_type': 'START_DELIVERY'})
-        event({'event_type': 'SIGN'})
         with SessionLocal() as session:
             events = list(session.scalars(select(TrackingEvent).where(
                 TrackingEvent.shipment_id == int(shipment['id']))))
-            self.assertEqual(len(events), 7)
+            self.assertEqual(len(events), 3)
             for item in events:
                 self.assertEqual(item.occurred_at, session.get(OperationLog, item.operation_id).occurred_at)
         observed = self.request('/server-time')[1]['server_time']

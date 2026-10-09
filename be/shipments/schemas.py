@@ -10,7 +10,6 @@ from pydantic import (
     Field,
     model_validator,
 )
-from scheduling.path_schemas import ShipmentTransportPathResponse
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 class AllowedActionResponse(BaseModel):
@@ -29,7 +28,6 @@ class TrackingEventResponse(BaseModel):
 
 
 class ShipmentCreateRequest(BaseModel):
-    scheduling_mode: Literal["LEGACY", "REVIEWED"] = "REVIEWED"
     model_config = ConfigDict(extra="forbid")
     destination_station_id: int | None = Field(default=None, gt=0, strict=True)
 
@@ -52,10 +50,7 @@ class ShipmentResponse(AddressResponse):
 
 
 class ShipmentDetailResponse(ShipmentResponse):
-    scheduling_mode: str = "LEGACY"
     schedule: dict | None = None
-    path_version: int = 0
-    transport_path: ShipmentTransportPathResponse | None = None
     active_transport_task: "ActiveTransportTaskResponse | None"
     tracking_events: list[TrackingEventResponse]
     allowed_actions: list[AllowedActionResponse] = Field(

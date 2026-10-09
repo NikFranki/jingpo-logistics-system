@@ -28,7 +28,7 @@ class V7ApiTests(unittest.TestCase):
             sender_name='s', sender_address='s', recipient_name='r', recipient_address='r'))
         status, parcel = self.request('/orders/'+order['id']+'/shipment', 'POST',
             dict(destination_station_id=int(target['id'])))
-        self.assertEqual(status, 201, parcel); self.assertEqual(parcel['scheduling_mode'], 'REVIEWED')
+        self.assertEqual(status, 201, parcel)
         base = '/shipments/'+parcel['id']
         status, preview = self.request(base+'/schedule/preview', 'POST', dict(origin_station_id=int(source['id']),
             line_id=int(line['id']), expected_line_version=1))
@@ -61,6 +61,12 @@ class V7ApiTests(unittest.TestCase):
         import json
         with openapi: schema = json.load(openapi)
         self.assertIn('SchedulePreviewResponse', schema['components']['schemas'])
+        self.assertNotIn('/api/v1/path-plans', schema['paths'])
+        self.assertNotIn('/api/v1/shipments/{shipment_id}/path', schema['paths'])
+        self.assertNotIn('/api/v1/shipments/{shipment_id}/path-options', schema['paths'])
+        shipment_fields = schema['components']['schemas']['ShipmentDetailResponse']['properties']
+        self.assertFalse({'path_version', 'transport_path'} & shipment_fields.keys())
+        self.assertEqual(self.request(base+'/schedule/preview', 'POST', dict(route_ids=[1]))[0], 422)
 
     def test_destination_correction_releases_unstarted_schedule_and_requires_review(self):
         prefix = 'V7DEST_' + uuid4().hex[:8].upper()

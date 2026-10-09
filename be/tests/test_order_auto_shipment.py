@@ -75,7 +75,6 @@ class OrderAutoShipmentTests(unittest.TestCase):
         self.assertEqual(result.status, "SHIPMENT_CREATED")
         create_shipment.assert_called_once()
         self.assertEqual(create_shipment.call_args.kwargs["order_id"], 123)
-        self.assertEqual(create_shipment.call_args.kwargs["scheduling_mode"], "REVIEWED")
         auto_schedule_shipment.assert_called_once()
         self.assertEqual(auto_schedule_shipment.call_args.args[1], 456)
 

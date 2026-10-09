@@ -29,7 +29,7 @@ from models import (
     TransportRoute,
 )
 
-from scheduling.path_service import shipment_path_body, auto_bind_path, invalidate_destination_path
+from scheduling.schedule_support import invalidate_future_schedule_legs
 from network.coverage import require_matched_destination, match_origin, planned_origin
 
 from shipments.schemas import (
@@ -110,18 +110,11 @@ def build_shipment_response_body(
     station = session.get(Station, shipment.last_scanned_station_id) if shipment.last_scanned_station_id else None
     can_deliver = bool(station and station.enabled and station.allows_delivery
         and station.id == shipment.destination_station_id and active_task is None)
-    path = shipment_path_body(session, shipment)
-    can_create_task = shipment.scheduling_mode == 'LEGACY' and path['status'] == 'READY' and path['next_route_id'] is not None
-    can_update_path = shipment.stage in (ShipmentStage.AT_STATION, ShipmentStage.IN_TRANSIT) and (
-        task is None or task.status == TaskStatus.IN_TRANSIT)
-    if shipment.scheduling_mode == 'REVIEWED' and shipment.schedule_version:
-        can_update_path = False
     from scheduling.service import schedule_body
     planned_start = planned_origin(session, shipment)
     return {
         **address_body(shipment),
-        "scheduling_mode": shipment.scheduling_mode,
-        "schedule": schedule_body(session, shipment) if shipment.scheduling_mode == "REVIEWED" else None,
+        "schedule": schedule_body(session, shipment) if shipment.schedule_version else None,
         "id": str(shipment.id),
         "shipment_no": shipment.shipment_no,
         "order_id": str(shipment.order_id),
@@ -168,18 +161,13 @@ def build_shipment_response_body(
             }
             for event in events
         ],
-        "path_version": shipment.path_version,
-        "transport_path": path,
-        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, can_create_task)
+        "allowed_actions": build_allowed_actions(shipment.stage, can_deliver, False)
         + [build_destination_action(
             shipment.stage,
             has_arrangements,
             bool(task and task.status == TaskStatus.IN_TRANSIT),
             has_unstarted_arrangements(session, shipment.id),
-        ),
-           {"action": "UPDATE_PATH", "enabled": can_update_path,
-            "reason_code": None if can_update_path else "INVALID_PATH_STATE",
-            "reason": None if can_update_path else "首次入站后可安排路径，待发车任务需先取消"}],
+        )],
     }
 
 
@@ -226,12 +214,8 @@ def create_shipment(
     order_id: int,
     idempotency_key: UUID,
     destination_station_id: int | None = None,
-    scheduling_mode: str = "LEGACY",
-    scheduling_mode_explicit: bool = False,
 ) -> tuple[dict, int]:
     request_hash = build_create_shipment_request_hash(order_id, destination_station_id)
-    if scheduling_mode_explicit:
-        request_hash = hashlib.sha256((request_hash + ":" + scheduling_mode).encode()).hexdigest()
 
     with session.begin():
         clock = business_time.begin_business_write(session)
@@ -319,7 +303,6 @@ def create_shipment(
             earliest_handover_at=order.earliest_handover_at,
             latest_delivery_at=order.latest_delivery_at,
             order_id=order.id,
-            scheduling_mode=scheduling_mode,
             destination_station_id=destination_station_id,
             sender_address=order.sender_address,
             recipient_address=order.recipient_address,
@@ -669,11 +652,8 @@ def process_shipment_event(
         session.add(event)
         session.flush()
         if request.event_type == TrackingEventType.ARRIVE:
-            if shipment.scheduling_mode == 'REVIEWED' and shipment.schedule_version:
-                from scheduling.service import activate_next
-                activate_next(session, shipment, clock, operation_log)
-            else:
-                auto_bind_path(session, shipment, clock)
+            from scheduling.service import activate_next
+            activate_next(session, shipment, clock, operation_log)
         session.flush()
         session.refresh(shipment)
 
@@ -897,10 +877,9 @@ def update_shipment_destination(
                 else:
                     recompute_task_state(session, task)
         shipment.destination_station_id = request.destination_station_id
-        invalidate_destination_path(session, shipment, clock, "目的站更正：" + request.reason[:494])
-        if shipment.scheduling_mode == 'REVIEWED':
-            shipment.schedule_status = 'NEEDS_RECONFIRMATION'
-            shipment.schedule_reason = '目的站已更正，请重新确认运输计划'
+        invalidate_future_schedule_legs(session, shipment, clock)
+        shipment.schedule_status = 'NEEDS_RECONFIRMATION'
+        shipment.schedule_reason = '目的站已更正，请重新确认运输计划'
         shipment.updated_at = datetime.now(timezone.utc)
         session.flush()
         shipment, events = get_shipment(session, shipment_id)

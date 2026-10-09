@@ -16,6 +16,8 @@ from transport.schemas import TransportTaskCancelRequest
 from transport.service import depart_transport_task, arrive_transport_task, cancel_transport_task, get_transport_task
 from network.schemas import RouteUpdateRequest
 from network.service import write_network
+from lines.schemas import LineCreateRequest, LineLegInput
+from lines.service import write_line
 import test_v3_network as helpers
 
 @unittest.skipUnless((make_url(os.environ['DATABASE_URL']).database or '').endswith('_test') if os.getenv('DATABASE_URL') else False, 'requires *_test database')
@@ -35,14 +37,12 @@ class V7ScheduleTests(unittest.TestCase):
 
     def shipment(self, ready=True):
         shipment, _ = self.parcel()
-        with SessionLocal() as session, session.begin():
-            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
         if ready:
             self.event(shipment, 'PICKUP'); self.event(shipment, 'ARRIVE', self.source)
         return shipment
 
     def preview(self, shipment, **changes):
-        args = {'route_ids': [int(self.first['id']), int(self.second['id'])]}
+        args = {'line_id': int(self.lines['FULL']['id']), 'expected_line_version': 1}
         args.update(changes)
         return self.call(preview_schedule, shipment, SchedulePreviewRequest(**args))
 
@@ -189,7 +189,8 @@ class V7ScheduleTests(unittest.TestCase):
             session.get(Station, int(self.middle['id'])).allows_first_arrival = True
         other = self.shipment(False)
         row = reviewed['legs'][1]
-        preview = self.preview(other, route_ids=[int(self.second['id'])], origin_station_id=int(self.middle['id']),
+        preview = self.preview(other, line_id=int(self.lines['SECOND']['id']), expected_line_version=1,
+            origin_station_id=int(self.middle['id']),
             legs=[dict(route_id=int(self.second['id']), planned_departure_at=row['planned_departure_at'],
                 planned_arrival_at=row['planned_arrival_at'])])
         unrelated = self.confirm(other, preview)
@@ -211,7 +212,7 @@ class V7ScheduleTests(unittest.TestCase):
         late = self.state(shipment)
         self.assertTrue(late['legs'][0]['forecast_stale'])
         self.assertEqual(late['legs'][1]['planned_arrival_at'], original['legs'][1]['planned_arrival_at'])
-        preview = self.preview(shipment, route_ids=[int(self.second['id'])])
+        preview = self.preview(shipment, line_id=int(self.lines['SECOND']['id']), expected_line_version=1)
         self.assertEqual(int(preview['frozen_task_id']), a)
         revised = self.confirm(shipment, preview)
         self.assertEqual(revised['version'], 2)
@@ -219,7 +220,7 @@ class V7ScheduleTests(unittest.TestCase):
         self.assertNotEqual(int(revised['legs'][1]['task_id']), b)
         self.assertEqual(self.call(lambda s: s.get(TransportTask, b).status), 'CANCELLED')
         self.call(arrive_transport_task, a, uuid4())
-        preview = self.preview(shipment, route_ids=[int(self.second['id'])])
+        preview = self.preview(shipment, line_id=int(self.lines['SECOND']['id']), expected_line_version=1)
         self.assertEqual(preview['legs'][0]['approved_transfer_minutes'], 10)
         revised = self.confirm(shipment, preview)
         self.assertEqual(revised['version'], 3)
@@ -299,20 +300,20 @@ class V7ScheduleTests(unittest.TestCase):
                 expected_schedule_revision=1, cancel_token=cancel['cancel_token']), uuid4())
         self.assertEqual(self.counts(), before)
 
-    def test_reference_bounds_and_invalid_plan_overrides_are_rejected(self):
+    def test_reference_bounds_and_invalid_line_overrides_are_rejected(self):
         from pydantic import ValidationError
         from network.schemas import StationCreateRequest, RouteCreateRequest
-        from scheduling.path_schemas import PathPlanCreateRequest
-        from scheduling.path_service import write_plan
+        from lines.schemas import LineCreateRequest
         for minutes in (-1, True, '10', 525601):
             with self.assertRaises(ValidationError): StationCreateRequest(code='BOUNDS', name='bounds', transfer_minutes=minutes)
         for minutes in (0, -1, True, '10', 525601):
             with self.assertRaises(ValidationError): RouteCreateRequest(code='BOUNDS', origin_station_id=1, destination_station_id=2, travel_minutes=minutes)
         for overrides in ([dict(station_id=int(self.source['id']), minutes=5)],
                           [dict(station_id=int(self.middle['id']), minutes=5)]*2):
-            request = PathPlanCreateRequest(code=self.prefix+'_INVALID', name='bad overrides',
-                route_ids=[int(self.first['id']), int(self.second['id'])], transfer_overrides=overrides)
-            with self.assertRaises(NetworkError): self.call(write_plan, request, uuid4())
+            with self.assertRaises(ValidationError):
+                LineCreateRequest(code=self.prefix+'_INVALID', name='bad overrides',
+                    station_ids=[int(self.source['id']), int(self.middle['id']), int(self.target['id'])],
+                    legs=[{}, {}], transfer_overrides=overrides)
 
     def test_depart_cancel_race_keeps_a_single_consistent_outcome(self):
         shipment = self.shipment(); reviewed = self.confirm(shipment)
@@ -342,8 +343,11 @@ class V7ScheduleTests(unittest.TestCase):
         with SessionLocal() as session, session.begin():
             session.get(Station, int(via['id'])).transfer_minutes = 5
             for route in (one, two): session.get(TransportRoute, int(route['id'])).travel_minutes = 45
+        line = self.call(write_line, LineCreateRequest(code=self.prefix+'_VIA', name='经中间站',
+            station_ids=[int(self.source['id']), int(via['id']), int(self.target['id'])],
+            legs=[LineLegInput(), LineLegInput()]), uuid4())
         before = self.counts(); original = self.state(shipment)
-        preview = self.preview(shipment, route_ids=[int(one['id']), int(two['id'])])
+        preview = self.preview(shipment, line_id=int(line['id']), expected_line_version=1)
         self.assertEqual(self.counts(), before)
         self.assertEqual(self.state(shipment), original)
         self.assertEqual([row['route_id'] for row in preview['legs']], [one['id'], two['id']])

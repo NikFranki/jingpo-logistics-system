@@ -2,7 +2,7 @@
 
 ## 统一运输线路
 
-`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。线路存放在 `transport_lines` / `transport_line_legs`；班次规则和车次快照存放在 `line_services`、`line_service_stops`、`scheduled_trips`。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐。旧路径方案管理接口与 `/path-options` 已下线，`path_plans` / `path_plan_legs` 已迁移删除；已有运单路径、班次和任务历史保留。
+`lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。线路存放在 `transport_lines` / `transport_line_legs`；班次规则和车次快照存放在 `line_services`、`line_service_stops`、`scheduled_trips`。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐。V6 旧路径方案表已迁移移除；运单线路安排统一作为班次运输计划管理。
 
 开发库已备份升级 c52d09a13f84，目录 2,347 条（启用 2,346），现有 44 个城市站的 1,892 个有向组合全部有线路。耗时为明确标注的演示值。初始化其他环境用 `python -m lines.seed` 和 `python -m lines.seed_national`，先迁移并备份。契约、部署与实际检查见 [统一线路说明](../docs/技术方案/v7/be/unified-transport-lines.md)。
 
@@ -24,7 +24,7 @@
 
 ## 寄件首站与创建后计划预览
 
-服务范围新增 purpose：PICKUP 接收、DELIVERY 派送。创建运单时唯一匹配寄件区域会保存 planned_origin_station_id；已有运单可只读推断。path-options 现在提供计划起点和多段路线候选，`GET /api/v1/shipments/{id}/schedule/initial-preview` 可在实际入站前生成默认时间预览。参考耗时缺失时返回缺项，保留人工编辑时间；确认后才建任务。ARRIVE 可省略 station_id，确认实际入站时默认计划首站。
+服务范围新增 purpose：PICKUP 接收、DELIVERY 派送。创建运单时唯一匹配寄件区域会保存 planned_origin_station_id；已有运单可只读推断。`GET /api/v1/shipments/{id}/line-options` 提供匹配的运输线路候选，`GET /api/v1/shipments/{id}/schedule/initial-preview` 可在实际入站前生成默认时间预览。参考耗时缺失时返回缺项，保留人工编辑时间；确认后才建任务。ARRIVE 可省略 station_id，确认实际入站时默认计划首站。
 
 开发库已备份并升级 a39f04d72816，新增 44 条接收范围；旧 44 条派送范围保留。源码合并 head 为 b41c60e79a23，开发库未执行模拟时钟表删除分支。详细契约与实际检查见 [计划首站说明](../docs/技术方案/v7/be/planned-origin-and-preview.md)。
 
@@ -46,66 +46,11 @@ V7 流程为“选择/切换完整路线 → 自动预览各站时间 → 人工
 
 后端已实现预览、审核确认、全段任务链、等待/激活、共享及下游取消；迁移版本为 `f72d8a94c105`。入口：[V7 PRD](../docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](../docs/技术方案/v7/be/spec.md)、[实施计划](../docs/技术方案/v7/be/plan.md)。新增 `scheduling` 模块负责预览、确认和任务链安排；`transport` 负责真实执行及激活已有后段任务。FE 和查询 Agent 独立适配，本轮未修改客户端。接口示例与操作顺序见 [客户端接入说明](../docs/技术方案/v7/be/client-contract.md)。发布状态及验证证据见 V7 实施计划。67 项后端联合检查全部通过，开发库已备份升级 V7，后端健康与只读契约检查通过。
 
-V7 迁移：停止后端并 `pg_dump -Fc` 备份后，执行 `python -m alembic upgrade f72d8a94c105`，检查版本并重启。开发库备份：`backups/jingpo_logistics_before_v7_20261001_171109.dump`。升级保留旧事实和缓存，不自动建任务；回退恢复备份。
+迁移部署：停止后端并备份数据库后，执行 `python -m alembic upgrade head`，检查版本并重启。V7 及之后迁移保留运输事实和正式计划历史；回退需恢复升级前备份。
 
-## V6 完整运输路径（后端已实现，V7 继续复用）
+## V6 旧实现退役
 
-以下为 V6/LEGACY 运单兼容流程说明；V7 新运单使用上方的班次审核确认流程。当前开发库为 V7。
-
-这是旧运单线路安排的兼容说明；线路数据由 `transport_lines` / `transport_line_legs` 保存，旧路径方案管理接口已下线。首次入站自动匹配、已绑定运单线路版本和历史记录仍用于兼容旧运单；新运单使用线路班次审核流程。
-
-```mermaid
-flowchart LR
-    N[运输线路] --> S[scheduling 排程与运单线路安排]
-    S --> T[创建或激活运输任务]
-    T --> S
-    S --> H[版本、冻结前缀与历史]
-```
-
-### 主要契约
-
-- 路径配置请使用 `/api/v1/transport-lines`；旧 `path-plans` 管理接口已下线。
-- `GET/PUT /api/v1/shipments/{id}/path`：当前完整路径与未来修改。PUT 要求 expected_version、expected_anchor_station_id、reason，以及 route_ids 或 plan_id/expected_plan_version。
-- 线路候选请使用 `/api/v1/shipments/{id}/line-options`。
-- `GET /api/v1/shipments/{id}/path-history?page=1&page_size=20`：路径布局版本，区别于实际物流轨迹。
-- 运单详情新增 path_version、transport_path 和 UPDATE_PATH 资格；运输中从本段终点修改未来路径，已完成/运输段保留，待发车任务先取消。
-- `POST /api/v1/transport-tasks/create` 可省略 route_code，提供每张运单的 expected_path_versions，自动取共同下一段；不同下一段需先分组。原显式线路请求仍校验下一段，无法任意改线路。
-
-自动任务请求示例（ID 和版本按实际数据填写）：
-
-```json
-{"shipment_ids":[10,11],"expected_arrival_at":"2026-10-02T12:00:00+08:00","expected_path_versions":{"10":1,"11":2}}
-```
-
-停用方案不修改绑定路径，停用未来线路会阻止新任务并提示重规划，已有任务仍可完成。更正目的站废弃旧未来段，保留已到达前缀并重新匹配。所有写入要求 Idempotency-Key，版本与接续站冲突后刷新再确认。
-
-兼容代码入口为 `scheduling/path_schemas.py`、`scheduling/path_service.py`、`scheduling/path_router.py`；不再有独立 `planning` 模块。它通过 shipments/transport/network 集成旧运单自动绑定、下一段校验和停用保护。详细规则见 [V6 PRD](../docs/prd/v6/JINGPO-logistics-system-v6.md)、[spec](../docs/技术方案/v6/be/spec.md)、[验收记录](../docs/技术方案/v6/be/plan.md)。
-
-### 从 V5 升级
-
-**V6 需要数据库迁移**。开发库已于 2026-10-01 备份并升级到 e61a7c93b204，本地后端已启动，`/health` 与 `/health/ready` 检查通过。备份文件为 `backups/jingpo_logistics_before_v6_20261001_134940.dump`。其他环境升级前需停止后端并备份；新接口与运单查询依赖新表/字段：
-
-```bash
-mkdir -p backups
-pg_dump -Fc jingpo_logistics -f "backups/jingpo_logistics_before_v6_$(date +%Y%m%d_%H%M%S).dump"
-export DATABASE_URL="postgresql+psycopg:///jingpo_logistics"
-./.venv/bin/python -m alembic upgrade head
-./.venv/bin/python -m alembic current
-./.venv/bin/python -m uvicorn main:app --reload
-```
-
-该 V6 迁移的目标版本为 e61a7c93b204；当前 head 已为 V7，单独复现 V6 时请指定该版本。迁移不自动创建方案或推测历史路径，旧任务可继续；旧运单后续新任务需要完整剩余路径。旧缓存/key/hash 保留，写后重新 GET。回退恢复升级前备份，不能直接 downgrade。
-
-### 验证
-
-```bash
-DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" RUN_V2_MIGRATION_TESTS=1 \
-  ./.venv/bin/python -m unittest discover -s tests -v
-DATABASE_URL="postgresql+psycopg:///jingpo_logistics_v6_test" \
-  ./.venv/bin/python -m alembic check
-```
-
-48 项联合测试通过，结构检查无差异。测试库需先升级 head，原 V2 回归需要后文 A/B/C 网络；测试样本自行配置完整方案。迁移演练需 CREATE DATABASE 权限，自动清理自己创建的临时库；不启用 RUN_V2_MIGRATION_TESTS 时 8 项迁移测试跳过。客户端适配和页面/Agent 验收由其负责方完成。
+V6 的独立运单路径接口、路径快照表和字段已退役。当前唯一安排流程是选择运输线路/班次、审核运单运输计划并生成分段任务；各段与任务关联仍作为计划执行和历史记录的一部分。V6 PRD 与迁移文件仅作为历史版本留档，不代表当前仍支持旧接口。清理迁移为 `c71d5f0a8b32`、`d74c2f8b1a06`；执行前先备份数据库，迁移不可 downgrade，回退需恢复备份。
 
 ## V5 运单目的站更正（后端已实现）
 

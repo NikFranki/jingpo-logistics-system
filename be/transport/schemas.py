@@ -29,7 +29,7 @@ class CandidateShipmentListResponse(BaseModel):
 class TransportTaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     route_code: NetworkCode | None = None
-    expected_path_versions: dict[str, Annotated[int, Field(gt=0, strict=True)]] | None = None
+    expected_schedule_versions: dict[str, Annotated[int, Field(ge=0, strict=True)]] | None = None
     expected_arrival_at: datetime
     shipment_ids: list[int] = Field(
         min_length=1,
@@ -56,14 +56,10 @@ class TransportTaskCreateRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_path_versions(self):
-        if self.route_code is None and self.expected_path_versions is None:
-            raise ValueError("Automatic next-leg creation requires expected_path_versions")
-        if self.expected_path_versions is not None:
-            if set(self.expected_path_versions) != {str(i) for i in self.shipment_ids}:
-                raise ValueError("expected_path_versions must cover precisely the shipment_ids")
-            if any(type(v) is not int or v < 1 for v in self.expected_path_versions.values()):
-                raise ValueError("expected_path_versions values must be positive integers")
+    def validate_schedule_versions(self):
+        if self.expected_schedule_versions is not None:
+            if set(self.expected_schedule_versions) != {str(i) for i in self.shipment_ids}:
+                raise ValueError("expected_schedule_versions must cover precisely the shipment_ids")
         return self
 
 
@@ -74,7 +70,7 @@ class TaskShipmentResponse(BaseModel):
 
 
 class TransportTaskResponse(BaseModel):
-    scheduling_source: str = "LEGACY"
+    scheduling_source: str = "SCHEDULE"
     scheduled_trip_id: str | None = None
     scheduled_trip_missed: bool = False
     planned_departure_at: datetime | None = None
@@ -120,7 +116,7 @@ class TransportTaskDetailResponse(TransportTaskResponse):
 
 
 class TransportTaskListItemResponse(BaseModel):
-    scheduling_source: str = "LEGACY"
+    scheduling_source: str = "SCHEDULE"
     scheduled_trip_id: str | None = None
     scheduled_trip_missed: bool = False
     planned_departure_at: datetime | None = None

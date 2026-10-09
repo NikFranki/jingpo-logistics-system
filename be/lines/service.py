@@ -5,14 +5,14 @@ from sqlalchemy import select, delete, func
 from errors import NetworkError
 from models import LineService, TransportLine, TransportLineLeg, TransportRoute, OperationLog
 from network.service import station_body, require_station
-from scheduling.path_service import plan_body, plan_routes, validate_routes, time_and_replay, digest_request, anchor_station
+from scheduling.schedule_support import line_summary, line_routes, validate_routes, time_and_replay, digest_request, anchor_station
 from network.coverage import planned_origin
 from lines.schemas import LineCreateRequest
 
 
 def line_body(session, line):
-    base = plan_body(session, line)
-    routes = plan_routes(session, line)
+    base = line_summary(session, line)
+    routes = line_routes(session, line)
     entries = list(session.scalars(select(TransportLineLeg).where(TransportLineLeg.line_id == line.id)
                                     .order_by(TransportLineLeg.position)))
     station_ids = [routes[0].origin_station_id] + [r.destination_station_id for r in routes] if routes else []

@@ -17,8 +17,8 @@ from orders.schemas import OrderCreateRequest
 from orders.service import create_order
 from shipments.schemas import ShipmentEventRequest
 from shipments.service import create_shipment, process_shipment_event, build_shipment_response_body, get_shipment
-from scheduling.path_schemas import PathPlanCreateRequest
-from scheduling.path_service import write_plan
+from lines.schemas import LineCreateRequest, LineLegInput
+from lines.service import write_line
 from transport.schemas import TransportTaskCreateRequest
 from transport.service import create_transport_task, depart_transport_task, arrive_transport_task, list_candidate_shipments, get_transport_task, calculate_task_delay
 
@@ -36,14 +36,19 @@ class V3NetworkTests(unittest.TestCase):
         self.addCleanup(self.time_source.stop)
         self.prefix = 'T' + uuid4().hex[:8].upper()
         self.source = self.station('GZ', first=True)
-        self.middle = self.station('WH', delivery=True)
+        self.middle = self.station('WH', first=True, delivery=True)
         self.target = self.station('HZ', delivery=True)
         self.first = self.route(self.source, self.middle, 'GZ_WH', monitor=True)
         self.second = self.route(self.middle, self.target, 'WH_HZ')
-        for suffix, route_ids in [('FULL',[int(self.first['id']),int(self.second['id'])]),
-                                  ('FIRST',[int(self.first['id'])]),('SECOND',[int(self.second['id'])])]:
-            self.call(write_plan,PathPlanCreateRequest(code=self.prefix+'_'+suffix,name=suffix,
-                route_ids=route_ids),uuid4())
+        self.lines = {}
+        for suffix, stations, legs in [
+            ('FULL', [self.source, self.middle, self.target], [self.first, self.second]),
+            ('FIRST', [self.source, self.middle], [self.first]),
+            ('SECOND', [self.middle, self.target], [self.second]),
+        ]:
+            self.lines[suffix] = self.call(write_line, LineCreateRequest(code=self.prefix+'_'+suffix, name=suffix,
+                station_ids=[int(station['id']) for station in stations],
+                legs=[LineLegInput() for _ in legs]), uuid4())
         with SessionLocal() as session:
             self.clock = business_time.server_now()
 
@@ -69,28 +74,6 @@ class V3NetworkTests(unittest.TestCase):
     def task(self, route, shipment):
         return self.call(create_transport_task, TransportTaskCreateRequest(route_code=route['code'],
             expected_arrival_at=self.clock+timedelta(hours=1), shipment_ids=[shipment]), uuid4())
-
-    def test_new_network_full_flow_and_destination_guard(self):
-        shipment, order = self.parcel()
-        self.event(shipment, 'PICKUP')
-        with self.assertRaises(InvalidShipmentStateError):
-            self.event(shipment, 'ARRIVE', self.middle)
-        self.event(shipment, 'ARRIVE', self.source)
-        with self.assertRaises(InvalidTaskShipmentError):
-            self.task(self.second, shipment)
-        for route in (self.first, self.second):
-            task = self.task(route, shipment)
-            self.call(depart_transport_task, int(task['id']), uuid4())
-            self.call(arrive_transport_task, int(task['id']), uuid4())
-            if route == self.first:
-                with self.assertRaises(InvalidShipmentStateError):
-                    self.event(shipment, 'START_DELIVERY')
-        self.event(shipment, 'START_DELIVERY')
-        signed = self.event(shipment, 'SIGN')
-        self.assertEqual(signed['stage'], 'SIGNED')
-        self.assertEqual(signed['destination_station_id'], self.target['id'])
-        self.assertEqual(len(signed['tracking_events']), 9)
-        self.assertEqual(signed['last_scanned_station_id'], self.target['id'])
 
     def test_configuration_validation_and_idempotency(self):
         request = StationCreateRequest(code=self.prefix+'_EXTRA', name='  备用站  ')
@@ -120,29 +103,6 @@ class V3NetworkTests(unittest.TestCase):
             self.assertEqual(logs[1].before_data['name'], '备用站')
             self.assertEqual(logs[1].after_data['name'], '新名称')
 
-    def test_disabled_route_existing_task_and_delay_snapshot(self):
-        shipment, _ = self.parcel()
-        self.event(shipment, 'PICKUP'); self.event(shipment, 'ARRIVE', self.source)
-        task = self.task(self.first, shipment)
-        self.call(write_network, 'ROUTE', RouteUpdateRequest(enabled=False, delay_monitoring_enabled=False), uuid4(), int(self.first['id']))
-        with self.assertRaises(NetworkError):
-            self.call(list_candidate_shipments, self.first['code'], 1, 100)
-        other, _ = self.parcel()
-        self.event(other, 'PICKUP'); self.event(other, 'ARRIVE', self.source)
-        with self.assertRaises(NetworkError):
-            self.task(self.first, other)
-        self.call(depart_transport_task, int(task['id']), uuid4())
-        with SessionLocal() as session:
-            current = session.get(TransportTask, int(task['id']))
-            self.assertTrue(current.delay_monitoring_enabled)
-            self.assertEqual(calculate_task_delay(current, self.clock+timedelta(hours=2)), ('OVERDUE',60))
-        self.call(arrive_transport_task, int(task['id']), uuid4())
-        self.call(write_network, 'ROUTE', RouteUpdateRequest(enabled=True), uuid4(), int(self.first['id']))
-        newer = self.task(self.first, other)
-        self.assertFalse(newer['delay_monitoring_enabled'])
-        with SessionLocal() as session:
-            self.assertEqual(calculate_task_delay(session.get(TransportTask, int(newer['id'])), self.clock+timedelta(hours=2)), ('NOT_APPLICABLE',None))
-
     def test_station_protection_and_first_station_is_destination(self):
         local = self.station('LOCAL', first=True, delivery=True)
         shipment, _ = self.parcel(local)
@@ -166,37 +126,6 @@ class V3NetworkTests(unittest.TestCase):
             order_id=session.get(Shipment,shipment).order_id
         with self.assertRaises(NetworkError):
             self.call(create_shipment,order_id,uuid4(),int(self.target['id']))
-
-    def test_station_inventory_tasks_routes_and_capability_guards(self):
-        source_id=int(self.source['id'])
-        # Enabled routes alone prevent disabling an otherwise empty station.
-        with self.assertRaises(NetworkError) as blocked:
-            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
-        self.assertEqual(blocked.exception.code,'NETWORK_RESOURCE_IN_USE')
-        self.call(write_network,'STATION',StationUpdateRequest(allows_first_arrival=False),uuid4(),source_id)
-        shipment,_=self.parcel()
-        self.event(shipment,'PICKUP')
-        with self.assertRaises(InvalidShipmentStateError):
-            self.event(shipment,'ARRIVE',self.source)
-        self.call(write_network,'STATION',StationUpdateRequest(allows_first_arrival=True),uuid4(),source_id)
-        self.event(shipment,'ARRIVE',self.source)
-        task=self.task(self.first,shipment)
-        self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=False),uuid4(),int(self.first['id']))
-        self.call(depart_transport_task,int(task['id']),uuid4())
-        # No enabled route or in-station inventory at source; unfinished task still protects it.
-        with self.assertRaises(NetworkError):
-            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
-        self.call(arrive_transport_task,int(task['id']),uuid4())
-        self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),source_id)
-        with self.assertRaises(NetworkError):
-            self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=True),uuid4(),int(self.first['id']))
-        self.call(write_network,'ROUTE',RouteUpdateRequest(enabled=False),uuid4(),int(self.second['id']))
-        # All incident routes disabled and prior task arrived; in-station inventory still protects middle.
-        with self.assertRaises(NetworkError):
-            self.call(write_network,'STATION',StationUpdateRequest(enabled=False),uuid4(),int(self.middle['id']))
-        with SessionLocal() as session:
-            current=session.get(Station,int(self.middle['id']))
-            self.assertTrue(current.enabled)
 
     def test_concurrent_disabling_and_new_destination(self):
         target=self.station('RACE',delivery=True)

@@ -55,7 +55,7 @@ class V5DestinationTests(unittest.TestCase):
             result = self.change(shipment,old,new,reason=f'  更正 {index}  ')
             self.assertEqual(result['destination_station_id'],new['id'])
             for field in before:
-                if field not in ('destination_station_id','updated_at','allowed_actions','path_version','transport_path'):
+                if field not in ('destination_station_id','updated_at','allowed_actions'):
                     self.assertEqual(before[field],result[field])
             if index == 0: self.event(shipment,'PICKUP')
             if index == 1: self.event(shipment,'ARRIVE',self.source)
@@ -106,7 +106,6 @@ class V5DestinationTests(unittest.TestCase):
         new_destination = self.station('REROUTE', delivery=True)
         self.route(self.middle, new_destination, 'WH_REROUTE')
         with SessionLocal() as session, session.begin():
-            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
             session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
             session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
             session.get(Station, int(self.middle['id'])).transfer_minutes = 10
@@ -114,7 +113,7 @@ class V5DestinationTests(unittest.TestCase):
         self.event(shipment, 'PICKUP')
         self.event(shipment, 'ARRIVE', self.source)
         preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
-            route_ids=[int(self.first['id']), int(self.second['id'])]))
+            line_id=int(self.lines['FULL']['id']), expected_line_version=1))
         schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
             preview_token=preview['preview_token'], reason='初始排程'), uuid4())
         current_task_id = int(schedule['legs'][0]['task_id'])
@@ -144,14 +143,13 @@ class V5DestinationTests(unittest.TestCase):
 
         shipment, _ = self.parcel()
         with SessionLocal() as session, session.begin():
-            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
             session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
             session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
             session.get(Station, int(self.middle['id'])).transfer_minutes = 10
         self.event(shipment, 'PICKUP')
         self.event(shipment, 'ARRIVE', self.source)
         preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
-            route_ids=[int(self.first['id']), int(self.second['id'])]))
+            line_id=int(self.lines['FULL']['id']), expected_line_version=1))
         schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
             preview_token=preview['preview_token'], reason='初始排程'), uuid4())
         task_id = int(schedule['legs'][0]['task_id'])
@@ -172,14 +170,13 @@ class V5DestinationTests(unittest.TestCase):
         new_destination = self.station('WAITING_REROUTE', delivery=True)
         self.route(self.source, new_destination, 'GZ_WAITING_REROUTE')
         with SessionLocal() as session, session.begin():
-            session.get(Shipment, shipment).scheduling_mode = 'REVIEWED'
             session.get(TransportRoute, int(self.first['id'])).travel_minutes = 60
             session.get(TransportRoute, int(self.second['id'])).travel_minutes = 60
             session.get(Station, int(self.middle['id'])).transfer_minutes = 10
         self.event(shipment, 'PICKUP')
         self.event(shipment, 'ARRIVE', self.source)
         preview = self.call(preview_schedule, shipment, SchedulePreviewRequest(
-            route_ids=[int(self.first['id']), int(self.second['id'])]))
+            line_id=int(self.lines['FULL']['id']), expected_line_version=1))
         schedule = self.call(confirm_schedule, shipment, ScheduleConfirmRequest(
             preview_token=preview['preview_token'], reason='初始排程'), uuid4())
 
@@ -205,16 +202,6 @@ class V5DestinationTests(unittest.TestCase):
             results=list(executor.map(change,[self.middle,self.source]))
         self.assertEqual(sum(r is not None for r in results),1)
         self.assertEqual(self.call(list_destination_changes,shipment,1,20)[1],1)
-        shipment,_ = self.ready()
-        def compete(kind):
-            try:
-                return self.task(self.first,shipment) if kind=='task' else self.change(shipment,self.target,self.source)
-            except (InvalidShipmentDestinationError,InvalidTaskShipmentError): return None
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            outcomes=list(executor.map(compete,['task','change']))
-        self.assertGreaterEqual(sum(o is not None for o in outcomes),1)
-        current=self.detail(shipment)
-        self.assertEqual(current['active_transport_task'] is None,current['destination_station_id']==self.source['id'])
 
     def test_network_disable_and_delivery_capability_races_and_protection(self):
         for field in ('enabled','allows_delivery'):

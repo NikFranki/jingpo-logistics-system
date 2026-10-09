@@ -28,7 +28,7 @@ from models import (
     ShipmentScheduleLeg,
 )
 from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
-from scheduling.path_service import auto_bind_path, next_path_leg
+from scheduling.schedule_support import current_schedule_legs, leg_state
 from network.service import require_enabled_route
 
 def list_candidate_shipments(
@@ -81,7 +81,7 @@ def list_candidate_shipments(
         future_leg.shipment_id == Shipment.id, future_leg.superseded_at.is_(None), ~completed_future,
         or_(future_route.enabled.is_(False),future_origin.enabled.is_(False),future_destination.enabled.is_(False))).exists()
     filters = (
-        Shipment.scheduling_mode == 'LEGACY',
+        Shipment.schedule_version > 0,
         Shipment.stage == required_stage,
         Shipment.last_scanned_station_id == origin_station.id,
         Shipment.destination_station_id != origin_station.id,
@@ -138,8 +138,8 @@ def build_create_task_request_hash(
             ),
             "shipment_ids": sorted(request.shipment_ids),
         }
-    if request.expected_path_versions is not None:
-        payload["expected_path_versions"] = request.expected_path_versions
+    if request.expected_schedule_versions is not None:
+        payload["expected_schedule_versions"] = request.expected_schedule_versions
     content = json.dumps(
         payload,
         sort_keys=True,
@@ -226,16 +226,13 @@ def create_transport_task(
             Shipment.id.in_(request.shipment_ids)).order_by(Shipment.id).with_for_update()))
         if len(shipments) != len(request.shipment_ids):
             raise InvalidTaskShipmentError
-        for shipment in shipments:
-            if shipment.scheduling_mode != 'LEGACY':
-                raise NetworkError('SCHEDULE_CONFIRM_REQUIRED', '请通过运输计划预览并人工确认创建任务')
-            auto_bind_path(session, shipment, clock)
-        if request.expected_path_versions is not None and any(
-            request.expected_path_versions[str(s.id)] != s.path_version for s in shipments):
+        if request.expected_schedule_versions is not None and any(
+            request.expected_schedule_versions[str(s.id)] != s.schedule_version for s in shipments):
             raise InvalidTaskShipmentError
         route_code = request.route_code
         if route_code is None:
-            legs = [next_path_leg(session, s) for s in shipments]
+            legs = [next((leg for leg in current_schedule_legs(session, s.id)
+                          if leg_state(session, leg)[0] == 'PENDING'), None) for s in shipments]
             if any(l is None for l in legs) or len({l.route_id for l in legs}) != 1:
                 raise InvalidTaskShipmentError
             route_code = session.get(TransportRoute, legs[0].route_id).code
@@ -287,8 +284,9 @@ def create_transport_task(
         if occupied_count:
             raise InvalidTaskShipmentError
 
-        path_legs = {s.id: next_path_leg(session, s) for s in shipments}
-        if any(leg is None or leg.route_id != route.id for leg in path_legs.values()):
+        schedule_legs = {s.id: next((leg for leg in current_schedule_legs(session, s.id)
+                                 if leg_state(session, leg)[0] == 'PENDING'), None) for s in shipments}
+        if any(leg is None or leg.route_id != route.id for leg in schedule_legs.values()):
             raise InvalidTaskShipmentError
         task = TransportTask(
             route_id=route.id,
@@ -303,7 +301,7 @@ def create_transport_task(
                 TaskShipment(
                     task_id=task.id,
                     shipment_id=shipment.id,
-                    schedule_leg_id=path_legs[shipment.id].id,
+                    schedule_leg_id=schedule_legs[shipment.id].id,
                 )
                 for shipment in shipments
             ]
@@ -775,11 +773,8 @@ def arrive_transport_task(
         session.flush()
 
         for shipment in shipments:
-            if shipment.scheduling_mode == 'REVIEWED':
-                from scheduling.service import activate_next
-                activate_next(session, shipment, clock, operation_log)
-            else:
-                auto_bind_path(session, shipment, clock)
+            from scheduling.service import activate_next
+            activate_next(session, shipment, clock, operation_log)
         response_body = build_task_detail_response(
             task=task,
             route=route,

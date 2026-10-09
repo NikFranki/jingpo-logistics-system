@@ -43,9 +43,6 @@ class V3ApiTests(unittest.TestCase):
             cls.server.kill(); cls.server.wait()
 
     def request(self,path,method='GET',body=None,key=None,legacy=True):
-        # V3–V6 exercise the retained legacy flow; V7 explicitly requests REVIEWED.
-        if legacy and method == 'POST' and path.startswith('/orders/') and path.endswith('/shipment') and isinstance(body, dict) and 'destination_station_id' in body:
-            body = {'scheduling_mode': 'LEGACY', **body}
         headers={'Content-Type':'application/json'}
         if method!='GET':
             headers['Idempotency-Key']=key or str(uuid4())
@@ -92,50 +89,3 @@ class V3ApiTests(unittest.TestCase):
         status,error=self.request('/routes','POST',{'code':code+'_L','origin_station_id':int(target['id']),'destination_station_id':int(target['id'])})
         self.assertEqual((status,error['error']['code']),(409,'INVALID_NETWORK_CONFIGURATION'))
         self.assertEqual(self.request('/transport-tasks/candidates?route_code=DOES_NOT_EXIST')[0],404)
-
-    def test_non_abc_http_flow_and_contract(self):
-        prefix='HTTP_'+uuid4().hex[:8].upper()
-        source=self.station(prefix+'_S',allows_first_arrival=True)
-        target=self.station(prefix+'_D',allows_delivery=True)
-        code=prefix+'_SD'
-        status,route=self.request('/routes','POST',{'code':code,'origin_station_id':int(source['id']),'destination_station_id':int(target['id']),'delay_monitoring_enabled':True})
-        self.assertEqual(status,201,route)
-        self.assertEqual(self.request('/routes/'+route['id'],'PATCH',{'destination_station_id':int(source['id'])})[0],422)
-        status,order=self.request('/orders/create','POST',{'product_name':'HTTP 样本','quantity':1,'sender_name':'s','sender_address':'原发件地址','recipient_name':'r','recipient_address':'原收件地址'})
-        self.assertEqual(status,201,order)
-        self.assertEqual(self.request('/orders/'+order['id']+'/shipment','POST',{})[0],409)
-        status,shipment=self.request('/orders/'+order['id']+'/shipment','POST',{'destination_station_id':int(target['id'])})
-        self.assertEqual(status,201,shipment)
-        self.assertEqual(shipment['destination_station_id'],target['id'])
-        events='/shipments/'+shipment['id']+'/events'
-        self.assertEqual(self.request(events,'POST',{'event_type':'PICKUP'})[0],200)
-        status,arrived=self.request(events,'POST',{'event_type':'ARRIVE','station_id':source['id']})
-        self.assertEqual(status,200,arrived)
-        candidates=self.request('/transport-tasks/candidates?route_code='+code)[1]
-        self.assertIn(shipment['id'],[s['id'] for s in candidates['items']])
-        clock=datetime.fromisoformat(self.request('/server-time')[1]['server_time'])
-        status,task=self.request('/transport-tasks/create','POST',{'route_code':code,'expected_arrival_at':(clock+timedelta(hours=1)).isoformat(),'shipment_ids':[int(shipment['id'])]})
-        self.assertEqual(status,201,task)
-        self.assertTrue(task['delay_monitoring_enabled'])
-        self.assertEqual(self.request('/routes/'+route['id'],'PATCH',{'enabled':False,'delay_monitoring_enabled':False})[0],200)
-        self.assertEqual(self.request('/transport-tasks/'+task['id']+'/depart','POST')[0],200)
-        from db import engine
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("UPDATE transport_tasks SET expected_arrival_at=now()-interval '60 minutes' WHERE id=:id"), {'id': int(task['id'])})
-        status,detail=self.request('/transport-tasks/'+task['id'])
-        self.assertEqual(status,200,detail)
-        self.assertEqual((detail['delay_status'],detail['delay_minutes']),('OVERDUE',60))
-        self.assertEqual(self.request('/transport-tasks/'+task['id']+'/arrive','POST')[0],200)
-        detail=self.request('/transport-tasks/'+task['id'])[1]
-        self.assertEqual((detail['delay_status'],detail['delay_minutes']),('LATE_ARRIVAL',60))
-        self.assertEqual(self.request(events,'POST',{'event_type':'START_DELIVERY'})[0],200)
-        status,signed=self.request(events,'POST',{'event_type':'SIGN'})
-        self.assertEqual(status,200,signed)
-        self.assertEqual(signed['stage'],'SIGNED')
-        self.assertEqual(self.request('/orders/'+order['id'])[1]['status'],'COMPLETED')
-        filtered=self.request('/transport-tasks?route_code='+code)[1]
-        self.assertEqual(filtered['total'],1)
-        self.assertEqual(filtered['items'][0]['route_code'],code)
-        self.assertIn(route['id'],[r['id'] for r in self.request('/routes')[1]])
-        self.assertNotIn(route['id'],[r['id'] for r in self.request('/routes?enabled=true')[1]])

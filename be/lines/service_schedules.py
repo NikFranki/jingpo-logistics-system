@@ -10,7 +10,7 @@ from errors import IdempotencyKeyReusedError, NetworkError
 from models import (LineService, LineServiceStop, OperationLog, TransportLine, ScheduledTrip,
                     Shipment, TransportRoute)
 from network.coverage import planned_origin
-from scheduling.path_service import (anchor_station, plan_routes, routes_for_ids, time_and_replay,
+from scheduling.schedule_support import (anchor_station, line_routes, routes_for_ids, time_and_replay,
                               validate_routes)
 
 
@@ -85,7 +85,7 @@ def materialize_trips(session, line, service, from_date, to_date):
     zone = ZoneInfo(service.timezone)
     if from_date < server_now().astimezone(zone).date():
         fail("INVALID_DATE_RANGE", "不能为过去日期生成新的计划车次")
-    routes = plan_routes(session, line)
+    routes = line_routes(session, line)
     stops = service_stops(session, service.id)
     created = 0
     slots = 0
@@ -161,7 +161,7 @@ def write_service(session, line_id, request, key, service_id=None):
             for time_field in ("arrival_time", "departure_time"):
                 if isinstance(stop.get(time_field), str):
                     stop[time_field] = time.fromisoformat(stop[time_field])
-        route_rows = plan_routes(session, line)
+        route_rows = line_routes(session, line)
         expected_stations = ([route_rows[0].origin_station_id] + [route.destination_station_id for route in route_rows]) if route_rows else []
         if [int(stop["station_id"]) for stop in stops] != expected_stations:
             fail("INVALID_LINE_SERVICE", "班次站点顺序必须与运输线路完全一致")

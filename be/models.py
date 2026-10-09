@@ -22,7 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
 )
-from sqlalchemy.orm import Mapped, mapped_column, synonym
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 
 from db import Base
@@ -37,7 +37,7 @@ class OperationLog(Base):
         ),
         CheckConstraint(
             "resource_type IN "
-            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'PATH_PLAN', 'TRANSPORT_LINE', 'LINE_SERVICE', 'SCHEDULED_TRIP')",
+            "('ORDER', 'SHIPMENT', 'TRANSPORT_TASK', 'CLOCK', 'STATION', 'ROUTE', 'TRANSPORT_LINE', 'LINE_SERVICE', 'SCHEDULED_TRIP')",
             name="ck_logs_resource_type",
         ),
         CheckConstraint(
@@ -234,15 +234,12 @@ class TransportRoute(Base):
 
 class Shipment(StructuredAddressFields, Base):
     planned_origin_station_id: Mapped[int | None] = mapped_column(ForeignKey("stations.id", ondelete="RESTRICT"))
-    scheduling_mode: Mapped[str] = mapped_column(String(16), server_default="LEGACY")
     schedule_version: Mapped[int] = mapped_column(Integer, server_default="0")
     schedule_status: Mapped[str] = mapped_column(String(32), server_default="NOT_CONFIRMED")
     schedule_reason: Mapped[str | None] = mapped_column(String(500))
     __tablename__ = "shipments"
     __table_args__ = (
-        CheckConstraint("path_version >= 0", name="ck_shipments_path_version"),
         CheckConstraint("schedule_version >= 0", name="ck_shipments_schedule_version"),
-        CheckConstraint("scheduling_mode IN ('LEGACY','REVIEWED')", name="ck_shipments_schedule_mode"),
         CheckConstraint("schedule_status IN ('NOT_CONFIRMED','CONFIRMED','NEEDS_RECONFIRMATION','BLOCKED','COMPLETED')", name="ck_shipments_schedule_status"),
         CheckConstraint(
             "earliest_handover_at IS NULL OR latest_delivery_at IS NULL "
@@ -300,7 +297,6 @@ class Shipment(StructuredAddressFields, Base):
         String(32),
         server_default="PENDING_PICKUP",
     )
-    path_version: Mapped[int] = mapped_column(Integer, server_default="0")
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     last_scanned_station_id: Mapped[int | None] = mapped_column(
         ForeignKey("stations.id"),
@@ -515,13 +511,8 @@ class TransportLineLeg(Base):
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     line_id: Mapped[int] = mapped_column(ForeignKey("transport_lines.id"))
-    plan_id = synonym("line_id")
     position: Mapped[int] = mapped_column(Integer)
     route_id: Mapped[int] = mapped_column(ForeignKey("transport_routes.id"))
-
-
-PathPlan = TransportLine
-PathPlanLeg = TransportLineLeg
 
 
 class LineService(Base):
@@ -602,27 +593,6 @@ class ShipmentScheduleLeg(Base):
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class ShipmentPathVersion(Base):
-    __tablename__ = "shipment_path_versions"
-    __table_args__ = (
-        UniqueConstraint("shipment_id", "version", name="uq_shipment_path_versions"),
-        CheckConstraint("version > 0", name="ck_shipment_path_versions_version"),
-        CheckConstraint("jsonb_typeof(legs) = 'array'", name="ck_shipment_path_versions_legs"),
-        CheckConstraint("length(btrim(reason)) BETWEEN 1 AND 500", name="ck_shipment_path_versions_reason"),
-    )
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
-    version: Mapped[int] = mapped_column(Integer)
-    destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
-    source_line_id: Mapped[int | None] = mapped_column(ForeignKey("transport_lines.id"))
-    source_line_version: Mapped[int | None] = mapped_column(Integer)
-    source_plan_id = synonym("source_line_id")
-    source_plan_version = synonym("source_line_version")
-    reason: Mapped[str] = mapped_column(String(500))
-    legs: Mapped[list] = mapped_column(JSONB)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
 class ShipmentScheduleVersion(Base):
     __tablename__ = "shipment_schedule_versions"
     __table_args__ = (
@@ -633,14 +603,11 @@ class ShipmentScheduleVersion(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     shipment_id: Mapped[int] = mapped_column(ForeignKey("shipments.id"))
     version: Mapped[int] = mapped_column(Integer)
-    path_version: Mapped[int] = mapped_column(Integer)
     origin_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     destination_station_id: Mapped[int] = mapped_column(ForeignKey("stations.id"))
     scheduled_trip_id: Mapped[int | None] = mapped_column(ForeignKey("scheduled_trips.id", name="fk_schedule_versions_scheduled_trip", ondelete="RESTRICT"))
     source_line_id: Mapped[int | None] = mapped_column(ForeignKey("transport_lines.id"))
     source_line_version: Mapped[int | None] = mapped_column(Integer)
-    source_plan_id = synonym("source_line_id")
-    source_plan_version = synonym("source_line_version")
     reason: Mapped[str] = mapped_column(String(500))
     legs: Mapped[list] = mapped_column(JSONB)
     operation_id: Mapped[int] = mapped_column(ForeignKey("operation_logs.id"))
