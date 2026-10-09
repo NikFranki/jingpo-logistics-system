@@ -84,6 +84,7 @@ flowchart LR
 | V5 运单目的站更正（BE 已实现，FE 已适配） | [V5 PRD](docs/prd/v5/JINGPO-logistics-system-v5.md)、[BE 规格](docs/技术方案/v5/be/spec.md)、[BE 验收记录](docs/技术方案/v5/be/plan.md)、[FE 适配记录](docs/技术方案/v5/fe/plan.md) |
 | V6 完整运输路径与未来段调整（BE 已实现，FE 已接入） | [V6 PRD](docs/prd/v6/JINGPO-logistics-system-v6.md)、[BE 规格](docs/技术方案/v6/be/spec.md)、[BE 验收记录](docs/技术方案/v6/be/plan.md)、[FE 适配记录](docs/技术方案/v6/fe/plan.md) |
 | V7 运输计划审核与全段任务生成（BE 已实现，FE 已接入待页面验收） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[BE 实施与验证](docs/技术方案/v7/be/plan.md)、[FE 适配与验证](docs/技术方案/v7/fe/plan.md) |
+| V8 待办 | [待补齐功能与验收目标](docs/prd/v8/TODO.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
 
