@@ -70,7 +70,7 @@ export default function App() {
         <Route path="/orders/:orderId" element={<OrderDetailPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/shipments" element={<ShipmentsPage revision={revision} />} />
         <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage revision={revision} busy={busy} mutate={mutate} />} />
-        <Route path="/tasks" element={<TasksPage revision={revision} mutate={mutate} />} />
+        <Route path="/tasks" element={<TasksPage revision={revision} />} />
         <Route path="/tasks/:taskId" element={<TaskDetailPage revision={revision} busy={busy} mutate={mutate} />} />
         <Route path="/network" element={<Navigate to="/network/transport-lines" replace />} />
         <Route path="/network/path-plans" element={<Navigate to="/network/transport-lines" replace />} />

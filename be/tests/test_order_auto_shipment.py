@@ -2,14 +2,20 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
+from pydantic import ValidationError
 
 from errors import NetworkError
 from orders.router import create_order
 from orders.schemas import OrderCreateRequest
 from orders.router import auto_schedule_shipment
+from shipments.schemas import ShipmentCreateRequest
 
 
 class OrderAutoShipmentTests(unittest.TestCase):
+    def test_shipment_create_rejects_retired_scheduling_mode(self):
+        with self.assertRaises(ValidationError):
+            ShipmentCreateRequest.model_validate({"scheduling_mode": "REVIEWED"})
+
     def setUp(self):
         self.request = OrderCreateRequest(
             product_name="test",
