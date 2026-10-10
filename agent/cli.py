@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from uuid import uuid4
 from copy import deepcopy
 
@@ -22,6 +23,29 @@ from state import TurnContext
 from memory import compact_session, delete_session
 from tracing import trace
 from time import monotonic
+
+
+async def show_progress(status):
+    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    index = 0
+    while True:
+        text = f"\r{frames[index % len(frames)]} {status['message']}…"
+        if sys.stderr.isatty():
+            sys.stderr.write(text)
+            sys.stderr.flush()
+        else:
+            sys.stderr.write(f"{status['message']}…\n")
+            sys.stderr.flush()
+            await asyncio.sleep(2)
+            continue
+        index += 1
+        await asyncio.sleep(0.1)
+
+
+def clear_progress():
+    if sys.stderr.isatty():
+        sys.stderr.write("\r\x1b[2K")
+        sys.stderr.flush()
 
 async def restore_turn(
     graph,
@@ -98,8 +122,13 @@ async def main() -> None:
         snapshot = await graph.aget_state(run_config)
         previous_state = deepcopy(snapshot.values)
 
-        context = TurnContext(debug=settings.debug)
+        progress = {"message": "思考中"}
+        context = TurnContext(
+            debug=settings.debug,
+            progress_callback=lambda message: progress.update(message=message),
+        )
         started = monotonic()
+        progress_task = asyncio.create_task(show_progress(progress))
 
         try:
             async with asyncio.timeout(context.remaining_timeout(120)):
@@ -111,6 +140,9 @@ async def main() -> None:
                     context=context,
                 )
         except Exception as exc:
+            progress_task.cancel()
+            await asyncio.gather(progress_task, return_exceptions=True)
+            clear_progress()
             if isinstance(exc, TimeoutError):
                 reason = "TURN_TIMEOUT"
                 message = "本轮执行超时，查询未完成，请重新提问。"
@@ -130,6 +162,10 @@ async def main() -> None:
             trace(context, "turn", started, status=reason, http_calls=context.http_calls)
             await compact_session(graph, run_config)
             continue
+        else:
+            progress_task.cancel()
+            await asyncio.gather(progress_task, return_exceptions=True)
+            clear_progress()
 
         trace(context, "turn", started, status=result["stop_reason"] or "ok", model_calls=result["model_calls"], tool_calls=result["tool_calls"], http_calls=context.http_calls)
         await compact_session(graph, run_config)

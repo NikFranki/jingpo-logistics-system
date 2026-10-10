@@ -1,4 +1,4 @@
-from typing import Annotated, TypedDict
+from typing import Annotated, Callable, TypedDict
 from dataclasses import dataclass, field
 from time import monotonic
 from uuid import uuid4
@@ -31,6 +31,11 @@ class TurnContext:
     http_calls: int = 0
     debug: bool = False
     trace_id: str = field(default_factory=lambda: str(uuid4()))
+    progress_callback: Callable[[str], None] | None = field(default=None, repr=False)
+
+    def set_progress(self, message: str) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(message)
 
     def remaining_timeout(self, maximum: float) -> float:
         remaining = self.deadline - monotonic()

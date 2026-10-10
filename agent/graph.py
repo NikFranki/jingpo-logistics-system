@@ -106,6 +106,7 @@ def create_model_node(model_with_tools):
         }
 
         started = monotonic()
+        runtime.context.set_progress("思考中")
         try:
             async with asyncio.timeout(timeout):
                 response = await model_with_tools.ainvoke([
@@ -149,6 +150,7 @@ def create_tools_node(tools_by_name):
         stop_reason = None
 
         for call in response.tool_calls:
+            runtime.context.set_progress("正在查询物流数据")
             started = monotonic()
             if stop_reason:
                 result = {
