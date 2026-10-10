@@ -22,7 +22,9 @@ def bound_result(value):
         for key, items in data.items():
             if isinstance(items, list):
                 lists.append((key, items))
-                collections[key] = {'total': len(items), 'returned': len(items)}
+                collection = collections.setdefault(key, {'total': len(items), 'returned': len(items)})
+                collection.setdefault('total', len(items))
+                collection['returned'] = len(items)
         events = data.get('tracking_events')
         if isinstance(events, list) and len(events) > MAX_EVENTS:
             # BE sorts newest first; task discovery uses the full history before trimming.

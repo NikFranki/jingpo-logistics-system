@@ -15,6 +15,8 @@ from tools import (
     create_order_search_tool,
     create_shipment_search_tool,
     create_shipment_tracking_tool,
+    create_shipment_schedule_tool,
+    create_destination_changes_tool,
 )
 from state import TurnContext
 from memory import compact_session, delete_session
@@ -54,9 +56,11 @@ async def main() -> None:
     order_search_tool = create_order_search_tool(settings.be_base_url)
     task_tool = create_transport_task_detail_tool(settings.be_base_url)
     task_search_tool = create_transport_task_search_tool(settings.be_base_url)
+    schedule_tool = create_shipment_schedule_tool(settings.be_base_url)
+    destination_changes_tool = create_destination_changes_tool(settings.be_base_url)
     graph = build_graph(model, [
         tracking_tool, search_tool, order_tool, order_search_tool,
-        task_tool, task_search_tool,
+        task_tool, task_search_tool, schedule_tool, destination_changes_tool,
     ])
 
     thread_id = str(uuid4())

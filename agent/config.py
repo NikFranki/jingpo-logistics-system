@@ -23,16 +23,23 @@ def load_settings() -> Settings:
 
     provider = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()
     model = os.getenv("LLM_MODEL", "").strip()
-    api_key = os.getenv("LLM_API_KEY", "").strip()
-    base_url = os.getenv(
-        "LLM_BASE_URL", "https://api.deepseek.com"
-    ).strip().rstrip("/")
+    provider_api_key = {
+        "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
+        "qwen": os.getenv("DASHSCOPE_API_KEY", ""),
+    }.get(provider, "").strip()
+    # Keep LLM_API_KEY as a backward-compatible fallback for existing .env files.
+    api_key = provider_api_key or os.getenv("LLM_API_KEY", "").strip()
+    default_base_url = {
+        "deepseek": "https://api.deepseek.com",
+        "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }.get(provider)
+    base_url = os.getenv("LLM_BASE_URL", default_base_url or "").strip().rstrip("/")
     be_base_url = os.getenv(
         "BE_BASE_URL", "http://127.0.0.1:8000"
     ).strip().rstrip("/")
 
-    if provider != "deepseek":
-        raise ValueError("当前仅支持 LLM_PROVIDER=deepseek")
+    if provider not in {"deepseek", "qwen"}:
+        raise ValueError("LLM_PROVIDER 仅支持 deepseek 或 qwen")
 
     if not model:
         raise ValueError("请配置 LLM_MODEL")

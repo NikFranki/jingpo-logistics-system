@@ -1,14 +1,20 @@
 # 物流查询 Agent
 
-本地 CLI，使用 LangGraph、LangChain 组件和 ChatDeepSeek，通过 BE 的只读接口查询订单、运单、运输任务和延误。支持当前会话内追问，不执行发货、发车、签收或其他写操作。
+本地 CLI，使用 LangGraph、LangChain 组件和 ChatDeepSeek，通过 BE 的只读接口查询订单、运单、V7 运输计划、运输任务和延误。支持当前会话内追问，不执行发货、排程确认、发车、签收或其他写操作。
 
 Agent V1 已完成并通过用户最终 review。业务主流程、响应校验、日志和会话清理已实现；受控测试及真实接口核验记录见 [plan.md](../docs/技术方案/v1/agent/plan.md) 第 12 节。真实模型的自然语言表现沿用用户此前分步验证，未新增专项验证。
 
-## V2 适配
+## V2 适配（历史）
 
 V2 使用六个通用运单阶段；在站位置由最后扫描站点说明，当前运输线路由 `active_transport_task` 说明。查询延误时同时读取当前任务和轨迹关联的历史任务，包含尚未发车、没有任务轨迹的待发车任务。历史任务晚到与当前任务超时分别说明。
 
 2026-09-30：20 项受控测试通过，真实 V2 后端七项只读契约检查通过；通过受控模型调用真实查询工具，确认 AB、BC 运输中及 AB 待发车三种当前任务关联。此次没有新增真实模型自然语言评测。完整记录见 [V2 验收记录](../docs/技术方案/v2/be/plan.md)。Agent 需要与 V2 后端、前端一起升级。
+
+## V7 适配（代码已接入，验收待完成）
+
+V7 适配支持读取运单完整分段计划、计划历史、目的站更正历史，以及任务的计划车次、动态预测、实际时间和共享等待信息。延误组合查询从当前 schedule、当前执行任务和轨迹历史任务收集关联，并按任务 ID 去重；未来计划段即使没有轨迹也会纳入核对。`PLANNED`、`ACTIVE`、`RELEASED` 分别表示未来关联、当前执行关联、已解除关联，不能互相混称。分段预计到达不是买家签收时间。
+
+对应规格与实施记录见 [V7 Agent 规格](../docs/技术方案/v7/agent/spec.md) 和 [V7 Agent 实施计划](../docs/技术方案/v7/agent/plan.md)。本次已接入只读工具和响应字段；本机 BE 当前不可连接，真实契约核验待后端启动后进行。受控测试与真实模型回答也尚未验收。新接口只读，工具不包含预览、确认、取消或物流写操作。
 
 ## 1. 先启动后端
 
@@ -48,14 +54,15 @@ requirements.txt 只声明代码直接使用的依赖，并固定本机已安装
 cp -n .env.example .env
 ```
 
-编辑 .env，把 LLM_MODEL 换成你已验证可用、支持工具调用的 DeepSeek 型号，把 LLM_API_KEY 换成自己的密钥。已有 .env 继续使用，无需覆盖。示例型号是占位符，不是实际可请求的型号。
+编辑 .env，选择模型供应商和型号，并分别填入对应平台的密钥。已有 .env 继续使用，无需覆盖。示例型号是占位符，不是实际可请求的型号。
 
 | 变量 | 说明 |
 | --- | --- |
-| LLM_PROVIDER | 当前仅支持 deepseek，默认也是 deepseek |
+| LLM_PROVIDER | `deepseek` 或 `qwen`，默认 `deepseek` |
 | LLM_MODEL | 必填，实际模型名称 |
-| LLM_API_KEY | 必填，模型服务密钥 |
-| LLM_BASE_URL | 默认 https://api.deepseek.com |
+| DEEPSEEK_API_KEY | 使用 DeepSeek 时填写；也兼容旧变量 LLM_API_KEY |
+| DASHSCOPE_API_KEY | 使用 Qwen/百炼时填写；也兼容旧变量 LLM_API_KEY |
+| LLM_BASE_URL | 可选；DeepSeek 默认 `https://api.deepseek.com`，Qwen 默认 `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | BE_BASE_URL | 默认 http://127.0.0.1:8000 |
 | AGENT_DEBUG | 默认 false；true/1 开启脱敏诊断日志，false/0 关闭 |
 
@@ -63,7 +70,7 @@ cp -n .env.example .env
 
 修改 .env 后重启 Agent；若曾在终端 export 同名变量，先 unset 对应变量，才能采用文件中的值。未来运行环境也可直接注入这些环境变量。仓库忽略 .env，仅提交无密钥的 .env.example。
 
-模型创建集中在 model.py 的 create_chat_model；目前只实现 DeepSeek，换供应商需要新增适配逻辑，不能仅修改 provider。
+模型创建集中在 model.py 的 create_chat_model。通过修改 `LLM_PROVIDER`、`LLM_MODEL` 和对应密钥即可切换，不必改代码。例如切到 Qwen 时设 `LLM_PROVIDER=qwen`、`LLM_MODEL=qwen3.8-max`，并填写 `DASHSCOPE_API_KEY`；切回 DeepSeek 时改为 `LLM_PROVIDER=deepseek`、对应模型名和 `DEEPSEEK_API_KEY`。Qwen 通过百炼 OpenAI 兼容接口调用；北京地域默认使用 DashScope 兼容接口，也可在百炼控制台复制业务空间专属地址后配置到 `LLM_BASE_URL`。API Key 与地域/端点须匹配。切换后重启 Agent。
 
 ## 4. 启动与对话
 
@@ -97,7 +104,7 @@ python cli.py
 | cli.py | 输入循环、会话切换、异常恢复及输出 |
 | config.py / model.py | 读取配置、创建模型适配器 |
 | graph.py / state.py | LangGraph 循环、会话状态和每轮预算 |
-| tools.py | 六个查询工具及订单→运单→任务关联 |
+| tools.py | 订单、运单、运输计划、目的站更正历史和运输任务查询；订单→运单→任务关联 |
 | be_client.py | 固定 BE 路径的 GET 请求及 HTTP 错误处理 |
 | prompts.py | 澄清、工具选择和有依据的回答规则 |
 | responses.py | 校验 BE 实际使用的响应字段，丢弃无关字段 |
@@ -109,7 +116,7 @@ python cli.py
 
 每轮最多 5 次模型调用、8 次工具尝试、24 次 HTTP 请求。第 5 次模型仍可调用工具，执行后停止，不发起第 6 次模型请求；如果第 5 次直接给出最终回答，则正常结束。
 
-单次模型等待最多 45 秒，HTTP 最多 10 秒，整轮最多 120 秒。输入最多 4,000 字符，保留最多 10 轮历史加当前轮，并按 64 KiB 消息上限裁剪。工具消息最多 32 KiB；轨迹保留 BE 最新在前顺序的最近 50 条，meta.collections 记录裁剪前总数及返回数，meta.truncated 标记裁剪。任务发现使用裁剪前的完整轨迹。单个字段本身过大时明确返回 RESULT_TOO_LARGE，不截断成误导性的业务字段。
+单次模型等待最多 45 秒，HTTP 最多 10 秒，整轮最多 120 秒。输入最多 4,000 字符，保留最多 10 轮历史加当前轮，并按 64 KiB 消息上限裁剪。工具消息最多 32 KiB；轨迹保留 BE 最新在前顺序的最近 50 条，meta.collections 记录裁剪前总数及返回数，meta.truncated 标记裁剪。任务发现使用完整轨迹和 schedule；V7 schedule 分段最多摘要 20 段，延误组合最多读取 18 个去重任务，超出时明确标记不完整。单个字段本身过大时明确返回 RESULT_TOO_LARGE，不截断成误导性的业务字段。
 
 CLI 在正常结束或恢复后，仅保留当前状态的一个检查点；/new、/exit 删除旧会话。清理不在图运行中执行，已有调用配对与后续追问保留。直接嵌入 build_graph 的其他入口也需在终止后调用 compact_session，不能在并发运行同一会话时清理。
 
@@ -117,7 +124,7 @@ CLI 在正常结束或恢复后，仅保留当前状态的一个检查点；/new
 
 - 配置报错：检查必填项、占位符及终端中同名环境变量。
 - 模型认证失败／限流：分别检查密钥权限或稍后重试；其他模型请求失败检查型号和网络。日志不输出原始异常。
-- 后端响应格式异常：成功状态码下的非法 JSON、缺失字段、错误类型会转换为 INVALID_RESPONSE；关联站点或任务失败时保留其他已确认事实。
+- 后端响应格式异常：成功状态码下的非法 JSON、缺失字段、错误类型会转换为 INVALID_RESPONSE；关联站点、schedule、历史或任务查询失败时保留其他已确认事实并标记 partial。
 - 无法连接后端：检查 BE_BASE_URL、BE 进程和数据库就绪检查。
 - 查询对象不存在：对照 Swagger 核对对象类型、数据库 ID 或完整编号。
 - 达到调用上限：本轮查询未完成，缩小范围后继续提问；下一轮预算重置。

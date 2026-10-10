@@ -83,6 +83,42 @@ async def get_shipment(base_url: str, shipment_id: int, context: TurnContext) ->
     return await _get(base_url, f"/api/v1/shipments/{shipment_id}", context, schema="shipment")
 
 
+async def get_shipment_schedule(base_url: str, shipment_id: int, context: TurnContext) -> dict:
+    if shipment_id <= 0:
+        raise ValueError("运单 ID 必须大于 0")
+    return await _get(
+        base_url, f"/api/v1/shipments/{shipment_id}/schedule", context, schema="schedule",
+    )
+
+
+async def list_shipment_schedule_history(
+    base_url: str, shipment_id: int, context: TurnContext,
+    page: int = 1, page_size: int = 20,
+) -> dict:
+    if shipment_id <= 0:
+        raise ValueError("运单 ID 必须大于 0")
+    if page < 1 or not 1 <= page_size <= 100:
+        raise ValueError("计划历史分页参数无效")
+    return await _get(
+        base_url, f"/api/v1/shipments/{shipment_id}/schedule-history", context,
+        {"page": page, "page_size": page_size}, schema="schedule_history",
+    )
+
+
+async def list_shipment_destination_changes(
+    base_url: str, shipment_id: int, context: TurnContext,
+    page: int = 1, page_size: int = 20,
+) -> dict:
+    if shipment_id <= 0:
+        raise ValueError("运单 ID 必须大于 0")
+    if page < 1 or not 1 <= page_size <= 100:
+        raise ValueError("目的站更正记录分页参数无效")
+    return await _get(
+        base_url, f"/api/v1/shipments/{shipment_id}/destination-changes", context,
+        {"page": page, "page_size": page_size}, schema="destination_changes",
+    )
+
+
 async def list_shipments(
     base_url: str,
     context: TurnContext,

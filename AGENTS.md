@@ -83,6 +83,7 @@ flowchart LR
 | V4 发车前取消与业务操作归属（BE 已实现） | [V4 PRD](docs/prd/v4/JINGPO-logistics-system-v4.md)、[BE 规格](docs/技术方案/v4/be/spec.md)、[实施计划](docs/技术方案/v4/be/plan.md) |
 | V5 运单目的站更正（BE 已实现，FE 已适配） | [V5 PRD](docs/prd/v5/JINGPO-logistics-system-v5.md)、[BE 规格](docs/技术方案/v5/be/spec.md)、[BE 验收记录](docs/技术方案/v5/be/plan.md)、[FE 适配记录](docs/技术方案/v5/fe/plan.md) |
 | V6 完整运输路径与未来段调整（BE 已实现，FE 已接入） | [V6 PRD](docs/prd/v6/JINGPO-logistics-system-v6.md)、[BE 规格](docs/技术方案/v6/be/spec.md)、[BE 验收记录](docs/技术方案/v6/be/plan.md)、[FE 适配记录](docs/技术方案/v6/fe/plan.md) |
+| V7 查询 Agent 适配（代码已接入，验收待完成） | [Agent 规格](docs/技术方案/v7/agent/spec.md)、[实施与验证计划](docs/技术方案/v7/agent/plan.md) |
 | V7 运输计划审核与全段任务生成（BE 已实现，FE 已接入待页面验收） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[BE 实施与验证](docs/技术方案/v7/be/plan.md)、[FE 适配与验证](docs/技术方案/v7/fe/plan.md) |
 | V8 待办 | [待补齐功能与验收目标](docs/prd/v8/TODO.md) |
 
