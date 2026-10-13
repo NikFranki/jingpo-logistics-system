@@ -217,12 +217,22 @@ class DestinationChangePage(Page[DestinationChange]):
     pass
 
 
+class GlobalDestinationChange(DestinationChange):
+    shipment_id: Identifier
+    shipment_no: Text
+
+
+class GlobalDestinationChangePage(Page[GlobalDestinationChange]):
+    pass
+
+
 SCHEMAS = {
     "shipments": TypeAdapter(Page[Shipment]),
     "shipment": TypeAdapter(ShipmentDetail),
     "schedule": TypeAdapter(Schedule),
     "schedule_history": TypeAdapter(ScheduleHistoryPage),
     "destination_changes": TypeAdapter(DestinationChangePage),
+    "all_destination_changes": TypeAdapter(GlobalDestinationChangePage),
     "orders": TypeAdapter(Page[Order]),
     "order": TypeAdapter(OrderDetail),
     "tasks": TypeAdapter(TaskPage),

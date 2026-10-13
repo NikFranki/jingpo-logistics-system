@@ -28,6 +28,7 @@ from shipments.schemas import (
     ShipmentListResponse,
     ShipmentDestinationUpdateRequest,
     DestinationChangeListResponse,
+    GlobalDestinationChangeListResponse,
 )
 from shipments.service import (
     build_shipment_response_body,
@@ -39,6 +40,7 @@ from shipments.service import (
     list_shipment_transport_tasks,
     update_shipment_destination,
     list_destination_changes,
+    list_all_destination_changes,
 )
 
 
@@ -46,6 +48,18 @@ router = APIRouter(
     prefix="/api/v1/shipments",
     tags=["shipments"],
 )
+
+
+@router.get("/destination-changes", response_model=GlobalDestinationChangeListResponse)
+def read_all_destination_changes(
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> GlobalDestinationChangeListResponse:
+    items, total = list_all_destination_changes(session, page, page_size)
+    return GlobalDestinationChangeListResponse(
+        items=items, total=total, page=page, page_size=page_size,
+    )
 
 
 @router.patch("/{shipment_id}/destination", response_model=ShipmentDetailResponse)

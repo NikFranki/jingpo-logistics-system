@@ -914,3 +914,34 @@ def list_destination_changes(
         "reason": log.after_data["reason"], "occurred_at": log.occurred_at,
     } for log in logs]
     return items, total
+
+
+def list_all_destination_changes(
+    session: Session, page: int, page_size: int,
+) -> tuple[list[dict], int]:
+    filters = (
+        OperationLog.resource_type == "SHIPMENT",
+        OperationLog.action == "UPDATE_SHIPMENT_DESTINATION",
+    )
+    query = select(OperationLog, Shipment).join(
+        Shipment, Shipment.id == OperationLog.resource_id,
+    ).where(*filters)
+    total = session.scalar(
+        select(func.count(OperationLog.id)).select_from(OperationLog).join(
+            Shipment, Shipment.id == OperationLog.resource_id,
+        ).where(*filters)
+    ) or 0
+    rows = session.execute(
+        query.order_by(OperationLog.id.desc())
+        .offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    items = [{
+        "id": str(log.id),
+        "shipment_id": str(shipment.id),
+        "shipment_no": shipment.shipment_no,
+        "previous_destination_station_id": log.before_data["destination_station_id"],
+        "destination_station_id": log.after_data["destination_station_id"],
+        "reason": log.after_data["reason"],
+        "occurred_at": log.occurred_at,
+    } for log, shipment in rows]
+    return items, total

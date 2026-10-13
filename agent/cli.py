@@ -2,6 +2,7 @@ import asyncio
 import sys
 from uuid import uuid4
 from copy import deepcopy
+from prompt_toolkit import PromptSession
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
@@ -18,6 +19,7 @@ from tools import (
     create_shipment_tracking_tool,
     create_shipment_schedule_tool,
     create_destination_changes_tool,
+    create_destination_change_shipment_scan_tool,
 )
 from state import TurnContext
 from memory import compact_session, delete_session
@@ -46,6 +48,12 @@ def clear_progress():
     if sys.stderr.isatty():
         sys.stderr.write("\r\x1b[2K")
         sys.stderr.flush()
+
+
+async def read_question():
+    if sys.stdin.isatty():
+        return (await PromptSession().prompt_async("你：")).strip()
+    return input("你：").strip()
 
 async def restore_turn(
     graph,
@@ -82,9 +90,10 @@ async def main() -> None:
     task_search_tool = create_transport_task_search_tool(settings.be_base_url)
     schedule_tool = create_shipment_schedule_tool(settings.be_base_url)
     destination_changes_tool = create_destination_changes_tool(settings.be_base_url)
+    destination_scan_tool = create_destination_change_shipment_scan_tool(settings.be_base_url)
     graph = build_graph(model, [
         tracking_tool, search_tool, order_tool, order_search_tool,
-        task_tool, task_search_tool, schedule_tool, destination_changes_tool,
+        task_tool, task_search_tool, schedule_tool, destination_changes_tool, destination_scan_tool,
     ])
 
     thread_id = str(uuid4())
@@ -92,7 +101,7 @@ async def main() -> None:
 
     while True:
         try:
-            question = input("你：").strip()
+            question = await read_question()
         except (EOFError, KeyboardInterrupt):
             await delete_session(graph, thread_id)
             break

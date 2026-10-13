@@ -119,6 +119,17 @@ async def list_shipment_destination_changes(
     )
 
 
+async def list_all_shipment_destination_changes(
+    base_url: str, context: TurnContext, page: int = 1, page_size: int = 50,
+) -> dict:
+    if page < 1 or not 1 <= page_size <= 100:
+        raise ValueError("全局目的站更正记录分页参数无效")
+    return await _get(
+        base_url, "/api/v1/shipments/destination-changes", context,
+        {"page": page, "page_size": page_size}, schema="all_destination_changes",
+    )
+
+
 async def list_shipments(
     base_url: str,
     context: TurnContext,

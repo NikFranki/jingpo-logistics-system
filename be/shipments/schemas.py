@@ -120,6 +120,18 @@ class DestinationChangeListResponse(BaseModel):
     page: int
     page_size: int
 
+
+class GlobalDestinationChangeResponse(DestinationChangeResponse):
+    shipment_id: str
+    shipment_no: str
+
+
+class GlobalDestinationChangeListResponse(BaseModel):
+    items: list[GlobalDestinationChangeResponse]
+    total: int
+    page: int
+    page_size: int
+
 class ShipmentEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

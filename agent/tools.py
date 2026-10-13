@@ -6,7 +6,8 @@ from langgraph.runtime import get_runtime
 
 from be_client import (
     BEClientError, get_shipment, get_shipment_schedule as read_shipment_schedule, get_stations,
-    list_shipment_destination_changes, list_shipment_schedule_history,
+    list_all_shipment_destination_changes, list_shipment_destination_changes,
+    list_shipment_schedule_history,
     list_shipments,
 )
 from be_client import get_order as read_order
@@ -52,7 +53,7 @@ class ShipmentSearchInput(BaseModel):
     shipment_no: ShipmentNumber | None = Field(default=None, description="完整运单号，精确筛选")
     stage: ShipmentStage | None = None
     page: int = Field(default=1, ge=1, strict=True)
-    page_size: int = Field(default=10, ge=1, le=20, strict=True)
+    page_size: int = Field(default=10, ge=1, le=100, strict=True)
 
 
 class ShipmentTrackingInput(BaseModel):
@@ -263,6 +264,41 @@ def create_shipment_search_tool(base_url: str):
         return result
 
     return search_shipments
+
+
+class DestinationChangeShipmentScanInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    page: int = Field(default=1, ge=1, strict=True)
+    page_size: int = Field(default=50, ge=1, le=100, strict=True)
+
+
+def create_destination_change_shipment_scan_tool(base_url: str):
+    @tool(args_schema=DestinationChangeShipmentScanInput)
+    async def find_shipments_with_destination_changes(
+        page: int = 1, page_size: int = 50,
+    ) -> dict:
+        """分页查询目的站更正审计记录；每条记录直接包含对应运单号与运单 ID。"""
+        result = _result()
+        context = get_runtime(TurnContext).context
+        try:
+            response = await list_all_shipment_destination_changes(base_url, context, page, page_size)
+            _record_request(result, response)
+            data = response["data"]
+            result["data"] = {"items": data["items"]}
+            result["meta"]["pagination"] = _pagination(data)
+            if not data["items"]:
+                result["status"] = "empty"
+                result["warnings"].append("当前页没有目的站更正记录；请结合 total 判断是否还有其他页。")
+        except BEClientError as exc:
+            return _error(result, exc)
+        except TurnLimitError as exc:
+            result["status"] = "partial"
+            result["meta"]["stop_reason"] = exc.code
+            result["warnings"].append("本轮预算耗尽，未能读取目的站更正记录页。")
+        return result
+
+    return find_shipments_with_destination_changes
 
 
 def create_shipment_tracking_tool(base_url: str):
