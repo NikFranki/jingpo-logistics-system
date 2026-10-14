@@ -32,6 +32,9 @@ class TurnContext:
     debug: bool = False
     trace_id: str = field(default_factory=lambda: str(uuid4()))
     progress_callback: Callable[[str], None] | None = field(default=None, repr=False)
+    references: dict = field(default_factory=dict, repr=False)
+    references_truncated: bool = False
+    warnings: list[str] = field(default_factory=list, repr=False)
 
     def set_progress(self, message: str) -> None:
         if self.progress_callback is not None:

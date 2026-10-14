@@ -21,9 +21,13 @@ PRD 建议顺序：问题与目标 → 用户流程图/界面示意 → 范围�
 flowchart LR
     U[用户] --> FE[前端 fe\n业务操作与演示]
     U --> CLI[查询 Agent agent\n自然语言问答]
-    CLI <--> LLM[DeepSeek 模型\n选择查询工具并组织回答]
+    CLI --> CORE[Agent 查询核心\n只读工具、会话与查询预算]
+    FE -->|/agent 同源请求| PROXY[服务端代理]
+    PROXY --> API[独立 Agent API 服务\n会话与查询进度]
+    API --> CORE
+    CORE <--> LLM[模型服务\n选择查询工具并组织回答]
     FE -->|查询与写操作| BE[后端 be\n物流事实、运输安排与操作历史]
-    CLI -->|只读 HTTP 查询| BE
+    CORE -->|只读 HTTP 查询| BE
     BE --> DB[(PostgreSQL\n业务数据、轨迹与操作日志)]
     BE --> L[lines 模块\n统一运输线路管理与候选]
     L --> DB
@@ -57,7 +61,7 @@ flowchart LR
 | --- | --- | --- |
 | `fe/` | 业务页面与演示操作 | [前端 README](fe/README.md) |
 | `be/` | 业务规则、数据与接口 | [后端 README](be/README.md) |
-| `agent/` | 自然语言物流查询 | [查询 Agent README](agent/README.md) |
+| `agent/` | CLI 与独立 HTTP 服务，供前端自然语言物流查询 | [查询 Agent README](agent/README.md) |
 
 具体代码结构、业务规则、启动和验证方式看对应 README 及其链接的详细文档；相关规则变化时更新所属项目文档。
 
@@ -83,9 +87,11 @@ flowchart LR
 | V4 发车前取消与业务操作归属（BE 已实现） | [V4 PRD](docs/prd/v4/JINGPO-logistics-system-v4.md)、[BE 规格](docs/技术方案/v4/be/spec.md)、[实施计划](docs/技术方案/v4/be/plan.md) |
 | V5 运单目的站更正（BE 已实现，FE 已适配） | [V5 PRD](docs/prd/v5/JINGPO-logistics-system-v5.md)、[BE 规格](docs/技术方案/v5/be/spec.md)、[BE 验收记录](docs/技术方案/v5/be/plan.md)、[FE 适配记录](docs/技术方案/v5/fe/plan.md) |
 | V6 完整运输路径与未来段调整（BE 已实现，FE 已接入） | [V6 PRD](docs/prd/v6/JINGPO-logistics-system-v6.md)、[BE 规格](docs/技术方案/v6/be/spec.md)、[BE 验收记录](docs/技术方案/v6/be/plan.md)、[FE 适配记录](docs/技术方案/v6/fe/plan.md) |
+| 前端物流查询助手与独立 Agent API | [接入契约、启动与验证](docs/技术方案/v7/agent/web-assistant.md) |
 | V7 查询 Agent 适配（代码已接入，验收待完成） | [Agent 规格](docs/技术方案/v7/agent/spec.md)、[实施与验证计划](docs/技术方案/v7/agent/plan.md) |
 | V7 运输计划审核与全段任务生成（BE 已实现，FE 已接入待页面验收） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[BE 实施与验证](docs/技术方案/v7/be/plan.md)、[FE 适配与验证](docs/技术方案/v7/fe/plan.md) |
 | V8 待办 | [待补齐功能与验收目标](docs/prd/v8/TODO.md) |
+| V8 登录与角色权限（PRD 草案待 review，未实现） | [注册、登录、数据权限与 BE/FE/Agent 范围](docs/prd/v8/JINGPO-logistics-system-v8.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
 

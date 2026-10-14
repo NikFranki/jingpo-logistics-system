@@ -1,7 +1,10 @@
 import asyncio
 import json
+import re
+from typing import get_args
 from time import monotonic
 from results import bound_result
+from references import collect_references
 from tracing import trace, safe_args
 from pydantic import ValidationError
 
@@ -18,6 +21,19 @@ from state import AgentState, TurnContext, TurnLimitError
 MAX_MODEL_CALLS = 5
 MAX_TOOL_CALLS = 8
 MAX_MESSAGE_BYTES = 64 * 1024
+
+
+def normalize_model_args(selected_tool, arguments):
+    """Normalize only schema-declared scalar types emitted as strings by providers."""
+    normalized = dict(arguments)
+    for name, field in getattr(selected_tool.args_schema, "model_fields", {}).items():
+        value = normalized.get(name)
+        types = (field.annotation, *get_args(field.annotation))
+        if int in types and isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,18}", value):
+            normalized[name] = int(value)
+        elif bool in types and value in ("true", "false"):
+            normalized[name] = value == "true"
+    return normalized
 
 
 def trim_messages_by_size(messages):
@@ -175,7 +191,7 @@ def create_tools_node(tools_by_name):
                     else:
                         async with asyncio.timeout(timeout):
                             result = await selected_tool.ainvoke(
-                                call["args"]
+                                normalize_model_args(selected_tool, call["args"])
                             )
 
                 except TurnLimitError as exc:
@@ -184,8 +200,15 @@ def create_tools_node(tools_by_name):
                 except TimeoutError:
                     stop_reason = "TURN_TIMEOUT"
                     result = {"status": "error", "error": "本轮执行超时"}
-                except ValidationError:
-                    result = {"status": "error", "error": "工具参数不合法"}
+                except ValidationError as exc:
+                    result = {
+                        "status": "error",
+                        "error": "工具参数不合法，请按工具输入格式修正后重试；ID 和页码必须传整数，不能传字符串。",
+                        "validation_errors": [
+                            {"field": ".".join(str(part) for part in error["loc"]), "type": error["type"]}
+                            for error in exc.errors(include_input=False, include_context=False)
+                        ],
+                    }
                 except Exception:
                     result = {"status": "error", "error": "工具执行失败"}
 
@@ -193,6 +216,10 @@ def create_tools_node(tools_by_name):
             if result_stop in {"HTTP_CALL_LIMIT", "TURN_TIMEOUT"}:
                 stop_reason = result_stop
             result = bound_result(result)
+            collect_references(call["name"], result, runtime.context)
+            for warning in result.get("warnings", []):
+                if isinstance(warning, str) and warning not in runtime.context.warnings:
+                    runtime.context.warnings.append(warning)
             trace(runtime.context, "tool", started, operation=call["name"] if call["name"] in tools_by_name else "unknown", args=safe_args(call["args"]), status=result.get("status"), tool_calls=calls)
             messages.append(
                 ToolMessage(

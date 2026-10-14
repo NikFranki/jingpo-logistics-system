@@ -10,17 +10,7 @@ from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from config import load_settings
 from graph import build_graph
 from model import create_chat_model
-from tools import (
-    create_transport_task_detail_tool,
-    create_transport_task_search_tool,
-    create_order_detail_tool,
-    create_order_search_tool,
-    create_shipment_search_tool,
-    create_shipment_tracking_tool,
-    create_shipment_schedule_tool,
-    create_destination_changes_tool,
-    create_destination_change_shipment_scan_tool,
-)
+from registry import build_tools
 from state import TurnContext
 from memory import compact_session, delete_session
 from tracing import trace
@@ -82,19 +72,7 @@ async def restore_turn(
 async def main() -> None:
     settings = load_settings()
     model = create_chat_model(settings)
-    tracking_tool = create_shipment_tracking_tool(settings.be_base_url)
-    search_tool = create_shipment_search_tool(settings.be_base_url)
-    order_tool = create_order_detail_tool(settings.be_base_url)
-    order_search_tool = create_order_search_tool(settings.be_base_url)
-    task_tool = create_transport_task_detail_tool(settings.be_base_url)
-    task_search_tool = create_transport_task_search_tool(settings.be_base_url)
-    schedule_tool = create_shipment_schedule_tool(settings.be_base_url)
-    destination_changes_tool = create_destination_changes_tool(settings.be_base_url)
-    destination_scan_tool = create_destination_change_shipment_scan_tool(settings.be_base_url)
-    graph = build_graph(model, [
-        tracking_tool, search_tool, order_tool, order_search_tool,
-        task_tool, task_search_tool, schedule_tool, destination_changes_tool, destination_scan_tool,
-    ])
+    graph = build_graph(model, build_tools(settings.be_base_url))
 
     thread_id = str(uuid4())
     print("输入 /new 开始新会话，/exit 退出。")

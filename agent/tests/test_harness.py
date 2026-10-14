@@ -35,6 +35,8 @@ SHIPMENT = dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT',
                 active_transport_task=dict(id='7', route_code='AB', origin_station_id='1', destination_station_id='2', status='IN_TRANSIT'))
 ORDER = dict(id='3', order_no='ORDER-3', product_name='parcel', quantity=1,
              status='SHIPPED', shipment=dict(id='2', shipment_no='SHIP-2', stage='IN_TRANSIT'))
+SCHEDULE = dict(shipment_id='2', status='UNPLANNED', version=0,
+                origin_station_id='1', destination_station_id='1', legs=[], server_time=TIME)
 
 
 def page(items):
@@ -186,6 +188,7 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
             self.assertEqual(req.url.host, 'be')
             seen.append(req.url.path)
             payload = {'/api/v1/shipments/2': shipment,
+                       '/api/v1/shipments/2/schedule': SCHEDULE,
                        '/api/v1/stations': [dict(id='1', code='A', name='A station')],
                        '/api/v1/transport-tasks/7': TASK,
                        '/api/v1/transport-tasks/8': {'malformed': True}}[req.url.path]
@@ -195,7 +198,7 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         with self.mocked(handler):
             result, _ = await self.invoke(model, [create_shipment_tracking_tool('http://be')], ctx)
         data = tool_results(result)[0]
-        self.assertEqual(ctx.http_calls, 4)
+        self.assertEqual(ctx.http_calls, 5)
         self.assertEqual(seen.count('/api/v1/transport-tasks/7'), 1)
         self.assertEqual(data['status'], 'partial')
         self.assertEqual(data['data']['task_errors'][0]['code'], 'INVALID_RESPONSE')
@@ -216,6 +219,8 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
                 payload = [dict(id='1', code='GZ', name='广州'), dict(id='2', code='WH', name='武汉'), dict(id='3', code='HZ', name='杭州')]
             elif req.url.path == '/api/v1/shipments/2':
                 payload = shipment
+            elif req.url.path == '/api/v1/shipments/2/schedule':
+                payload = {**SCHEDULE, 'destination_station_id': '3'}
             else:
                 payload = task
             return httpx.Response(200, json=payload)
@@ -249,6 +254,7 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         def handler(req):
             paths.append(req.url.path)
             payload = {'/api/v1/shipments/2': shipment,
+                       '/api/v1/shipments/2/schedule': SCHEDULE,
                        '/api/v1/stations': [dict(id='1', code='A', name='A station'),
                                             dict(id='2', code='B', name='B station')],
                        '/api/v1/transport-tasks/7': task}[req.url.path]
@@ -268,6 +274,7 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         registry = [f('http://be') for f in (create_order_search_tool, create_order_detail_tool, create_shipment_search_tool,
                                             create_shipment_tracking_tool, create_transport_task_search_tool, create_transport_task_detail_tool)]
         payloads = {'/api/v1/orders': page([ORDER]), '/api/v1/orders/3': ORDER,
+                    '/api/v1/shipments/2/schedule': SCHEDULE,
                     '/api/v1/shipments': page([SHIPMENT]), '/api/v1/shipments/2': SHIPMENT,
                     '/api/v1/stations': [dict(id='1', code='A', name='A'), dict(id='2', code='B', name='B')],
                     '/api/v1/transport-tasks': page([TASK]), '/api/v1/transport-tasks/7': TASK}

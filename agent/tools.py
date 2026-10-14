@@ -682,7 +682,7 @@ def create_destination_changes_tool(base_url: str):
             _record_request(result, response)
             data = response["data"]
             changes = data["items"]
-            result["data"] = {"items": changes}
+            result["data"] = {"shipment_id": str(shipment_id), "items": changes}
             result["meta"]["pagination"] = _pagination(data)
             if not changes:
                 result["status"] = "empty"

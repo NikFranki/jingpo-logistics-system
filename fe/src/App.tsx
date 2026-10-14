@@ -14,6 +14,7 @@ const TaskDetailPage = lazy(() => import('./pages/TasksPage').then(module => ({ 
 const NetworkPage = lazy(() => import('./NetworkPage'))
 const TransportLinesPage = lazy(() => import('./TransportLinesPage'))
 const LineServicesPage = lazy(() => import('./LineServicesPage'))
+const AssistantPanel = lazy(() => import('./AssistantPanel'))
 
 export default function App() {
   const location = useLocation()
@@ -81,5 +82,5 @@ export default function App() {
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Routes>
     </Suspense>
-  </ProLayout></>
+  </ProLayout><Suspense fallback={null}><AssistantPanel /></Suspense></>
 }

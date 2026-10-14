@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/agent': { target: 'http://127.0.0.1:8001', changeOrigin: true, timeout: 150000, proxyTimeout: 150000 },
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/health': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
