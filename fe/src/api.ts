@@ -1,10 +1,12 @@
-export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED'
+import { csrfHeaders, currentIdentityVersion, identityFetch, notifyIdentityChange, onIdentityReset } from './auth/transport'
+
+export type Stage = 'PENDING_PICKUP' | 'PICKED_UP' | 'AT_STATION' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'SIGNED' | 'CANCELLED'
 export type TaskStatus = 'WAITING_CARGO' | 'WAITING_PREDECESSOR' | 'PENDING_DEPARTURE' | 'IN_TRANSIT' | 'ARRIVED' | 'CANCELLED'
 export type RouteCode = string
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
 export type Action = { action: string; enabled: boolean; reason_code: string | null; reason: string | null }
 export type AddressSnapshot = { sender_province_id?: string | null; sender_province_name?: string | null; sender_city_id?: string | null; sender_city_name?: string | null; sender_district_id?: string | null; sender_district_name?: string | null; recipient_province_id?: string | null; recipient_province_name?: string | null; recipient_city_id?: string | null; recipient_city_name?: string | null; recipient_district_id?: string | null; recipient_district_name?: string | null }
-export type Order = AddressSnapshot & { id: string; order_no: string; product_name: string; quantity: number; sender_name: string; sender_address: string; recipient_name: string; recipient_address: string; earliest_handover_at: string | null; latest_delivery_at: string | null; region_code: string; status: string; created_at: string; updated_at: string }
+export type Order = AddressSnapshot & { id: string; order_no: string; product_name: string; quantity: number; sender_name: string; sender_address: string; recipient_name: string; recipient_address: string; earliest_handover_at: string | null; latest_delivery_at: string | null; region_code: string; status: string; created_at: string; updated_at: string; created_by_user_id?: string | null; cancelled_at?: string | null; cancel_reason?: string | null }
 export type OrderDetail = Order & { shipment: { id: string; shipment_no: string; stage: Stage } | null }
 export type DestinationMatch = { status: 'MATCHED' | 'NOT_FOUND' | 'CONFLICT' | 'ADDRESS_REQUIRED' | 'INVALID_ADDRESS' | 'EXISTING_SHIPMENT'; reason: string | null; destination_station: Station | null; matched_level: 'PROVINCE' | 'CITY' | 'DISTRICT' | null; service_area_id: string | null }
 export type AdministrativeRegion = { id: string; code: string; name: string; level: 'PROVINCE' | 'CITY' | 'DISTRICT'; province_id: string | null; city_id: string | null; kind: string | null; has_cities?: boolean; has_districts?: boolean }
@@ -59,7 +61,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const timeoutController = new AbortController()
   const timeout = setTimeout(() => timeoutController.abort(), 15_000)
   try {
-    response = await fetch(`${base}${path}`, { ...init, signal: init?.signal ?? timeoutController.signal })
+    const headers = new Headers(init?.headers)
+    if (init?.method && init.method !== 'GET') Object.entries(csrfHeaders()).forEach(([key, value]) => headers.set(key, value))
+    response = await identityFetch(`${base}${path}`, { ...init, headers, signal: init?.signal ? AbortSignal.any([init.signal, timeoutController.signal]) : timeoutController.signal })
   } catch (error) {
     if (timeoutController.signal.aborted) throw new ApiError('请求超时，后端暂时没有响应，请重试。', 0)
     if (error instanceof Error && error.name === 'AbortError') throw new ApiError('请求已取消。', 0)
@@ -69,6 +73,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null)
+    if (response.status === 401 || ['AUTH_CHANGED', 'EMAIL_NOT_VERIFIED', 'PROFILE_INCOMPLETE', 'USERNAME_REQUIRED', 'CSRF_REJECTED'].includes(body?.error?.code)) notifyIdentityChange(body?.error?.code ?? 'AUTH_REQUIRED')
     const fallback: Record<number, string> = {
       400: '提交内容有误，请检查表单后重试。',
       401: '请求未通过身份验证，请检查访问凭证。',
@@ -103,8 +108,18 @@ let routesRequest: Promise<TransportRoute[]> | undefined
 let stationsCachedAt = 0
 let routesCachedAt = 0
 const networkCacheTtl = 30_000
+let networkIdentityVersion = -1
+
+export function clearNetworkCache() {
+  stationsRequest = undefined; routesRequest = undefined; stationsCachedAt = 0; routesCachedAt = 0
+  networkIdentityVersion = currentIdentityVersion()
+}
+
+function checkNetworkIdentity() { if (networkIdentityVersion !== currentIdentityVersion()) clearNetworkCache() }
+onIdentityReset(clearNetworkCache)
 
 function stations() {
+  checkNetworkIdentity()
   if (!stationsRequest || Date.now() - stationsCachedAt > networkCacheTtl) {
     stationsCachedAt = Date.now()
     stationsRequest = request<Station[] | Page<Station>>('/api/v1/stations').then(async result => {
@@ -126,6 +141,7 @@ function stations() {
 }
 
 function routes() {
+  checkNetworkIdentity()
   if (!routesRequest || Date.now() - routesCachedAt > networkCacheTtl) {
     routesCachedAt = Date.now()
     routesRequest = request<TransportRoute[] | Page<TransportRoute>>('/api/v1/routes').then(async result => {
@@ -157,6 +173,7 @@ function writeNetwork<T>(path: string, method: 'POST' | 'PATCH', body: unknown, 
 }
 
 export const api = {
+  orderingOptions: () => request<{ stations: Omit<Station, 'enabled'>[] }>('/api/v1/ordering-options').then(result => result.stations.map(station => ({ ...station, enabled: true }))),
   provinces: () => request<AdministrativeRegion[]>('/api/v1/provinces'),
   cities: (province_id: string) => request<AdministrativeRegion[]>(`/api/v1/cities${query({ province_id })}`),
   districts: (province_id: string, city_id?: string) => request<AdministrativeRegion[]>(`/api/v1/districts${query({ province_id, city_id })}`),
@@ -180,6 +197,7 @@ export const api = {
   order: (id: string) => request<OrderDetail>(`/api/v1/orders/${id}`),
   createOrder: (body: OrderInput, key?: string) => write<Order>('/api/v1/orders/create', 'POST', body, key),
   updateOrder: (id: string, body: OrderInput, key?: string) => write<Order>(`/api/v1/orders/${id}`, 'PATCH', body, key),
+  cancelOrder: (id: string, reason: string, key?: string) => write<Order>(`/api/v1/orders/${id}/cancel`, 'POST', { reason }, key),
   destinationMatch: (orderId: string) => request<DestinationMatch>(`/api/v1/orders/${orderId}/destination-match`),
   createShipment: (orderId: string, destination_station_id?: number, key?: string) => write<ShipmentDetail>(`/api/v1/orders/${orderId}/shipment`, 'POST', { ...(destination_station_id ? { destination_station_id } : {}) }, key),
   shipments: (params: { page?: number; page_size?: number; shipment_no?: string; stage?: string } = {}) => request<Page<Shipment>>(`/api/v1/shipments${query(params)}`),

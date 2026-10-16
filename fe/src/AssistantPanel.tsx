@@ -6,6 +6,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { AssistantError, createAssistantSession, deleteAssistantSession, queryAssistant, referenceLabels, referencePaths, type AssistantAnswer } from './assistantApi'
 import './assistant.css'
+import { useAuth } from './auth/AuthContext'
 
 type Geometry = { x: number; y: number; width: number; height: number }
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; answer?: AssistantAnswer; error?: boolean; retry?: { text: string; messageId: string } }
@@ -19,6 +20,7 @@ function constrain(box: Geometry): Geometry {
 }
 
 export default function AssistantPanel() {
+  const ownScope = useAuth().session?.user.role === 'user'
   const [open, setOpen] = useState(false)
   const [maximized, setMaximized] = useState(false)
   const [compact, setCompact] = useState(window.innerWidth <= 640)
@@ -123,13 +125,13 @@ export default function AssistantPanel() {
           <Tooltip title="收起，保留当前对话"><Button type="text" icon={<MinusOutlined />} aria-label="收起助手" onClick={collapse} /></Tooltip>
         </div>
       </header>
-      <div className="jp-assistant-scope">只读查询<span>订单 · 运单 · 运输任务</span></div>
+      <div className="jp-assistant-scope">只读查询<span>{ownScope ? '自己的订单 · 关联运单和进度' : '订单 · 运单 · 运输任务'}</span></div>
       <div ref={log} className="jp-assistant-log" role="log" aria-label="对话记录" aria-live="polite" aria-relevant="additions">
         {messages.length === 0 && <div className="jp-assistant-empty">
           <h2>从一个问题开始</h2>
           <p>查询物流状态、运输安排或目的站更正记录。查询详情时，请带上完整编号或对象 ID。</p>
           <div className="jp-assistant-suggestions">
-            {['哪些运单发生过目的站更正？', '列出运输中的任务', '查看待揽收运单'].map(text => <button type="button" key={text} onClick={() => void send(text)} disabled={busy}>{text}<SendOutlined /></button>)}
+            {(ownScope ? ['查看我的订单', '查看我的待揽收运单', '我的运单运输到哪里了？'] : ['哪些运单发生过目的站更正？', '列出运输中的任务', '查看待揽收运单']).map(text => <button type="button" key={text} onClick={() => void send(text)} disabled={busy}>{text}<SendOutlined /></button>)}
           </div>
         </div>}
         {messages.map(item => <article className={`jp-assistant-message jp-assistant-message-${item.role}`} key={item.id}>
@@ -139,7 +141,7 @@ export default function AssistantPanel() {
           {item.answer?.warnings.length ? <details className="jp-assistant-warnings"><summary>查询范围与提示（{item.answer.warnings.length}）</summary><ul>{item.answer.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}
           {item.answer?.references.length ? <div className="jp-assistant-references">
             <div className="jp-assistant-reference-title">本次查询涉及的对象</div>
-            <ul>{item.answer.references.map(ref => <li key={`${ref.type}:${ref.id}`}><Link to={`${referencePaths[ref.type]}/${ref.id}`}><span>{referenceLabels[ref.type]}</span><strong>{ref.number || `${referenceLabels[ref.type]} ${ref.id}`}</strong><small>ID {ref.id}</small></Link></li>)}</ul>
+            <ul>{item.answer.references.filter(ref => !ownScope || ref.type !== 'transport_task').map(ref => <li key={`${ref.type}:${ref.id}`}><Link to={`${referencePaths[ref.type]}/${ref.id}`}><span>{referenceLabels[ref.type]}</span><strong>{ref.number || `${referenceLabels[ref.type]} ${ref.id}`}</strong><small>ID {ref.id}</small></Link></li>)}</ul>
             {item.answer.references_truncated && <p>对象较多，仅展示前 100 个。请缩小范围继续查询。</p>}
           </div> : null}
         </article>)}

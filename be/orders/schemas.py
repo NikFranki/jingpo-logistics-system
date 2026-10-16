@@ -14,6 +14,9 @@ from pydantic import (
 
 
 class OrderResponse(AddressResponse):
+    created_by_user_id: str | None = None
+    cancelled_at: datetime | None = None
+    cancel_reason: str | None = None
     id: str
     order_no: str
     product_name: str
@@ -108,6 +111,11 @@ class OrderShipmentSummary(BaseModel):
     id: str
     shipment_no: str
     stage: str
+
+
+class OrderCancelRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 class OrderDetailResponse(OrderResponse):

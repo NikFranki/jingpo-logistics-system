@@ -13,6 +13,8 @@ def collect_references(tool_name: str, result: dict, context) -> None:
     def add(kind, ident, number=None):
         if not isinstance(ident, str) or not OBJECT_ID.fullmatch(ident):
             return
+        if kind == "transport_task" and context.identity and context.identity.own_only:
+            return
         key = (kind, ident)
         if key not in context.references and len(context.references) >= MAX_REFERENCES:
             context.references_truncated = True

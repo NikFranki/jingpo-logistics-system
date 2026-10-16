@@ -1,5 +1,15 @@
 # JINGPO 前端
 
+## V8 登录与权限
+
+运行 `npm run dev` 后打开 `/v8-preview/login`，可模拟四角色、注册/邮箱验证、找回密码、个人账号、用户管理及 Google 回调状态。预览不请求 BE/Agent、不保存密码、不发送邮件；数据只在当前工作区内存保留，刷新或离开后重置。顶部可直接切换角色。
+
+正式入口 `/login` 已接 BE V8：Cookie 登录、CSRF、邮箱验证/找回、Google 登录/补用户名、用户管理分页和 CLI 授权。业务页面要求登录，导航和动作按账号权限展示。HTTP 接入集中在 `src/auth/httpAdapter.ts`。详见 [FE spec](../docs/技术方案/v8/fe/spec.md) 与 [FE plan](../docs/技术方案/v8/fe/plan.md)。
+
+使用前由 BE 负责方备份、迁移到 V8 并初始化唯一管理员，再重启服务。开发默认前端为 `http://localhost:5173`，BE 的 `AUTH_FRONTEND_URL` 必须与浏览器访问地址一致，开发 HTTP 设置 `AUTH_COOKIE_SECURE=false`。通过同源 `/api` 代理访问，写请求自动带 CSRF；不要将密码或网页登录凭据放进 localStorage。
+
+Agent 服务已接入 V8 个人 Bearer 和会话隔离。助手开关仍需显式启用：在 `fe/.env.local` 设置 `VITE_AGENT_V8_ENABLED=true` 并重启开发服务；生产构建可传同名 Docker build arg，并配置 Agent 服务及同源 `/agent` 代理。启用后 FE 向 BE 领取只读个人 token，仅在内存保存并通过 Bearer 调用 Agent，不回退匿名接口。Google 需要后端真实配置；回调失败可能由 BE 直接返回 JSON 错误，不能将预览里的冲突状态切换视为真实 Google 验收。
+
 技术栈：React + TypeScript + Vite + Ant Design + ProComponents。订单、运单和运输任务各有独立详情页，业务操作回到所属详情页。V5 目的站更正、V6 完整路径和 V7 全程运输计划审核已接入后端接口。
 
 ## 启动

@@ -4,6 +4,7 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 # sqlalchemy orm 工具
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from fastapi import Request
 
 # 配置文件导出的 DATABASE_URL
 from config import DATABASE_URL
@@ -19,6 +20,9 @@ engine = create_engine(DATABASE_URL, connect_args={"options": "-c timezone=UTC"}
 SessionLocal = sessionmaker(bind=engine)
 
 # 为请求提供 Session，请求结束后自动关闭（创建数据库 Session -> yield 给接口使用 -> 接口执行完成 -> 退出 with，自动关闭 Session）
-def get_db() -> Generator[Session, None, None]:
+def get_db(request: Request) -> Generator[Session, None, None]:
     with SessionLocal() as session:
+        principal = getattr(request.state, 'principal', None)
+        if principal:
+            session.info['principal'] = principal
         yield session

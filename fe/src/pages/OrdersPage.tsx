@@ -2,11 +2,13 @@ import { fuzzySelectFilter } from '../fuzzySearch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space, Spin, Tag, Typography } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
+import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type DestinationMatch, type Order, type OrderDetail, type OrderInput } from '../api'
 import { apiError, stageLabel, stageText, stages, StatusTag, type Shared, useNetwork } from '../shared'
 import { AddressRegionFields } from '../AddressRegionFields'
+import { useAuth } from '../auth/AuthContext'
+import { hasPermission } from '../auth/contracts'
 
 const { Text } = Typography
 type OrderFormValues = Omit<OrderInput, 'sender_address' | 'recipient_address' | 'earliest_handover_at' | 'latest_delivery_at' | 'sender_province_id' | 'sender_city_id' | 'sender_district_id' | 'recipient_province_id' | 'recipient_city_id' | 'recipient_district_id'> & {
@@ -68,6 +70,7 @@ const blankOrderForm: OrderFormValues = {
 }
 
 function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
+  const user = useAuth().session?.user
   const actionRef = useRef<ActionType | undefined>(undefined)
   const [formOpen, setFormOpen] = useState(false)
   const [loadError, setLoadError] = useState<string>()
@@ -77,12 +80,12 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
     { title: '订单号', dataIndex: 'order_no', copyable: true, width: 150 },
     { title: '运单号', dataIndex: 'shipment_no', hideInTable: true, hideInSearch: false },
     { title: '商品', dataIndex: 'product_name', search: false, render: (_, row) => `${row.product_name} × ${row.quantity}` },
-    { title: '订单状态', dataIndex: 'status', search: false, valueEnum: { PENDING_SHIPMENT: { text: '待创建运单' }, SHIPMENT_CREATED: { text: '运单已创建' }, COMPLETED: { text: '已完成' } } },
+    { title: '订单状态', dataIndex: 'status', search: false, valueEnum: { PENDING_SHIPMENT: { text: '待创建运单' }, SHIPMENT_CREATED: { text: '运单已创建' }, COMPLETED: { text: '已完成' }, CANCELLED: { text: '已取消' } } },
     { title: '运单 / 运输阶段', dataIndex: 'stage', valueType: 'select', valueEnum: stages, fieldProps: { showSearch: true, filterOption: fuzzySelectFilter, placeholder: '全部运输阶段' }, render: (_, row) => <OrderShipment orderId={row.id} orderStatus={row.status} revision={revision} /> },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', search: false },
     { title: '操作', valueType: 'option', render: (_, row) => <Link to={`/orders/${row.id}`}>查看详情</Link> },
   ]
-  return <PageContainer title="订单" subTitle="创建订单并管理对应的运单。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setFormOpen(true)}>创建模拟订单</Button>}>
+  return <PageContainer title="订单" subTitle={user?.role === 'user' ? '创建和管理自己的订单，查看关联运单进度。' : '查看公司订单和对应运单。'} extra={hasPermission(user, 'orders:create') && <Button type="primary" icon={<PlusOutlined />} onClick={() => setFormOpen(true)}>创建订单</Button>}>
     {loadError && <Alert type="error" showIcon message="订单列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
     <ProTable<Order> actionRef={actionRef} rowKey="id" columns={columns} scroll={{ x: 980 }} search={{ labelWidth: 96 }} options={{ reload: true, density: true, setting: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} request={async params => {
       try {
@@ -116,6 +119,8 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
 }
 
 function OrderDetailPage({ revision, busy, mutate }: Shared) {
+  const user = useAuth().session?.user
+  const [cancelOpen, setCancelOpen] = useState(false)
   const { orderId = '' } = useParams()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<OrderDetail>()
@@ -155,11 +160,20 @@ function OrderDetailPage({ revision, busy, mutate }: Shared) {
   }, [orderId, revision, retry])
 
   const title = detail?.order_no ?? '订单详情'
-  return <PageContainer title={title} subTitle="查看订单信息，创建或打开关联运单。" breadcrumb={{ items: [{ title: <Link to="/orders">订单列表</Link> }, { title }] }} extra={<Space wrap>{detail && !detail.shipment && <Button onClick={() => setEditOrderOpen(true)}>编辑订单</Button>}{detail && !detail.shipment && <Button type="primary" loading={busy} onClick={() => setShipmentOpen(true)}>创建运单</Button>}{detail?.shipment && <Button type="primary" onClick={() => navigate(`/shipments/${detail.shipment!.id}`)}>查看运单</Button>}</Space>}>
+  return <PageContainer title={title} subTitle="查看订单信息和关联运单。" breadcrumb={{ items: [{ title: <Link to="/orders">订单列表</Link> }, { title }] }} extra={<Space wrap>{detail?.status === 'PENDING_SHIPMENT' && hasPermission(user, 'orders:update') && <Button disabled={busy} onClick={() => setEditOrderOpen(true)}>编辑订单</Button>}{detail?.status === 'PENDING_SHIPMENT' && hasPermission(user, 'logistics:write') && <Button type="primary" loading={busy} onClick={() => setShipmentOpen(true)}>创建运单</Button>}{detail && hasPermission(user, 'orders:cancel') && (detail.status === 'PENDING_SHIPMENT' || detail.shipment?.stage === 'PENDING_PICKUP') && detail.status !== 'CANCELLED' && <Button danger disabled={busy} onClick={() => setCancelOpen(true)}>取消订单</Button>}{detail?.shipment && <Button type="primary" onClick={() => navigate(`/shipments/${detail.shipment!.id}`)}>查看运单</Button>}</Space>}>
     {loadError && <Alert type="error" showIcon message="订单详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
+      <ModalForm<{ reason: string }> title="取消订单" open={cancelOpen} onOpenChange={setCancelOpen} modalProps={{ destroyOnHidden: true }} submitter={{ searchConfig: { submitText: '确认取消' }, submitButtonProps: { danger: true, loading: busy } }} onFinish={async values => {
+        const result = await mutate(`cancel-order:${detail.id}:${values.reason.trim()}`, key => api.cancelOrder(detail.id, values.reason.trim(), key), '订单已取消')
+        if (result) setCancelOpen(false)
+        return Boolean(result)
+      }}>
+        <Alert type="warning" showIcon message="仅未揽收的订单可以取消" description="后端将解除该运单未执行的运输安排，保留业务历史，不影响共享任务中的其他运单。" style={{ marginBottom: 16 }} />
+        <ProFormTextArea name="reason" label="取消原因" rules={[{ required: true, whitespace: true }, { max: 500 }]} fieldProps={{ maxLength: 500, showCount: true }} />
+      </ModalForm>
       <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
-        <Descriptions.Item label="订单状态">{detail.status === 'COMPLETED' ? '已完成' : detail.shipment ? '运单已创建' : '待创建运单'}</Descriptions.Item>
+        <Descriptions.Item label="订单状态">{detail.status === 'CANCELLED' ? '已取消' : detail.status === 'COMPLETED' ? '已完成' : detail.shipment ? '运单已创建' : '待创建运单'}</Descriptions.Item>
+        {detail.status === 'CANCELLED' && <><Descriptions.Item label="取消原因">{detail.cancel_reason}</Descriptions.Item><Descriptions.Item label="取消时间">{detail.cancelled_at ? new Date(detail.cancelled_at).toLocaleString('zh-CN') : '—'}</Descriptions.Item></>}
         <Descriptions.Item label="商品">{detail.product_name} × {detail.quantity}</Descriptions.Item>
         <Descriptions.Item label="下单发件地址"><span className="jp-wrap-anywhere">{detail.sender_name} · {fullAddress(detail, 'sender')}</span></Descriptions.Item>
         <Descriptions.Item label="下单收件地址"><span className="jp-wrap-anywhere">{detail.recipient_name} · {fullAddress(detail, 'recipient')}</span></Descriptions.Item>

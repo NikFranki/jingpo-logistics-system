@@ -1,3 +1,5 @@
+import { useAuth } from './auth/AuthContext'
+import { hasPermission } from './auth/contracts'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -9,7 +11,9 @@ import type { Mutate } from './shared'
 const { Text } = Typography
 type Props = { revision: number; busy: boolean; mutate: Mutate }
 
-export default function NetworkPage({ revision, busy, mutate }: Props) {
+export default function NetworkPage({ revision, busy: mutationBusy, mutate }: Props) {
+  const user = useAuth().session?.user
+  const busy = mutationBusy || !hasPermission(user, 'network:write')
   const [stations, setStations] = useState<Station[]>([])
   const [search, setSearch] = useState('')
   const [stationFilter, setStationFilter] = useState('')
@@ -70,7 +74,7 @@ export default function NetworkPage({ revision, busy, mutate }: Props) {
     { title: '操作', key: 'action', fixed: 'right', width: 100, render: (_, row) => <Space><Button type="link" size="small" disabled={busy} onClick={() => openEdit(row)}>编辑</Button>{row.enabled && <Popconfirm title="停用此站点？" description="若站点仍被运单或启用线路使用，后端会拒绝停用。" okText="停用" cancelText="取消" onConfirm={() => void changeStation(row, { enabled: false })}><Button type="link" danger size="small" disabled={busy}>停用</Button></Popconfirm>}</Space> },
   ]
 
-  return <><PageContainer title="站点管理" subTitle="维护物流站点、站点能力和默认中转参考时长。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增站点</Button>}>
+  return <><PageContainer title="站点管理" subTitle="维护物流站点、站点能力和默认中转参考时长。" extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={openCreate}>新增站点</Button>}>
     {error && <Alert type="error" showIcon message="站点配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => setStationFilter(search.trim())} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>

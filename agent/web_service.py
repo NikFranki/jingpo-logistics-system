@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from memory import compact_session, delete_session
+from identity import IdentityError, IdentityGuard
 from state import TurnContext
 from tracing import trace
 
@@ -26,11 +27,16 @@ class Session:
     id: str = field(default_factory=lambda: str(uuid4()))
     touched_at: float = field(default_factory=monotonic)
     busy: bool = False
+    owner: tuple = field(default_factory=tuple)
+    auth_version: int = 0
+    invalid: bool = False
+    task: object = field(default=None, repr=False)
     responses: OrderedDict = field(default_factory=OrderedDict, repr=False)
 
 
 class AgentService:
-    def __init__(self, graph, debug=False, ttl=1800, max_sessions=100, max_active=4):
+    def __init__(self, graph, debug=False, ttl=1800, max_sessions=100, max_active=4, identity_client=None):
+        self.identity_client = identity_client
         self.graph = graph
         self.debug = debug
         self.ttl, self.max_sessions, self.max_active = ttl, max_sessions, max_active
@@ -43,31 +49,45 @@ class AgentService:
                 self.sessions.pop(session.id, None)
                 await delete_session(self.graph, session.id)
 
-    async def create_session(self):
+    async def create_session(self, identity):
         await self.prune()
         if len(self.sessions) >= self.max_sessions:
             raise ServiceError(429, "SESSION_LIMIT", "助手会话较多，请稍后再试。")
-        session = Session()
+        session = Session(owner=identity.owner, auth_version=identity.auth_version)
         self.sessions[session.id] = session
         return session
 
-    async def get_session(self, ident):
+    async def get_session(self, ident, identity):
         await self.prune()
         session = self.sessions.get(ident)
-        if session is None:
+        if session is None or session.invalid or session.owner != identity.owner:
             raise ServiceError(404, "SESSION_EXPIRED", "会话已过期，请开始新对话。")
+        if session.auth_version != identity.auth_version:
+            await self.invalidate(session)
+            raise IdentityError(409, "AUTH_CHANGED", "账号权限已变化，请开始新对话。")
         session.touched_at = monotonic()
         return session
 
-    async def remove_session(self, ident):
-        session = await self.get_session(ident)
+    async def remove_session(self, ident, identity):
+        session = await self.get_session(ident, identity)
         if session.busy:
             raise ServiceError(409, "SESSION_BUSY", "正在查询，请停止查询后再开始新对话。")
         # Detach synchronously before deleting checkpoints, so no new turn can start.
         self.sessions.pop(ident, None)
         await delete_session(self.graph, ident)
 
+    async def invalidate(self, session):
+        session.invalid = True
+        session.responses.clear()
+        self.sessions.pop(session.id, None)
+        if session.task and session.task is not asyncio.current_task() and not session.task.done():
+            session.task.cancel()
+            await asyncio.gather(session.task, return_exceptions=True)
+        await delete_session(self.graph, session.id)
+
     def acquire(self, session, message_id, question):
+        if session.invalid:
+            raise ServiceError(404, "SESSION_EXPIRED", "会话已失效，请开始新对话。")
         digest = sha256(question.encode()).hexdigest()
         cached = session.responses.get(message_id)
         if cached is not None:
@@ -90,16 +110,33 @@ class AgentService:
             "model_calls": 0, "tool_calls": 0, "stop_reason": reason,
         }, as_node="stop")
 
-    async def run_turn(self, session, message_id, question, progress):
+    async def run_turn(self, session, message_id, question, progress, identity, guard=None):
         config = {"configurable": {"thread_id": session.id}, "recursion_limit": 30}
         previous = deepcopy((await self.graph.aget_state(config)).values)
-        context = TurnContext(debug=self.debug, progress_callback=progress)
+        session.task = asyncio.current_task()
+        context = TurnContext(debug=self.debug, progress_callback=progress,
+                              identity=identity, identity_client=guard or IdentityGuard(self.identity_client))
         started = monotonic()
         try:
             async with asyncio.timeout(context.remaining_timeout(120)):
-                result = await self.graph.ainvoke(
-                    {"messages": [HumanMessage(content=question)]}, config=config, context=context,
-                )
+                await context.recheck_identity()
+                async def watch_identity():
+                    while True:
+                        await asyncio.sleep(2)
+                        await context.recheck_identity()
+                query = asyncio.create_task(self.graph.ainvoke(
+                    {"messages": [HumanMessage(content=question)]}, config=config, context=context))
+                watcher = asyncio.create_task(watch_identity())
+                try:
+                    done, _ = await asyncio.wait({query, watcher}, return_when=asyncio.FIRST_COMPLETED)
+                    if watcher in done:
+                        await watcher
+                    result = await query
+                    await context.recheck_identity()
+                finally:
+                    query.cancel()
+                    watcher.cancel()
+                    await asyncio.gather(query, watcher, return_exceptions=True)
             answer = result["messages"][-1].content
             if not isinstance(answer, str):
                 raise ValueError("unsupported model content")
@@ -108,10 +145,18 @@ class AgentService:
                 answer = "回答过长，无法完整展示。请缩小查询范围后重试。"
                 reason = "RESPONSE_LIMIT"
                 await self._restore(config, previous, question, answer, reason)
+        except IdentityError:
+            await self.invalidate(session)
+            context.references.clear()
+            context.warnings.clear()
+            raise
         except asyncio.CancelledError:
             # A disconnected browser must not leave half a tool-call pair in memory.
-            await self._restore(config, previous)
-            await compact_session(self.graph, config)
+            if session.invalid:
+                await delete_session(self.graph, session.id)
+            else:
+                await self._restore(config, previous)
+                await compact_session(self.graph, config)
             trace(context, "turn", started, status="TURN_CANCELLED", http_calls=context.http_calls)
             raise
         except Exception as exc:
@@ -119,6 +164,13 @@ class AgentService:
             answer = "本轮查询超时，请重新提问。" if reason == "TURN_TIMEOUT" else "本轮查询失败，请重新提问。"
             await self._restore(config, previous, question, answer, reason)
             result = {"model_calls": 0, "tool_calls": 0}
+        try:
+            await context.recheck_identity()
+            if session.invalid:
+                raise IdentityError(409, "AUTH_CHANGED", "账号权限已变化，请开始新对话。")
+        except IdentityError:
+            await self.invalidate(session)
+            raise
         await compact_session(self.graph, config)
         trace(context, "turn", started, status=reason or "ok", http_calls=context.http_calls)
         response = {

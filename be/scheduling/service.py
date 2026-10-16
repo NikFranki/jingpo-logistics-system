@@ -209,8 +209,8 @@ def activate_next(session, shipment, now, parent):
 
 
 def context(session, shipment):
-    if shipment.stage in ('OUT_FOR_DELIVERY', 'SIGNED'):
-        error('INVALID_SCHEDULE_STAGE', '派送中或签收后不能规划站间运输')
+    if shipment.stage in ('OUT_FOR_DELIVERY', 'SIGNED', 'CANCELLED'):
+        error('INVALID_SCHEDULE_STAGE', '已取消、派送中或已签收的运单不能规划站间运输')
     pair = active_task(session, shipment)
     frozen_task = pair[1] if pair and pair[1].status == 'IN_TRANSIT' else None
     anchor = session.get(TransportRoute, frozen_task.route_id).destination_station_id if frozen_task else shipment.last_scanned_station_id

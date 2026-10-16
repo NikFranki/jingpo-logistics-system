@@ -1,4 +1,6 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
+import { useAuth } from '../auth/AuthContext'
+import { hasPermission } from '../auth/contracts'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { ModalForm, PageContainer, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components'
@@ -37,7 +39,9 @@ function TasksPage({ revision }: Pick<Shared, 'revision'>) {
   </PageContainer>
 }
 
-function TaskDetailPage({ revision, busy, mutate }: Shared) {
+function TaskDetailPage({ revision, busy: mutationBusy, mutate }: Shared) {
+  const user = useAuth().session?.user
+  const busy = mutationBusy || !hasPermission(user, 'logistics:write')
   const { taskId = '' } = useParams()
   const [detail, setDetail] = useState<TaskDetail>()
   const [loading, setLoading] = useState(true)

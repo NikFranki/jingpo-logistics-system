@@ -1,7 +1,7 @@
 # 引入依赖
 import logging
 from uuid import uuid4
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,6 +20,11 @@ from transport.router import router as transport_router
 from scheduling.router import router as scheduling_router
 from regions.router import router as regions_router
 from lines.router import router as lines_router
+from auth.router import router as auth_router, admin_router
+from auth.external import router as external_auth_router
+from auth.dependencies import authorize_business
+from auth.access import protect_response
+from auth.logging import AuthAccessLogFilter
 
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS
@@ -28,6 +33,7 @@ from config import CORS_ORIGINS
 app = FastAPI()
 
 logger = logging.getLogger(__name__)
+logging.getLogger('uvicorn.access').addFilter(AuthAccessLogFilter())
 
 @app.middleware("http")
 async def add_request_id(
@@ -38,6 +44,9 @@ async def add_request_id(
     request.state.request_id = request_id
 
     response = await call_next(request)
+    response = await protect_response(request, response)
+    if request.url.path.startswith(('/api/v1/auth', '/api/v1/admin')):
+        response.headers['Cache-Control'] = 'no-store'
     response.headers["X-Request-ID"] = request_id
 
     return response
@@ -131,13 +140,12 @@ async def handle_unexpected_error(
         headers={"X-Request-ID": request_id},
     )
 
-app.include_router(orders_router)
-app.include_router(network_router)
-app.include_router(shipments_router)
-app.include_router(transport_router)
-app.include_router(scheduling_router)
-app.include_router(regions_router)
-app.include_router(lines_router)
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(external_auth_router)
+for business_router in (orders_router, network_router, shipments_router, transport_router,
+                        scheduling_router, regions_router, lines_router):
+    app.include_router(business_router, dependencies=[Depends(authorize_business)])
 
 # 把 get /health 请求交给下面的函数
 @app.get("/health")
@@ -149,6 +157,7 @@ def readiness():
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
+            connection.execute(text('SELECT 1 FROM auth_users LIMIT 1'))
     except SQLAlchemyError:
         raise HTTPException(
             status_code=503,
@@ -157,7 +166,7 @@ def readiness():
     return {"status": "ready"}
 
 
-@app.get("/api/v1/server-time")
+@app.get("/api/v1/server-time", dependencies=[Depends(authorize_business)])
 def read_server_time():
     from business_time import server_now
     return {"server_time": server_now()}

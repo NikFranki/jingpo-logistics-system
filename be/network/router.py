@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 from db import get_db
+from auth.dependencies import scoped_key
 from errors import IdempotencyKeyReusedError
 from network.schemas import (StationResponse, StationListResponse, TransportRouteResponse,
     TransportRouteListResponse, StationCreateRequest,
@@ -14,7 +15,14 @@ from network.coverage import (ServiceAreaCreate, ServiceAreaUpdate, ServiceAreaR
 
 router = APIRouter(prefix="/api/v1", tags=["network"])
 DB = Annotated[Session, Depends(get_db)]
-Key = Annotated[UUID, Header(alias="Idempotency-Key")]
+Key = Annotated[UUID, Depends(scoped_key)]
+
+
+@router.get('/ordering-options')
+def ordering_options(session: DB):
+    return {'stations': [{'id': str(station.id), 'code': station.code, 'name': station.name,
+            'allows_first_arrival': station.allows_first_arrival, 'allows_delivery': station.allows_delivery}
+            for station in list_stations(session, True)]}
 
 @router.get("/stations", response_model=list[StationResponse] | StationListResponse)
 def read_stations(session: DB, enabled: bool | None = None,

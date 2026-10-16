@@ -15,6 +15,10 @@ def server_now() -> datetime:
 def begin_business_write(session: Session) -> datetime:
     """Call inside a transaction; sample time after waiting for the write lock."""
     session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": BUSINESS_WRITE_LOCK})
+    principal = session.info.get('principal')
+    if principal:
+        from auth.dependencies import assert_current
+        assert_current(session, principal)
     return server_now()
 
 

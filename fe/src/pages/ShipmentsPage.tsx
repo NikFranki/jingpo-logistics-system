@@ -1,4 +1,6 @@
 import { fuzzySelectFilter } from '../fuzzySearch'
+import { useAuth } from '../auth/AuthContext'
+import { hasPermission } from '../auth/contracts'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Empty, Form, Input, message, Modal, Select, Space, Spin, Table, Tabs, Tag, Timeline, Tooltip, Typography } from 'antd'
 import { QuestionCircleOutlined } from '@ant-design/icons'
@@ -40,6 +42,9 @@ function ShipmentsPage({ revision }: Pick<Shared, 'revision'>) {
 }
 
 function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
+  const user = useAuth().session?.user
+  const canWrite = hasPermission(user, 'logistics:write')
+  const canSeeTasks = user?.role !== 'user'
   const { shipmentId = '' } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -119,7 +124,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
     setEventSaving(false)
     if (result) setEventToConfirm(undefined)
   }
-  const actionEnabled = (name: string) => allowed(detail?.allowed_actions ?? [], name)?.enabled === true
+  const actionEnabled = (name: string) => canWrite && allowed(detail?.allowed_actions ?? [], name)?.enabled === true
   const destinationAction = allowed(detail?.allowed_actions ?? [], 'UPDATE_DESTINATION')
   const deliveryStations = network.stations.filter(station => station.enabled && station.allows_delivery && station.id !== detail?.destination_station_id)
   const closeDestinationModal = () => {
@@ -154,7 +159,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
   return <>{holder}<PageContainer title={detail?.shipment_no ?? '运单详情'} subTitle="当前站点、运输区间、履约操作和关联任务历史。" breadcrumb={{ items: [{ title: <Link to="/shipments">运单列表</Link> }, { title: detail?.shipment_no ?? '运单详情' }] }}>
     {loadError && <Alert type="error" showIcon message="运单详情加载失败" description={loadError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} style={{ marginBottom: 16 }} />}
     {loading && !detail ? <Spin /> : detail && <>
-      <div style={{ marginBottom: 16 }}><Space wrap><StatusTag tone={detail.stage === 'SIGNED' ? 'success' : 'info'}>{stageText[detail.stage]}</StatusTag>{detail.last_scanned_station_id && <Text>最近扫描：<StationName id={detail.last_scanned_station_id} /></Text>}{detail.active_transport_task && <Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看当前任务 · <StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></Button>}</Space></div>
+      <div style={{ marginBottom: 16 }}><Space wrap><StatusTag tone={detail.stage === 'SIGNED' ? 'success' : 'info'}>{stageText[detail.stage]}</StatusTag>{detail.last_scanned_station_id && <Text>最近扫描：<StationName id={detail.last_scanned_station_id} /></Text>}{canSeeTasks && detail.active_transport_task && <Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看当前任务 · <StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></Button>}</Space></div>
       {detail.stage === 'IN_TRANSIT' && detail.active_transport_task && <Alert style={{ marginBottom: 16 }} type="info" showIcon message={<>运输区间：<StationName id={detail.active_transport_task.origin_station_id} /> → <StationName id={detail.active_transport_task.destination_station_id} /></>} description={<>最近扫描在 <StationName id={detail.last_scanned_station_id ?? detail.active_transport_task.origin_station_id} />；货物到达并入站后会显示当前所在站。</>} />}
       {detail.stage === 'AT_STATION' && detail.last_scanned_station_id && <Alert style={{ marginBottom: 16 }} type="info" showIcon message={<>当前所在站：<Text strong><StationName id={detail.last_scanned_station_id} /></Text></>} />}
       <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
@@ -175,13 +180,13 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
             { title: '确认计划', width: 170, render: (_, leg) => <>出发 {formatTime(leg.planned_departure_at)}<br />到达 {formatTime(leg.planned_arrival_at)}</> },
             { title: '最新预计', width: 190, render: (_, leg) => <>出发 {formatTime(leg.forecast_departure_at)}<br />到达 {formatTime(leg.forecast_arrival_at)}{leg.forecast_stale && <><br /><Tag color="orange">预测已过期</Tag></>}</> },
             { title: '实际时间', width: 170, render: (_, leg) => <>发车 {formatTime(leg.actual_departure_at)}<br />到达 {formatTime(leg.actual_arrival_at)}</> },
-            { title: '任务', width: 150, render: (_, leg) => leg.task_id ? <Link to={`/tasks/${leg.task_id}`}>{leg.task_no ?? `任务 ${leg.task_id}`}</Link> : '—' },
-            { title: '等待条件', width: 200, render: (_, leg) => <>{leg.ready_at ? `就绪时间 ${formatTime(leg.ready_at)}` : ''}{leg.waiting_members.length > 0 && <Text type="secondary" style={{ display: 'block' }}>等待运单：{leg.waiting_members.map(member => member.shipment_no ?? member.shipment_id).join('、')}</Text>}</> },
+            { title: '任务', width: 150, render: (_, leg) => leg.task_id && canSeeTasks ? <Link to={`/tasks/${leg.task_id}`}>{leg.task_no ?? `任务 ${leg.task_id}`}</Link> : '—' },
+            { title: '等待条件', width: 200, render: (_, leg) => <>{leg.ready_at ? `就绪时间 ${formatTime(leg.ready_at)}` : ''}{canSeeTasks && leg.waiting_members.length > 0 && <Text type="secondary" style={{ display: 'block' }}>等待运单：{leg.waiting_members.map(member => member.shipment_no ?? member.shipment_id).join('、')}</Text>}</> },
           ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未确认运输计划；先预览路线和逐站时间。" />}
         </> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未确认运输计划；请选择线路和班次。" />}
-        {detail.schedule?.status !== 'COMPLETED' && !['OUT_FOR_DELIVERY', 'SIGNED'].includes(detail.stage) && <SchedulePlanner shipment={detail} routes={network.routes} enabled={!busy} busy={busy} mutate={mutate} autoOpen={openScheduleOnLoad} onSaved={() => { setOpenScheduleOnLoad(false); setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
+        {canWrite && detail.schedule?.status !== 'COMPLETED' && !['OUT_FOR_DELIVERY', 'SIGNED', 'CANCELLED'].includes(detail.stage) && <SchedulePlanner shipment={detail} routes={network.routes} enabled={!busy} busy={busy} mutate={mutate} autoOpen={openScheduleOnLoad} onSaved={() => { setOpenScheduleOnLoad(false); setScheduleHistoryPage(1); setRetry(value => value + 1) }} />}
       </section>
-      <div style={{ margin: '20px 0 28px' }}>
+      {canWrite && detail.stage !== 'CANCELLED' && <div style={{ margin: '20px 0 28px' }}>
         <Text strong style={{ display: 'block', marginBottom: 12 }}>下一步操作</Text>
         <Space wrap>
           {detail.stage === 'PENDING_PICKUP' && <Button type="primary" disabled={busy || !actionEnabled('PICKUP')} onClick={() => runEvent('PICKUP')}>确认揽收</Button>}
@@ -201,7 +206,8 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
         {detail.stage === 'IN_TRANSIT' && detail.active_transport_task && <Alert type="info" showIcon message="运单在途，到达并入站后再继续操作。" description={<Button type="link" onClick={() => navigate('/tasks/' + detail.active_transport_task!.id)}>查看运输任务</Button>} />}
         {detail.stage === 'OUT_FOR_DELIVERY' && <Button type="primary" disabled={busy || !actionEnabled('SIGN')} onClick={() => runEvent('SIGN')}>确认买家签收</Button>}
         {detail.stage === 'SIGNED' && <Alert type="success" showIcon message="运单已签收，物流流程完成。" />}
-      </div>
+      </div>}
+      {detail.stage === 'CANCELLED' && <Alert type="warning" showIcon message="运单已随订单取消，历史记录保留。" style={{ marginTop: 16 }} />}
       <Tabs items={[
         { key: 'tracking', label: '物流轨迹', children: detail.tracking_events.length ? <Timeline items={detail.tracking_events.map(event => ({ children: <><Text strong>{eventText[event.event_type] ?? event.event_type}</Text><br /><Text type="secondary">{formatTime(event.occurred_at)}{event.station_id ? ' · ' : ''}</Text>{event.station_id && <StationName id={event.station_id} />}</> }))} /> : <Empty description="暂无物流轨迹" /> },
         { key: 'schedule-history', label: '运输计划历史', children: scheduleHistoryError ? <Alert type="warning" showIcon message="计划历史暂不可用" description={scheduleHistoryError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : scheduleHistory.length ? <Table<ScheduleHistoryItem> rowKey="version" dataSource={scheduleHistory} pagination={{ current: scheduleHistoryPage, pageSize: 20, showSizeChanger: false, total: scheduleHistoryTotal, onChange: setScheduleHistoryPage }} columns={[
@@ -218,7 +224,7 @@ function ShipmentDetailPage({ revision, busy, mutate }: Shared) {
           { title: '操作时间', dataIndex: 'occurred_at', render: value => formatTime(value) },
         ]} /> },
         { key: 'tasks', label: '运输任务历史', children: historyError ? <Alert type="warning" showIcon message="任务历史暂不可用" description={historyError} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : history.length ? <Table<ShipmentTaskHistory> rowKey="id" pagination={{ current: historyPage, pageSize: 20, showSizeChanger: false, total: historyTotal, onChange: setHistoryPage }} dataSource={history} columns={[
-          { title: '任务号', dataIndex: 'task_no', render: (value, row) => <Link to={'/tasks/' + row.id}>{value}</Link> },
+          { title: '任务号', dataIndex: 'task_no', render: (value, row) => canSeeTasks ? <Link to={'/tasks/' + row.id}>{value}</Link> : value },
           { title: '线路', render: (_, row) => <>{row.route_code} · <StationName id={row.origin_station_id} /> → <StationName id={row.destination_station_id} /></> },
           { title: '状态', dataIndex: 'status', render: value => taskStatusText[value] }, { title: '释放占用时间', dataIndex: 'released_at', render: value => formatTime(value) },
           { title: '取消时间', dataIndex: 'cancelled_at', render: value => formatTime(value) },

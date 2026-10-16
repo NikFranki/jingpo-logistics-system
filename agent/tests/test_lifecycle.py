@@ -59,17 +59,19 @@ class LifecycleTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['messages'][-1].content, 'next')
 
     async def test_cli_input_4000_boundary_and_new_cleanup(self):
-        model = FakeModel([AIMessage(content='accepted')])
-        graph = build_graph(model, [noop])
+        from unittest.mock import AsyncMock
+        client = type('Client', (), {})()
+        client.token = 'test-token'
+        client.resume = AsyncMock(return_value=True)
+        client.new_session = AsyncMock()
+        client.query = AsyncMock(return_value={'answer': 'accepted', 'usage': {'model_calls': 1, 'tool_calls': 0, 'http_calls': 0}})
         output = StringIO()
-        with patch('cli.load_settings', return_value=Settings('deepseek', 'fake', 'secret', 'http://fake', 'http://be')), \
-             patch('cli.create_chat_model', return_value=model), patch('cli.build_graph', return_value=graph), \
+        with patch('cli_client.CLIClient.configured', return_value=client), \
              patch('builtins.input', side_effect=['a' * 4001, 'a' * 4000, '/new', '/exit']), redirect_stdout(output):
             await cli.main()
-        self.assertEqual(len(model.inputs), 1)
+        self.assertEqual(client.query.await_count, 1)
         self.assertIn('4000', output.getvalue())
-        self.assertFalse(graph.checkpointer.storage)
-        self.assertFalse(graph.checkpointer.blobs)
+        self.assertEqual(client.new_session.await_count, 2)
 
     async def test_partial_budget_preserves_known_shipment(self):
         def handler(req):

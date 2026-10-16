@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
 from models import Order
 from regions.addresses import address_body
 from logistics_types import ShipmentStage
@@ -28,6 +29,7 @@ from orders.schemas import (
     OrderResponse,
     OrderUpdateRequest,
     OrderDetailResponse,
+    OrderCancelRequest,
 )
 from orders.service import (
     create_order as create_order_service,
@@ -35,6 +37,7 @@ from orders.service import (
     list_orders,
     update_order as update_order_service,
     get_order_detail,
+    cancel_order,
 )
 
 
@@ -75,6 +78,9 @@ def auto_schedule_shipment(session: Session, shipment_id: int, idempotency_key: 
 
 def to_order_response(order: Order) -> OrderResponse:
     return OrderResponse(
+        created_by_user_id=str(order.created_by_user_id) if order.created_by_user_id else None,
+        cancelled_at=order.cancelled_at,
+        cancel_reason=order.cancel_reason,
         **address_body(order),
         id=str(order.id),
         order_no=order.order_no,
@@ -127,7 +133,7 @@ def create_order(
     request: OrderCreateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> OrderResponse:
@@ -177,7 +183,7 @@ def update_order(
     request: OrderUpdateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> OrderResponse:
@@ -217,7 +223,7 @@ def create_order_shipment(
     response: Response,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
@@ -249,6 +255,17 @@ def create_order_shipment(
     return ShipmentDetailResponse.model_validate(
         response_body
     )
+
+@router.post('/{order_id}/cancel', response_model=OrderResponse)
+def cancel_order_endpoint(order_id: int, request: OrderCancelRequest,
+    idempotency_key: Annotated[UUID, Depends(scoped_key)], session: Annotated[Session, Depends(get_db)]):
+    try:
+        return OrderResponse.model_validate(cancel_order(session, order_id, request, idempotency_key))
+    except OrderNotFoundError:
+        raise HTTPException(404, 'Order not found')
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, 'Idempotency-Key was reused with different content')
+
 
 @router.get(
     "/{order_id}",

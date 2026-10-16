@@ -18,7 +18,7 @@ from state import TurnContext, TurnLimitError
 
 ShipmentStage = Literal[
     "PENDING_PICKUP", "PICKED_UP", "AT_STATION", "IN_TRANSIT",
-    "OUT_FOR_DELIVERY", "SIGNED",
+    "OUT_FOR_DELIVERY", "SIGNED", "CANCELLED",
 ]
 ShipmentNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OrderNumber = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -150,6 +150,7 @@ def _member_summary(item: dict, limit: int = 10) -> tuple[list[dict], int]:
 def _order_summary(item: dict) -> dict:
     keys = (
         "id", "order_no", "product_name", "quantity", "status",
+        "created_by_user_id", "cancelled_at", "cancel_reason",
         "earliest_handover_at", "latest_delivery_at",
         "sender_province_name", "sender_city_name", "sender_district_name",
         "recipient_province_name", "recipient_city_name", "recipient_district_name",
@@ -381,6 +382,30 @@ def create_shipment_tracking_tool(base_url: str):
             event["station"] = station_summary(event["station_id"])
 
         if result["meta"].get("stop_reason"):
+            return result
+
+        if include_tasks and context.identity and context.identity.own_only:
+            schedule = shipment.get("schedule")
+            if schedule is not None:
+                result["data"]["schedule"] = _schedule_summary(schedule)
+            else:
+                try:
+                    response = await read_shipment_schedule(base_url, shipment_id, context)
+                    _record_request(result, response)
+                    result["data"]["schedule"] = _schedule_summary(response["data"])
+                except BEClientError as exc:
+                    result["status"] = "partial"
+                    result["warnings"].append("运单计划暂时无法查询，保留已确认轨迹；延误情况尚未确认。")
+                    if exc.request_id:
+                        result["meta"]["request_ids"].append(exc.request_id)
+                except TurnLimitError as exc:
+                    result["status"] = "partial"
+                    result["meta"]["stop_reason"] = exc.code
+            summary = result["data"].get("schedule", {})
+            if summary.get("legs_truncated") or summary.get("configuration_risks_truncated"):
+                result["meta"]["truncated"] = True
+                result["warnings"].append("运输计划过长，返回的计划信息已裁剪。")
+            result["warnings"].append("仅查询当前运单的安全计划与进度，不读取共享任务详情；无法据此确认精确任务延误分钟数。")
             return result
 
         if include_tasks:

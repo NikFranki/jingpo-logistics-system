@@ -7,7 +7,18 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
-from api import create_app
+from api import create_app as real_create_app
+from auth_helpers import Auth, actor
+
+def create_app(graph):
+    app = real_create_app(graph, identity_client=Auth())
+    return app
+
+class AuthenticatedTestClient(TestClient):
+    def __init__(self, app):
+        super().__init__(app, headers={"Authorization": "Bearer test-token"})
+
+TestClient = AuthenticatedTestClient
 from graph import build_graph, normalize_model_args
 from references import collect_references
 from state import TurnContext
@@ -89,10 +100,11 @@ class AsyncSessionTests(unittest.IsolatedAsyncioTestCase):
     async def test_busy_limits_expiry_and_checkpoint_prune(self):
         graph = build_graph(FakeModel([]), [noop])
         service = AgentService(graph, ttl=30, max_sessions=2, max_active=1)
-        first = await service.create_session()
-        second = await service.create_session()
+        identity = actor()
+        first = await service.create_session(identity)
+        second = await service.create_session(identity)
         with self.assertRaises(ServiceError) as limit:
-            await service.create_session()
+            await service.create_session(identity)
         self.assertEqual(limit.exception.code, "SESSION_LIMIT")
         service.acquire(first, str(uuid4()), "one")
         with self.assertRaises(ServiceError) as busy:
@@ -116,7 +128,7 @@ class AsyncSessionTests(unittest.IsolatedAsyncioTestCase):
         graph = build_graph(SlowModel([]), [noop])
         app = create_app(graph)
         async with app.router.lifespan_context(app):
-            session = await app.state.service.create_session()
+            session = await app.state.service.create_session(app.state.identity_client.identity)
             disconnect = asyncio.Event()
             sent_request = False
             progress_count = 0
@@ -138,7 +150,7 @@ class AsyncSessionTests(unittest.IsolatedAsyncioTestCase):
 
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.0"}, "http_version": "1.1",
                      "method": "POST", "path": f"/agent/api/v1/sessions/{session.id}/messages", "raw_path": b"/",
-                     "root_path": "", "scheme": "http", "query_string": b"", "headers": [(b"content-type", b"application/json")],
+                     "root_path": "", "scheme": "http", "query_string": b"", "headers": [(b"content-type", b"application/json"), (b"authorization", b"Bearer test-token")],
                      "client": ("127.0.0.1", 1000), "server": ("127.0.0.1", 8001)}
             await asyncio.wait_for(app(scope, receive, send), 2)
             for _ in range(20):

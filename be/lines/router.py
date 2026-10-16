@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 from db import get_db
+from auth.dependencies import scoped_key
 from errors import IdempotencyKeyReusedError, NetworkError
 from models import Shipment, TransportLine
 from lines.schemas import (LineCreateRequest, LineUpdateRequest, LineResponse, LineOptionsResponse,
@@ -16,7 +17,7 @@ from lines.service_schedules import list_services, write_service, generate_trips
 
 router = APIRouter(prefix='/api/v1', tags=['transport-lines'])
 DB = Annotated[Session, Depends(get_db)]
-Key = Annotated[UUID, Header(alias='Idempotency-Key')]
+Key = Annotated[UUID, Depends(scoped_key)]
 
 
 @router.get('/transport-lines', response_model=LineListResponse)

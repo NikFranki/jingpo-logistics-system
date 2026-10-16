@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from responses import validate_response
 from tracing import trace
 
+from identity import IdentityError
 from state import TurnContext
 
 
@@ -29,9 +30,15 @@ async def _get(
     *,
     schema: str,
 ) -> dict:
+    await context.recheck_identity()
     started = monotonic()
     context.reserve_http_call()
     timeout = context.remaining_timeout(10)
+
+    headers = {"Authorization": f"Bearer {context.identity.token}"} if context.identity else {}
+    if context.identity and context.identity.own_only and path == "/api/v1/stations":
+        path = "/api/v1/ordering-options"
+        schema = "ordering_options"
 
     try:
         async with asyncio.timeout(timeout):
@@ -41,7 +48,7 @@ async def _get(
                 follow_redirects=False,
             ) as client:
                 response = await client.get(
-                    path, params=params
+                    path, params=params, headers=headers
                 )
     except (TimeoutError, httpx.TimeoutException) as exc:
         trace(context, "http", started, operation=schema, status="TIMEOUT", http_calls=context.http_calls)
@@ -50,6 +57,16 @@ async def _get(
         trace(context, "http", started, operation=schema, status="NETWORK_ERROR", http_calls=context.http_calls)
         raise BEClientError("NETWORK_ERROR", "无法连接后端") from exc
 
+    if context.identity and response.status_code in (401, 403):
+        raise IdentityError()
+    if context.identity and response.status_code == 409:
+        try:
+            changed = response.json().get("error", {}).get("code") == "AUTH_CHANGED"
+        except (ValueError, AttributeError):
+            changed = False
+        if changed:
+            raise IdentityError(409, "AUTH_CHANGED", "账号权限已变化，请开始新对话。")
+    await context.recheck_identity()
     request_id = response.headers.get("X-Request-ID")
 
     trace(context, "http", started, operation=schema, status=response.status_code, request_id=request_id, http_calls=context.http_calls)
@@ -72,6 +89,8 @@ async def _get(
         trace(context, "http_validation", started, operation=schema, status="INVALID_RESPONSE", request_id=request_id)
         raise BEClientError("INVALID_RESPONSE", "后端响应格式异常，暂时无法确认查询结果", request_id) from None
 
+    if schema == "ordering_options":
+        data = data["stations"]
     return {
         "data": data,
         "request_id": request_id,

@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from db import get_db
+from auth.dependencies import scoped_key
 from errors import IdempotencyKeyReusedError, ShipmentNotFoundError
 from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest, CancelPreviewRequest
 from scheduling.schemas import SchedulePreviewResponse, ScheduleResponse, ScheduleHistoryResponse, CancelPreviewResponse
@@ -10,7 +11,7 @@ from scheduling.service import preview_schedule, confirm_schedule, schedule_body
 
 router = APIRouter(prefix='/api/v1', tags=['scheduling'])
 DB = Annotated[Session, Depends(get_db)]
-Key = Annotated[UUID, Header(alias='Idempotency-Key')]
+Key = Annotated[UUID, Depends(scoped_key)]
 ResourceId = Annotated[int, Path(gt=0)]
 
 

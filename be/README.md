@@ -1,5 +1,13 @@
 # BE
 
+## V8 登录与数据权限
+
+`auth/` 负责注册、密码/Google 登录、邮箱验证与重置、24 小时可撤销会话、CLI 浏览器授权、只读 Agent 凭据、固定角色与用户管理。业务路由统一登录校验，普通用户仅见自己创建的订单及关联运单；developer 全公司只读，ops/admin 按原业务规则操作。新订单和操作日志记录实际账号，历史归属不猜测回填。
+
+接口与部署配置见 [V8 BE spec](../docs/技术方案/v8/be/spec.md)，验证和交付边界见 [V8 BE plan](../docs/技术方案/v8/be/plan.md)。迁移 `f81a3d6c2907` 增加身份表、订单归属/取消和操作者。订单取消仅限未揽收，释放本票未执行关联并保留历史。FE/Agent 需接入真实身份接口，不能直接沿用匿名调用。
+
+发布前停服务、备份、升级，随后运行 `python -m auth.admin init --username <用户名> --email <邮箱>` 交互设置唯一管理员；恢复使用 `restore`，撤销旧登录。开发库已于 2026-10-15 备份并升级到 `f81a3d6c2907`，原 19 张业务表对账一致，后端已重启且就绪；管理员尚未初始化，SMTP/Google 尚未配置。备份及发布证据见 V8 plan。测试依赖安装 `pip install -r requirements-dev.txt`；隔离库验证命令见 V8 plan。
+
 ## 统一运输线路
 
 `lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。线路存放在 `transport_lines` / `transport_line_legs`；班次规则和车次快照存放在 `line_services`、`line_service_stops`、`scheduled_trips`。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐。V6 旧路径方案表已迁移移除；运单线路安排统一作为班次运输计划管理。

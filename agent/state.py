@@ -36,6 +36,13 @@ class TurnContext:
     references_truncated: bool = False
     warnings: list[str] = field(default_factory=list, repr=False)
 
+    identity: object | None = field(default=None, repr=False)
+    identity_client: object | None = field(default=None, repr=False)
+
+    async def recheck_identity(self):
+        if self.identity is not None:
+            await self.identity_client.recheck(self.identity)
+
     def set_progress(self, message: str) -> None:
         if self.progress_callback is not None:
             self.progress_callback(message)

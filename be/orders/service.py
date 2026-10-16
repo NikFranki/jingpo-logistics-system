@@ -153,6 +153,9 @@ def create_order(
 
 def build_order_response_body(order: Order) -> dict:
     return {
+        'created_by_user_id': str(order.created_by_user_id) if order.created_by_user_id else None,
+        'cancelled_at': order.cancelled_at.isoformat() if order.cancelled_at else None,
+        'cancel_reason': order.cancel_reason,
         **address_body(order),
         "id": str(order.id),
         "order_no": order.order_no,
@@ -169,6 +172,62 @@ def build_order_response_body(order: Order) -> dict:
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }
+
+
+def cancel_order(session, order_id, request, idempotency_key):
+    from models import TaskShipment, TransportTask
+    from scheduling.service import UNSTARTED, cancel_empty, release_entry
+    request_hash = hashlib.sha256(json.dumps({'action': 'CANCEL_ORDER', 'order_id': order_id,
+        'reason': request.reason}, sort_keys=True).encode()).hexdigest()
+    with session.begin():
+        clock = business_time.begin_business_write(session)
+        replay = session.scalar(select(OperationLog).where(OperationLog.idempotency_key == idempotency_key))
+        if replay:
+            if replay.request_hash != request_hash:
+                raise IdempotencyKeyReusedError
+            return replay.response_body
+        order = session.get(Order, order_id, with_for_update=True)
+        if not order:
+            raise OrderNotFoundError
+        if order.status == 'CANCELLED':
+            if order.cancel_reason != request.reason:
+                raise NetworkError('ORDER_ALREADY_CANCELLED', '订单已取消，不能覆盖原原因')
+        elif order.status not in ('PENDING_SHIPMENT', 'SHIPMENT_CREATED'):
+            raise NetworkError('ORDER_NOT_CANCELLABLE', '当前订单状态不可取消')
+        shipment = session.scalar(select(Shipment).where(Shipment.order_id == order_id).with_for_update())
+        if shipment and shipment.stage not in ('PENDING_PICKUP', 'CANCELLED'):
+            raise NetworkError('ORDER_NOT_CANCELLABLE', '货物已揽收，不能取消订单')
+        if shipment:
+            associations = session.execute(select(TaskShipment, TransportTask).join(TransportTask,
+                TaskShipment.task_id == TransportTask.id).where(TaskShipment.shipment_id == shipment.id)).all()
+            if any(task.departed_at or task.arrived_at for _, task in associations):
+                raise NetworkError('ORDER_NOT_CANCELLABLE', '已发生运输事实，不能取消订单')
+            affected = {}
+            for entry, task in associations:
+                if entry.association_state == 'RELEASED':
+                    continue
+                if task.status not in UNSTARTED:
+                    raise NetworkError('ORDER_NOT_CANCELLABLE', '运输任务已执行，不能取消订单')
+                release_entry(session, entry, clock, request.reason)
+                task.schedule_revision += 1
+                affected[task.id] = task
+            session.flush()
+            for task in affected.values():
+                cancel_empty(session, task, clock, '关联订单取消')
+            shipment.stage = 'CANCELLED'
+            shipment.schedule_status = 'BLOCKED'
+            shipment.schedule_reason = '订单已取消'
+            shipment.updated_at = clock
+        before = {'status': order.status}
+        order.status, order.cancelled_at, order.cancel_reason = 'CANCELLED', order.cancelled_at or clock, request.reason
+        order.updated_at = clock
+        session.flush()
+        body = build_order_response_body(order)
+        session.add(OperationLog(idempotency_key=idempotency_key, request_hash=request_hash,
+            action='CANCEL_ORDER', resource_type='ORDER', resource_id=order.id,
+            before_data=before, after_data={'status': order.status}, response_body=body,
+            response_status=200, occurred_at=clock))
+        return body
 
 def build_update_order_request_hash(
     order_id: int,

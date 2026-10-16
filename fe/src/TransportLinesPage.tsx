@@ -1,3 +1,5 @@
+import { useAuth } from './auth/AuthContext'
+import { hasPermission } from './auth/contracts'
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -11,7 +13,9 @@ type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success
 type Props = { revision: number; busy: boolean; mutate: Mutate }
 type LineForm = { code?: string; name: string; station_ids: string[]; travel_minutes?: Record<string, number>; transfer_minutes?: Record<string, number>; enabled: boolean }
 
-export default function TransportLinesPage({ revision, busy, mutate }: Props) {
+export default function TransportLinesPage({ revision, busy: mutationBusy, mutate }: Props) {
+  const user = useAuth().session?.user
+  const busy = mutationBusy || !hasPermission(user, 'network:write')
   const navigate = useNavigate()
   const [stations, setStations] = useState<Station[]>([])
   const [lines, setLines] = useState<TransportLine[]>([])
@@ -101,10 +105,10 @@ export default function TransportLinesPage({ revision, busy, mutate }: Props) {
     { title: '编码 / 名称', width: 220, render: (_, line) => <><Text strong>{line.code}</Text><br />{line.name}</> },
     { title: '完整站点顺序', render: (_, line) => <>{line.stations.map(station => `${station.name}（${station.code}）`).join(' → ')}<br /><Text type="secondary">{line.legs.length} 段 · 参考总时长 {line.total_reference_minutes ?? '未完整配置'} 分钟</Text></> },
     { title: '状态', width: 130, render: (_, line) => <Space><Tag color={line.usable ? 'green' : 'default'}>{line.usable ? '可用' : line.reason || '不可用'}</Tag><Switch size="small" checked={line.enabled} disabled={busy} onChange={value => void toggle(line, value)} /></Space> },
-    { title: '操作', width: 190, render: (_, line) => <Space><Button type="link" disabled={busy} onClick={() => navigate(`/network/transport-lines/${line.id}/services`)}>每日班次</Button><Button type="link" disabled={busy} onClick={() => openEdit(line)}>编辑线路</Button></Space> },
+    { title: '操作', width: 190, render: (_, line) => <Space><Button type="link" disabled={mutationBusy} onClick={() => navigate(`/network/transport-lines/${line.id}/services`)}>每日班次</Button><Button type="link" disabled={busy} onClick={() => openEdit(line)}>编辑线路</Button></Space> },
   ]
 
-  return <PageContainer title="运输线路" subTitle="维护站点顺序与分段耗时，并为每条线路配置每日班次；运单按日期选择具体发车计划。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增运输线路</Button>}>
+  return <PageContainer title="运输线路" subTitle="维护站点顺序与分段耗时，并为每条线路配置每日班次；运单按日期选择具体发车计划。" extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={openCreate}>新增运输线路</Button>}>
     {error && <Alert type="error" showIcon message="运输线路或班次操作失败" description={error} action={<Button size="small" onClick={() => { setError(undefined); void refresh() }}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => { setPage(1); setStationSearch(stationQuery.trim()) }} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>

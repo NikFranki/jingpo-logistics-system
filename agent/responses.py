@@ -14,7 +14,7 @@ from pydantic import (
 Identifier = Annotated[str, StringConstraints(pattern=r"^[1-9][0-9]*$")]
 Text = Annotated[str, StringConstraints(min_length=1)]
 RouteCode = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9_-]{0,31}$")]
-Stage = Literal["PENDING_PICKUP", "PICKED_UP", "AT_STATION", "IN_TRANSIT", "OUT_FOR_DELIVERY", "SIGNED"]
+Stage = Literal["PENDING_PICKUP", "PICKED_UP", "AT_STATION", "IN_TRANSIT", "OUT_FOR_DELIVERY", "SIGNED", "CANCELLED"]
 TaskStatus = Literal["WAITING_CARGO", "WAITING_PREDECESSOR", "PENDING_DEPARTURE", "IN_TRANSIT", "ARRIVED", "CANCELLED"]
 AssociationState = Literal["PLANNED", "ACTIVE", "RELEASED"]
 
@@ -152,12 +152,19 @@ class Station(Response):
     name: Text
 
 
+class OrderingOptions(Response):
+    stations: list[Station]
+
+
 class Order(AddressRegions):
     id: Identifier
     order_no: Text
     product_name: Text
     quantity: int = Field(gt=0)
     status: Text
+    created_by_user_id: Identifier | None = None
+    cancelled_at: Timestamp | None = None
+    cancel_reason: str | None = None
     earliest_handover_at: Timestamp | None = None
     latest_delivery_at: Timestamp | None = None
 
@@ -238,6 +245,7 @@ SCHEMAS = {
     "tasks": TypeAdapter(TaskPage),
     "task": TypeAdapter(TaskDetail),
     "stations": TypeAdapter(list[Station]),
+    "ordering_options": TypeAdapter(OrderingOptions),
 }
 
 

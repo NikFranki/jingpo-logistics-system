@@ -5,10 +5,11 @@ import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { api, ApiError, type Action, type OrderInput, type ShipmentDetail, type Stage, type TaskDetail, type Station, type TransportRoute } from './api'
 import { statusTagStyles, type StatusTone } from './theme'
+import { useAuth } from './auth/AuthContext'
 
 const { Text } = Typography
 const legacyStageText: Record<string, string> = { AT_A: 'A 站内', IN_TRANSIT_AB: 'A → B 运输中', AT_B: 'B 站内', IN_TRANSIT_BC: 'B → C 运输中', AT_C: 'C 站内' }
-export const stageText: Record<Stage, string> = new Proxy({ PENDING_PICKUP: '待揽收', PICKED_UP: '已揽收', AT_STATION: '在站', IN_TRANSIT: '运输中', OUT_FOR_DELIVERY: '派送中', SIGNED: '已签收' }, { get: (labels, property) => typeof property === 'string' ? labels[property as Stage] ?? legacyStageText[property] ?? property : Reflect.get(labels, property) })
+export const stageText: Record<Stage, string> = new Proxy({ PENDING_PICKUP: '待揽收', PICKED_UP: '已揽收', AT_STATION: '在站', IN_TRANSIT: '运输中', OUT_FOR_DELIVERY: '派送中', SIGNED: '已签收', CANCELLED: '已取消' }, { get: (labels, property) => typeof property === 'string' ? labels[property as Stage] ?? legacyStageText[property] ?? property : Reflect.get(labels, property) })
 export const taskStatusText: Record<string, string> = new Proxy({ WAITING_CARGO: '待首站入站', WAITING_PREDECESSOR: '待前段到达', PENDING_DEPARTURE: '待发车', IN_TRANSIT: '运输中', ARRIVED: '已到达', CANCELLED: '已取消' }, { get: (labels, property) => typeof property === 'string' ? labels[property as keyof typeof labels] ?? property : Reflect.get(labels, property) })
 export const eventText: Record<string, string> = { SHIPMENT_CREATED: '发货单已创建', PICKUP: '包裹已揽收', ARRIVE: '到达并入站', DEPART: '运输任务已发车', START_DELIVERY: '开始派送', SIGN: '买家已签收' }
 export const actionText: Record<string, string> = { PICKUP: '揽收', ARRIVE: '首次入站', START_DELIVERY: '开始派送', SIGN: '签收', DEPART: '任务发车' }
@@ -67,22 +68,24 @@ export function StatusTag({ tone, children, icon }: { tone: StatusTone; children
 export type Mutate = <T>(identity: string, action: (key: string) => Promise<T>, success: string) => Promise<T | undefined>
 export type Shared = { revision: number; busy: boolean; mutate: Mutate }
 export function useNetwork(revision: number) {
+  const ownScope = useAuth().session?.user.role === 'user'
   const [stations, setStations] = useState<Station[]>([])
   const [routes, setRoutes] = useState<TransportRoute[]>([])
   const [error, setError] = useState<string>()
   useEffect(() => {
     let active = true
-    Promise.all([api.stations(), api.routes()]).then(([stationRows, routeRows]) => {
+    Promise.all([ownScope ? api.orderingOptions() : api.stations(), ownScope ? Promise.resolve([]) : api.routes()]).then(([stationRows, routeRows]) => {
       if (active) { setStations(stationRows); setRoutes(routeRows); setError(undefined) }
     }).catch(reason => { if (active) setError(apiError(reason)) })
     return () => { active = false }
-  }, [revision])
+  }, [revision, ownScope])
   return { stations, routes, error }
 }
 
 export function StationName({ id }: { id: string }) {
+  const ownScope = useAuth().session?.user.role === 'user'
   const [station, setStation] = useState<{ code: string; name: string }>()
-  useEffect(() => { let active = true; api.stations().then(rows => { if (active) setStation(rows.find(row => row.id === id)) }).catch(() => { if (active) setStation(undefined) }); return () => { active = false } }, [id])
+  useEffect(() => { let active = true; (ownScope ? api.orderingOptions() : api.stations()).then(rows => { if (active) setStation(rows.find(row => row.id === id)) }).catch(() => { if (active) setStation(undefined) }); return () => { active = false } }, [id, ownScope])
   return <>{station ? `${station.code} 站（${station.name}）` : id}</>
 }
 

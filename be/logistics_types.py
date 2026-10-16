@@ -13,6 +13,7 @@ class ShipmentStage(StrEnum):
     IN_TRANSIT = "IN_TRANSIT"
     OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
     SIGNED = "SIGNED"
+    CANCELLED = "CANCELLED"
 
 
 class TrackingEventType(StrEnum):

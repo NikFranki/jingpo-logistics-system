@@ -29,6 +29,7 @@ from db import Base
 from logistics_types import ShipmentStage, TrackingEventType, sql_enum_values
 
 class OperationLog(Base):
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey('auth_users.id'))
     __tablename__ = "operation_logs"
     __table_args__ = (
         CheckConstraint(
@@ -97,6 +98,9 @@ class StructuredAddressFields:
 
 
 class Order(StructuredAddressFields, Base):
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey('auth_users.id'), index=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_reason: Mapped[str | None] = mapped_column(String(500))
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint(
@@ -114,7 +118,7 @@ class Order(StructuredAddressFields, Base):
         ),
         CheckConstraint(
             "status IN "
-            "('PENDING_SHIPMENT', 'SHIPMENT_CREATED', 'COMPLETED')",
+            "('PENDING_SHIPMENT', 'SHIPMENT_CREATED', 'COMPLETED', 'CANCELLED')",
             name="ck_orders_status",
         ),
         CheckConstraint(
@@ -255,10 +259,10 @@ class Shipment(StructuredAddressFields, Base):
             name="ck_shipments_stage",
         ),
         CheckConstraint(
-            "(stage IN ('PENDING_PICKUP', 'PICKED_UP') "
+            "(stage IN ('PENDING_PICKUP', 'PICKED_UP', 'CANCELLED') "
             "AND last_scanned_station_id IS NULL) "
             "OR "
-            "(stage NOT IN ('PENDING_PICKUP', 'PICKED_UP') "
+            "(stage NOT IN ('PENDING_PICKUP', 'PICKED_UP', 'CANCELLED') "
             "AND last_scanned_station_id IS NOT NULL)",
             name="ck_shipments_scanned_station",
         ),
@@ -682,3 +686,6 @@ class StationServiceArea(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, server_default=text('true'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+from auth.models import User, LoginSession, EmailToken, GoogleIdentity, OAuthAttempt, DeviceGrant, AuthAudit, RateBucket

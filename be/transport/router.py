@@ -12,6 +12,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
 from network.schemas import NetworkCode
 from logistics_types import TaskStatus
 from errors import (
@@ -120,7 +121,7 @@ def create_task(
     request: TransportTaskCreateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> TransportTaskResponse:
@@ -161,7 +162,7 @@ def depart_task(
     task_id: int,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
     request: TransportTaskDepartRequest | None = Body(default=None),
@@ -209,7 +210,7 @@ def arrive_task(
     task_id: int,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> TransportTaskDetailResponse:
@@ -274,7 +275,7 @@ def read_transport_task(
 def cancel_task(
     task_id: int,
     request: TransportTaskCancelRequest,
-    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    idempotency_key: Annotated[UUID, Depends(scoped_key)],
     session: Annotated[Session, Depends(get_db)],
 ) -> TransportTaskDetailResponse:
     try:

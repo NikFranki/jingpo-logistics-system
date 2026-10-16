@@ -16,6 +16,15 @@ from sqlalchemy.engine import make_url
 class V3ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from db import SessionLocal
+        from auth.models import User
+        from auth.service import issue_session
+        with SessionLocal.begin() as session:
+            name = 'http-test-' + uuid4().hex[:16]
+            user = User(username=name, email=name + '@example.com', role='ops', email_verified=True)
+            session.add(user)
+            session.flush()
+            cls.access_token = issue_session(session, user)['access_token']
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0))
             port=sock.getsockname()[1]
@@ -43,7 +52,7 @@ class V3ApiTests(unittest.TestCase):
             cls.server.kill(); cls.server.wait()
 
     def request(self,path,method='GET',body=None,key=None,legacy=True):
-        headers={'Content-Type':'application/json'}
+        headers={'Content-Type':'application/json', 'Authorization':'Bearer ' + self.access_token}
         if method!='GET':
             headers['Idempotency-Key']=key or str(uuid4())
         request=Request(self.base+'/api/v1'+path,method=method,headers=headers,

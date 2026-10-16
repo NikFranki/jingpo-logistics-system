@@ -21,13 +21,16 @@ PRD 建议顺序：问题与目标 → 用户流程图/界面示意 → 范围�
 flowchart LR
     U[用户] --> FE[前端 fe\n业务操作与演示]
     U --> CLI[查询 Agent agent\n自然语言问答]
-    CLI --> CORE[Agent 查询核心\n只读工具、会话与查询预算]
-    FE -->|/agent 同源请求| PROXY[服务端代理]
-    PROXY --> API[独立 Agent API 服务\n会话与查询进度]
-    API --> CORE
+    CLI -->|个人只读 Bearer| API[独立 Agent API 服务\n身份与会话隔离、查询进度]
+    FE -->|个人只读 Bearer| PROXY[服务端代理]
+    PROXY --> API
+    API -->|introspect / recheck| AUTH
+    API --> CORE[Agent 查询核心\n可信身份上下文、角色工具与查询预算]
     CORE <--> LLM[模型服务\n选择查询工具并组织回答]
-    FE -->|查询与写操作| BE[后端 be\n物流事实、运输安排与操作历史]
-    CORE -->|只读 HTTP 查询| BE
+    FE -->|Cookie 登录与 CSRF 业务请求| BE[后端 be\n物流事实、运输安排与操作历史]
+    BE --> AUTH[auth 模块\n账号、可撤销会话与数据权限]
+    AUTH --> DB
+    CORE -->|携带个人 Bearer 的只读 HTTP 查询| BE
     BE --> DB[(PostgreSQL\n业务数据、轨迹与操作日志)]
     BE --> L[lines 模块\n统一运输线路管理与候选]
     L --> DB
@@ -68,9 +71,9 @@ flowchart LR
 ## 文档去哪找
 
 | 要了解什么 | 文档 |
+| --- | --- |
 | 运输线路统一契约及旧字段弃用策略 | [统一运输线路](docs/技术方案/v7/be/unified-transport-lines.md) |
 | 线路班次、车次生成和运单候选 | [班次与计划车次](docs/技术方案/v7/be/line-services.md) |
-| --- | --- |
 | 订单时间窗与兼容任务共享规则 | [字段、匹配条件与迁移](docs/技术方案/v7/be/order-delivery-windows.md) |
 | 服务器时间与移除模拟时钟 | [时间规则、接口与迁移](docs/技术方案/server-time.md) |
 | 寄件首站与创建后预览 | [字段、接口和交付状态](docs/技术方案/v7/be/planned-origin-and-preview.md) |
@@ -91,7 +94,9 @@ flowchart LR
 | V7 查询 Agent 适配（代码已接入，验收待完成） | [Agent 规格](docs/技术方案/v7/agent/spec.md)、[实施与验证计划](docs/技术方案/v7/agent/plan.md) |
 | V7 运输计划审核与全段任务生成（BE 已实现，FE 已接入待页面验收） | [V7 PRD](docs/prd/v7/JINGPO-logistics-system-v7.md)、[BE 规格](docs/技术方案/v7/be/spec.md)、[BE 实施与验证](docs/技术方案/v7/be/plan.md)、[FE 适配与验证](docs/技术方案/v7/fe/plan.md) |
 | V8 待办 | [待补齐功能与验收目标](docs/prd/v8/TODO.md) |
-| V8 登录与角色权限（PRD 草案待 review，未实现） | [注册、登录、数据权限与 BE/FE/Agent 范围](docs/prd/v8/JINGPO-logistics-system-v8.md) |
+| V8 FE 登录与权限（已接 BE，浏览器与三端验收待完成） | `/login` 正式入口，`/v8-preview/login` 独立预览；[FE spec](docs/技术方案/v8/fe/spec.md)、[交付状态](docs/技术方案/v8/fe/plan.md)；Cookie/CSRF、固定角色与业务权限、用户管理及订单取消；Agent 已接 V8 身份，本地开关与 Compose 构建已启用，真实浏览器联调待验收 |
+| V8 Agent 身份与权限（代码、受控测试及隔离 BE 联调已完成） | `identity.py` 校验个人身份；CLI 统一走 API，系统凭据库保存登录；普通用户安全运单查询；[规格](docs/技术方案/v8/agent/spec.md)、[交付记录](docs/技术方案/v8/agent/plan.md)；真实浏览器/模型与完整容器验收待完成 |
+| V8 登录与角色权限（BE 已实现，三端联调待完成） | `be/auth/` 负责身份、会话与固定权限，订单记录创建者；[PRD](docs/prd/v8/JINGPO-logistics-system-v8.md)、[BE spec](docs/技术方案/v8/be/spec.md)、[BE 验证记录](docs/技术方案/v8/be/plan.md)、[FE plan](docs/技术方案/v8/fe/plan.md)、[Agent spec](docs/技术方案/v8/agent/spec.md)、[Agent plan](docs/技术方案/v8/agent/plan.md) |
 
 当前快照（2026-09-30）：V2 通用阶段、事件、迁移及 BE/FE/Agent 客户端已在工作区实现。BE 6 项、Agent 20 项测试及前端构建通过，页面全流程走查、历史迁移演练和真实 Agent 查询工具核验完成；证据记录在 [V2 实施与验证记录](docs/技术方案/v2/be/plan.md)。开发库已由用户升级到 V2（`f714e269c2db`）；本地后端就绪，真实只读契约检查通过。
 

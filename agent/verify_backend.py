@@ -1,4 +1,4 @@
-"""Optional read-only BE contract smoke check. No model, keys or .env access."""
+"""Optional read-only BE contract smoke check. Uses the CLI personal login from the OS credential store; no model calls."""
 import argparse
 import asyncio
 import json
@@ -10,14 +10,17 @@ from be_client import (get_order, get_shipment, get_stations, get_transport_task
 from state import TurnContext
 
 
-async def verify(base_url):
-    context = TurnContext()
+async def verify(base_url, identity, auth):
+    context = TurnContext(identity=identity, identity_client=auth)
     results = []
-    for label, listing, detail in [
+    operations = [
         ('orders', list_orders, get_order),
         ('shipments', list_shipments, get_shipment),
         ('transport_tasks', list_transport_tasks, get_transport_task),
-    ]:
+    ]
+    if identity.own_only:
+        operations = [entry for entry in operations if entry[0] != "transport_tasks"]
+    for label, listing, detail in operations:
         response = await listing(base_url, context, page_size=1)
         results.append({'check': label + '_list', 'status': 'ok', 'request_id': response['request_id']})
         items = response['data']['items']
@@ -46,5 +49,21 @@ async def verify(base_url):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--base-url', default='http://127.0.0.1:8000')
-    asyncio.run(verify(parser.parse_args().base_url))
+    parser.add_argument('--base-url', default=None)
+    args = parser.parse_args()
+    async def main():
+        from cli_client import CLIClient
+        from identity import IdentityError
+        client = CLIClient.configured()
+        if args.base_url:
+            client = CLIClient(args.base_url, client.agent_url)
+        if not await client.resume():
+            print("请先用 python cli.py 的 /login 登录，并保存到系统凭据库。")
+            raise SystemExit(1)
+        identity = await client.auth.authenticate(client.token)
+        try:
+            await verify(client.be_url, identity, client.auth)
+        except IdentityError as exc:
+            print(exc.message)
+            raise SystemExit(1)
+    asyncio.run(main())

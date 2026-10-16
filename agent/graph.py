@@ -15,6 +15,7 @@ from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.runtime import Runtime
 
 from prompts import SYSTEM_PROMPT
+from identity import IdentityError, allowed_tool
 from state import AgentState, TurnContext, TurnLimitError
 
 
@@ -97,11 +98,12 @@ def prepare_turn(state: AgentState) -> dict:
     }
 
 
-def create_model_node(model_with_tools):
+def create_model_node(model_with_tools, own_model=None):
     async def model_node(
         state: AgentState,
         runtime: Runtime[TurnContext],
     ) -> dict:
+        await runtime.context.recheck_identity()
         calls = state["model_calls"]
 
         if calls >= MAX_MODEL_CALLS:
@@ -125,10 +127,17 @@ def create_model_node(model_with_tools):
         runtime.context.set_progress("思考中")
         try:
             async with asyncio.timeout(timeout):
-                response = await model_with_tools.ainvoke([
-                    SystemMessage(content=SYSTEM_PROMPT),
+                identity = runtime.context.identity
+                selected_model = own_model if identity and identity.own_only else model_with_tools
+                style = ("当前可信身份为 developer。可说明业务 ID、关联关系、版本与执行状态。"
+                         if identity and identity.role == "developer" else "优先用业务语言解释进度，避免无关技术细节。")
+                scope = "仅能查询自己的订单和运单；不能查询全局任务或全局更正日志。延误用运单安全计划判断，不承诺精确任务延误。仅使用本次实际注册的工具；通用规则中未注册的工具不适用于当前身份。" if identity and identity.own_only else ""
+                response = await selected_model.ainvoke([
+                    SystemMessage(content=SYSTEM_PROMPT + "\n" + style + scope),
                     *messages,
                 ])
+        except IdentityError:
+            raise
         except TimeoutError:
             trace(runtime.context, "model", started, status="REQUEST_TIMEOUT", model_calls=calls + 1)
             return {
@@ -142,6 +151,7 @@ def create_model_node(model_with_tools):
             trace(runtime.context, "model", started, status=reason, model_calls=calls + 1)
             return {**updates, "model_calls": calls + 1, "stop_reason": reason}
 
+        await runtime.context.recheck_identity()
         if not isinstance(response, AIMessage) or response.invalid_tool_calls or len({c["id"] for c in response.tool_calls}) != len(response.tool_calls) or any(not c["id"] for c in response.tool_calls):
             trace(runtime.context, "model", started, status="INVALID_RESPONSE", model_calls=calls + 1)
             return {**updates, "model_calls": calls + 1, "stop_reason": "INVALID_RESPONSE"}
@@ -186,7 +196,9 @@ def create_tools_node(tools_by_name):
                     calls += 1
                     selected_tool = tools_by_name.get(call["name"])
 
-                    if selected_tool is None:
+                    if not allowed_tool(runtime.context.identity, call["name"]):
+                        result = {"status": "error", "error": "当前身份不允许使用该查询工具"}
+                    elif selected_tool is None:
                         result = {"status": "error", "error": "未知工具"}
                     else:
                         async with asyncio.timeout(timeout):
@@ -194,6 +206,8 @@ def create_tools_node(tools_by_name):
                                 normalize_model_args(selected_tool, call["args"])
                             )
 
+                except IdentityError:
+                    raise
                 except TurnLimitError as exc:
                     stop_reason = exc.code
                     result = {"status": "error", "error": str(exc)}
@@ -212,6 +226,7 @@ def create_tools_node(tools_by_name):
                 except Exception:
                     result = {"status": "error", "error": "工具执行失败"}
 
+            await runtime.context.recheck_identity()
             result_stop = result.get("meta", {}).get("stop_reason")
             if result_stop in {"HTTP_CALL_LIMIT", "TURN_TIMEOUT"}:
                 stop_reason = result_stop
@@ -297,6 +312,8 @@ def stop_node(state: AgentState) -> dict:
 def build_graph(model, tools):
     tools_by_name = {tool.name: tool for tool in tools}
     model_with_tools = model.bind_tools(tools)
+    own_tools = [tool for tool in tools if tool.name not in {"search_transport_tasks", "get_transport_task", "find_shipments_with_destination_changes"}]
+    own_model = model.bind_tools(own_tools) if own_tools else model
 
     builder = StateGraph(
         AgentState,
@@ -304,7 +321,7 @@ def build_graph(model, tools):
     )
 
     builder.add_node("prepare_turn", prepare_turn)
-    builder.add_node("model", create_model_node(model_with_tools))
+    builder.add_node("model", create_model_node(model_with_tools, own_model))
     builder.add_node("tools", create_tools_node(tools_by_name))
     builder.add_node("stop", stop_node)
 

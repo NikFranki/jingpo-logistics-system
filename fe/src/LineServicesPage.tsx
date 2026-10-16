@@ -1,3 +1,5 @@
+import { useAuth } from './auth/AuthContext'
+import { hasPermission } from './auth/contracts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, InputNumber, Modal, Space, Switch, Table, TimePicker, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -29,7 +31,9 @@ function makeDefaultStops(line: TransportLine, departureTime: Dayjs): StopTimeFo
   })
 }
 
-export default function LineServicesPage({ revision, busy, mutate }: Props) {
+export default function LineServicesPage({ revision, busy: mutationBusy, mutate }: Props) {
+  const user = useAuth().session?.user
+  const busy = mutationBusy || !hasPermission(user, 'network:write')
   const { lineId = '' } = useParams()
   const navigate = useNavigate()
   const [line, setLine] = useState<TransportLine>()

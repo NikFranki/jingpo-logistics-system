@@ -11,6 +11,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
 from logistics_types import ShipmentStage
 from transport.schemas import ShipmentTaskHistoryResponse
 
@@ -66,7 +67,7 @@ def read_all_destination_changes(
 def update_destination(
     shipment_id: int,
     request: ShipmentDestinationUpdateRequest,
-    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    idempotency_key: Annotated[UUID, Depends(scoped_key)],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
     try:
@@ -102,7 +103,7 @@ def update_address(
     request: ShipmentAddressUpdateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
@@ -142,7 +143,7 @@ def create_shipment_event(
     request: ShipmentEventRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:

@@ -78,7 +78,7 @@ def _station_changes(session: Session, station: Station, changes: dict):
             raise NetworkError('NETWORK_RESOURCE_IN_USE', '仍有未入站运单以此站为计划始发站')
     if disabling or removing_delivery:
         has_destination = session.scalar(select(Shipment.id).where(
-            Shipment.destination_station_id == station.id, Shipment.stage != "SIGNED").limit(1))
+            Shipment.destination_station_id == station.id, Shipment.stage.notin_(['SIGNED', 'CANCELLED'])).limit(1))
         if has_destination:
             raise NetworkError("NETWORK_RESOURCE_IN_USE", "仍有未签收运单以此站为目的站")
     if disabling:
@@ -92,7 +92,7 @@ def _station_changes(session: Session, station: Station, changes: dict):
             TaskShipment.schedule_leg_id==ShipmentScheduleLeg.id,TransportTask.status==TaskStatus.ARRIVED).exists()
         future_legs = session.scalar(select(ShipmentScheduleLeg.id).join(TransportRoute,
             ShipmentScheduleLeg.route_id==TransportRoute.id).join(Shipment,ShipmentScheduleLeg.shipment_id==Shipment.id).where(
-            endpoints,ShipmentScheduleLeg.superseded_at.is_(None),Shipment.stage != "SIGNED",~completed).limit(1))
+            endpoints,ShipmentScheduleLeg.superseded_at.is_(None),Shipment.stage.notin_(['SIGNED', 'CANCELLED']),~completed).limit(1))
         if inventory or tasks or routes or future_legs:
             raise NetworkError("NETWORK_RESOURCE_IN_USE", "站点仍有在站运单、未完成任务、未来计划段或启用线路，请先处理")
 
