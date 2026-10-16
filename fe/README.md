@@ -2,7 +2,7 @@
 
 ## V8 登录与权限
 
-运行 `npm run dev` 后打开 `/v8-preview/login`，可模拟四角色、注册/邮箱验证、找回密码、个人账号、用户管理及 Google 回调状态。预览不请求 BE/Agent、不保存密码、不发送邮件；数据只在当前工作区内存保留，刷新或离开后重置。顶部可直接切换角色。
+运行 `npm run dev` 后打开 `/v8-preview/login`，可模拟四角色、注册/邮箱验证、找回密码、个人账号和用户管理。预览不请求 BE/Agent、不保存密码、不发送邮件；数据只在当前工作区内存保留，刷新或离开后重置。顶部可直接切换角色。
 
 正式入口 `/login` 已接 BE V8：Cookie 登录、CSRF、邮箱验证/找回、Google 登录/补用户名、用户管理分页和 CLI 授权。业务页面要求登录，导航和动作按账号权限展示。HTTP 接入集中在 `src/auth/httpAdapter.ts`。详见 [FE spec](../docs/技术方案/v8/fe/spec.md) 与 [FE plan](../docs/技术方案/v8/fe/plan.md)。
 
@@ -23,6 +23,12 @@ npm run dev
 ```
 
 浏览器打开 `http://localhost:5173`。开发服务器把 `/api` 请求代理到 `http://127.0.0.1:8000`，将 `/agent` 请求代理到独立 Agent 服务 `http://127.0.0.1:8001`。如需直连其他后端地址，在 `fe/.env.local` 设置 `VITE_API_BASE_URL`，并把前端地址加入后端 `CORS_ORIGINS`。
+
+## Cloudflare Pages 生产部署
+
+生产前端部署到 Cloudflare Pages，后端继续运行在 Render。Pages Function 将同源 `/api/*` 请求转发到 Render BE；不要在浏览器里跨站直连 BE，否则登录 Cookie 可能被浏览器跨站策略拦截。Cloudflare 创建项目时选择仓库 `main` 分支，Root directory 设为 `fe`，Build command 为 `npm ci && npm run build`，Build output directory 为 `dist`。构建变量 `BE_API_ORIGIN` 设为 `https://jingpo-be.onrender.com`；`VITE_API_BASE_URL` 留空/不设置，`VITE_AGENT_V8_ENABLED=false`（Agent 尚未部署时）。
+
+`functions/api/[[path]].js` 代理 API，`public/_routes.json` 限定 Function 只处理 `/api/*`；Pages 自动将无对应静态文件的路由回退到 SPA 根页面。部署后将实际 `https://<项目名>.pages.dev` 地址配置到 BE 的 `AUTH_FRONTEND_URL` 和 `CORS_ORIGINS`，生产 Cookie 设 `AUTH_COOKIE_SECURE=true`。Google 登录的 `GOOGLE_REDIRECT_URI` 设为 `https://<项目名>.pages.dev/api/v1/auth/google/callback`，并将同一地址加入 OAuth Web client 的 Authorized redirect URIs；保留原本 localhost 和 OAuth Playground 回调。BE 与 Google 配置均更新后重新部署 BE，再验收登录、刷新、注册邮件和密码重置。
 
 ## 页面地址
 

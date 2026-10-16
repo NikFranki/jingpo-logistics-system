@@ -260,20 +260,18 @@ function CliAuthorization() {
 
 function GoogleCallback({ paths }: { paths: Paths }) {
   const { adapter, acceptSession, session } = useAuth()
-  const [stage, setStage] = useState<'pending' | 'username' | 'conflict' | 'failed'>(paths.preview || session?.user.needsUsername ? 'username' : session ? 'pending' : 'failed')
+  const [stage] = useState<'pending' | 'username' | 'failed'>(session?.user.needsUsername ? 'username' : session ? 'pending' : 'failed')
   const navigate = useNavigate()
   const action = useAction()
   useEffect(() => {
-    if (!paths.preview && session && !session.user.needsUsername) navigate(session.user.emailVerified ? '/account' : '/verify-email', { replace: true })
-  }, [paths.preview, session, navigate])
+    if (session && !session.user.needsUsername) navigate(session.user.emailVerified ? '/account' : '/verify-email', { replace: true })
+  }, [session, navigate])
   return <><Title level={2}>Google 登录</Title>
-    {paths.preview && <Form layout="vertical"><Form.Item label="预览回调状态"><Select value={stage} onChange={setStage} options={[{ value: 'username', label: '首次登录：补填用户名' }, { value: 'conflict', label: '邮箱已有账号' }, { value: 'failed', label: '登录失败或取消' }, { value: 'pending', label: '等待身份验证' }]} /></Form.Item></Form>}
     <Feedback {...action} />
-    {stage === 'pending' && <Result status="info" title="等待账号服务验证身份" subTitle="Google 身份验证接入后才能继续，当前不会建立真实登录。" />}
+    {stage === 'pending' && <Result status="info" title="正在确认登录状态" subTitle="请稍候。" />}
     {stage === 'failed' && <Result status="warning" title="Google 登录未完成" subTitle="你可以返回登录页重试，或使用用户名和密码登录。" />}
-    {stage === 'conflict' && <Result status="info" title="此邮箱已有账号" subTitle="请先登录已有账号，再在个人账号中绑定 Google。" extra={<Link to={`${paths.base}/forgot-password`}>忘记密码？</Link>} />}
       {stage === 'username' && <><Paragraph type="secondary">为新账号设置用户名，初始角色为普通用户。</Paragraph><Form layout="vertical" onFinish={(values: { username: string }) => void action.run(async () => { const result = await adapter.completeGoogle(values.username); acceptSession(result); navigate(`${paths.base}${result.user.emailVerified ? '/account' : '/verify-email'}`, { replace: true }) })}>
-      <Form.Item label="用户名" name="username" rules={usernameRules}><Input autoComplete="username" autoFocus /></Form.Item><Button type="primary" htmlType="submit" loading={action.busy}>{paths.preview ? '模拟完成注册' : '完成注册'}</Button>
+      <Form.Item label="用户名" name="username" rules={usernameRules}><Input autoComplete="username" autoFocus /></Form.Item><Button type="primary" htmlType="submit" loading={action.busy}>完成注册</Button>
     </Form></>}
     <Paragraph className="jp-auth-footnote"><Link to={`${paths.base}/login`}>返回登录</Link></Paragraph>
   </>
@@ -287,7 +285,7 @@ function Workspace({ paths, selectRole }: { paths: Paths; selectRole?: (role: Ro
     <header className="jp-auth-header"><Link to={paths.preview ? `${paths.base}/login` : '/'} className="jp-auth-brand"><TruckOutlined /> 返回首页</Link></header>
     <div className="jp-auth-content">
       {paths.preview && <Alert showIcon type="warning" message="独立交互预览 · 数据仅保存在当前页面内存，刷新即重置；不会调用 BE 或 Agent。" className="jp-auth-environment" />}
-      {paths.preview && <div className="jp-auth-preview-controls"><label htmlFor="jp-preview-role">预览角色</label><Select id="jp-preview-role" placeholder="选择角色后进入个人账号" value={session?.user.role} onChange={selectRole} options={roles.map(role => ({ value: role, label: roleLabels[role] }))} className="jp-auth-preview-select" /><Link to={`${paths.base}/login`}>登录流程</Link><Link to={`${paths.base}/register`}>注册流程</Link><Link to={`${paths.base}/oauth/google/callback`}>Google 回调</Link></div>}
+      {paths.preview && <div className="jp-auth-preview-controls"><label htmlFor="jp-preview-role">预览角色</label><Select id="jp-preview-role" placeholder="选择角色后进入个人账号" value={session?.user.role} onChange={selectRole} options={roles.map(role => ({ value: role, label: roleLabels[role] }))} className="jp-auth-preview-select" /><Link to={`${paths.base}/login`}>登录流程</Link><Link to={`${paths.base}/register`}>注册流程</Link></div>}
       <main className={`jp-auth-surface${location.pathname.endsWith('/admin/users') ? ' jp-auth-wide' : ''}`} key={protectedPage ? session ? `${session.user.id}:${session.user.role}:${session.user.authVersion}` : 'anonymous' : 'public-auth'}>
         {loading ? <div className="jp-auth-loading"><Spin /></div> : <Routes>
           <Route path="login" element={<Login paths={paths} />} />
@@ -300,7 +298,7 @@ function Workspace({ paths, selectRole }: { paths: Paths; selectRole?: (role: Ro
           <Route path="admin/users" element={<Gate paths={paths} admin><UserManagement /></Gate>} />
           <Route path="permissions" element={<Gate paths={paths}><PermissionsPreview /></Gate>} />
           <Route path="cli/authorize" element={<Gate paths={paths}><CliAuthorization /></Gate>} />
-          <Route path="oauth/google/callback" element={<GoogleCallback paths={paths} />} />
+          {!paths.preview && <Route path="oauth/google/callback" element={<GoogleCallback paths={paths} />} />}
           <Route path="*" element={<Navigate to={`${paths.base}/login`} replace />} />
         </Routes>}
       </main>

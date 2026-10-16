@@ -37,7 +37,7 @@ flowchart LR
 | /oauth/google/callback | 从 BE 当前身份决定补用户名、验证邮箱或进入账号 |
 | /cli/authorize | 显示当前账号，输入 8 位授权码，主动允许或拒绝只读 CLI 登录 |
 
-每个入口增加 /v8-preview 前缀可预览；/v8-preview/permissions 展示角色动作样例。预览账号 admin、ops、developer、sales、finance 只保存在工作区内存，finance 待验证；模拟密码不验证也不保存。Google 状态切换只是界面预览。
+每个适用入口增加 /v8-preview 前缀可预览；/v8-preview/permissions 展示角色动作样例。预览账号 admin、ops、developer、sales、finance 只保存在工作区内存，finance 待验证；模拟密码不验证也不保存。Google OAuth 只保留正式回调 `/oauth/google/callback`，预览不提供回调模拟页面。
 
 新密码遵守 BE 的 12～128 位、包含字母和数字规则；用户名只限制为 1～40 位，不限制字符种类。验证/重置 token 读取到临时状态后从地址栏移除，不写浏览器存储；刷新后需要重新打开邮件链接。
 
