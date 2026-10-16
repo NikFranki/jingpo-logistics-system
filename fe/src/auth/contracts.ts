@@ -25,6 +25,7 @@ export interface AuthAdapter {
   verifyEmail(token: string): Promise<void>
   requestPasswordReset(email: string): Promise<void>
   resetPassword(token: string, password: string): Promise<void>
+  changePassword(currentPassword: string, password: string): Promise<void>
   startGoogle(intent: 'login' | 'bind'): Promise<{ redirectUrl: string }>
   completeGoogle(username: string): Promise<LoginSession>
   listUsers(signal: AbortSignal, params: { search: string; page: number; pageSize: number }): Promise<{ items: Account[]; total: number }>

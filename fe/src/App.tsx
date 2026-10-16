@@ -34,7 +34,7 @@ function AuthenticatedApp() {
   const { session, loading, error, refresh } = useAuth()
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '64px auto' }} />
   if (error) return <Result status="warning" title="账号服务暂不可用" subTitle={error} extra={<Button onClick={() => void refresh()}>重试</Button>} />
-  if (['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/account', '/admin/users', '/cli/authorize', '/oauth/google/callback'].includes(pathname)) return <Suspense fallback={<Spin />}><AccountWorkspace /></Suspense>
+  if (['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/account', '/change-password', '/admin/users', '/cli/authorize', '/oauth/google/callback'].includes(pathname)) return <Suspense fallback={<Spin />}><AccountWorkspace /></Suspense>
   if (!session) return <Navigate to={`/login?next=${encodeURIComponent(pathname + location.search)}`} replace />
   if (session.user.needsUsername) return <Navigate to="/oauth/google/callback" replace />
   if (!session.user.emailVerified) return <Navigate to="/verify-email" replace />

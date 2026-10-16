@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Button, Descriptions, Divider, Form, Input, Modal, Result, Select, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
-import { ArrowLeftOutlined, GoogleOutlined, LogoutOutlined, TruckOutlined } from '@ant-design/icons'
+import { GoogleOutlined, TruckOutlined } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
 import { createPreviewAdapter, disconnectedAdapter } from './adapters'
@@ -153,9 +153,8 @@ function PasswordPage({ paths, reset = false }: { paths: Paths; reset?: boolean 
 }
 
 function AccountPage({ paths }: { paths: Paths }) {
-  const { session, signOut } = useAuth()
+  const { session } = useAuth()
   const action = useAction()
-  const navigate = useNavigate()
   if (!session) return null
   const user = session.user
   return <><Title level={2}>个人账号</Title><Paragraph type="secondary">查看账号身份、登录状态和授权范围。</Paragraph><Feedback {...action} />
@@ -166,11 +165,28 @@ function AccountPage({ paths }: { paths: Paths }) {
       { key: 'scope', label: '数据范围', children: roleDescriptions[user.role] },
       { key: 'expiry', label: '本次登录到期', children: new Date(session.expiresAt).toLocaleString('zh-CN') },
       { key: 'google', label: 'Google', children: user.googleLinked ? '已绑定' : '尚未绑定' },
-      { key: 'password', label: '本地密码', children: user.hasPassword === false ? <Link to={`${paths.base}/forgot-password`}>通过邮箱设置密码</Link> : '已设置' },
+      { key: 'password', label: '本地密码', children: user.hasPassword === false ? <Link to={`${paths.base}/forgot-password`}>通过邮箱设置密码</Link> : <Space>已设置<Link to={`${paths.base}/change-password`}>更改密码</Link></Space> },
     ]} />
-    <div className="jp-auth-section">{!user.googleLinked && <GoogleButton intent="bind" action={action} />}<Paragraph type="secondary" className="jp-auth-footnote">Agent 仅提供查询；{user.role === 'developer' ? '你的回答默认包含技术关联说明。' : '你的回答默认使用业务语言。'}</Paragraph></div>
+    {!user.googleLinked && <div className="jp-auth-section"><GoogleButton intent="bind" action={action} /></div>}
     {canManageUsers(user.role) && <Link to={`${paths.base}/admin/users`}>管理用户账号</Link>}
-    <Divider /><Button icon={<LogoutOutlined />} loading={action.busy} onClick={() => void action.run(async () => { await signOut(); navigate(`${paths.base}/login`, { replace: true }) })}>退出当前登录</Button>
+  </>
+}
+
+function ChangePasswordPage() {
+  const { adapter, refresh } = useAuth()
+  const action = useAction()
+  const [complete, setComplete] = useState(false)
+  return <><Title level={2}>更改密码</Title><Paragraph type="secondary">更改后，当前设备保持登录，其他设备需要重新登录。</Paragraph><Feedback {...action} />
+    {complete ? <Result status="success" title="密码已更改" subTitle="当前设备保持登录，其他登录已退出。" /> : <Form layout="vertical" requiredMark={false} onFinish={(values: { currentPassword: string; password: string }) => void action.run(async () => {
+      await adapter.changePassword(values.currentPassword, values.password)
+      await refresh()
+      setComplete(true)
+    })}>
+      <Form.Item label="当前密码" name="currentPassword" rules={passwordRules}><Input.Password autoComplete="current-password" autoFocus /></Form.Item>
+      <Form.Item label="新密码" name="password" rules={newPasswordRules} extra="12～128 位，同时包含字母和数字。"><Input.Password autoComplete="new-password" maxLength={128} /></Form.Item>
+      <Form.Item label="确认新密码" name="confirmPassword" dependencies={['password']} rules={[{ required: true, message: '请再次输入新密码' }, ({ getFieldValue }) => ({ validator: (_, value) => !value || getFieldValue('password') === value ? Promise.resolve() : Promise.reject(new Error('两次输入的密码不一致')) })]}><Input.Password autoComplete="new-password" maxLength={128} /></Form.Item>
+      <Button type="primary" htmlType="submit" loading={action.busy}>确认更改</Button>
+    </Form>}
   </>
 }
 
@@ -266,13 +282,12 @@ function GoogleCallback({ paths }: { paths: Paths }) {
 function Workspace({ paths, selectRole }: { paths: Paths; selectRole?: (role: Role) => void }) {
   const { session, loading } = useAuth()
   const location = useLocation()
-  const protectedPage = /\/(account|admin|permissions|cli)(\/|$)/.test(location.pathname)
+  const protectedPage = /\/(account|change-password|admin|permissions|cli)(\/|$)/.test(location.pathname)
   return <div className="jp-auth-root">
-    <header className="jp-auth-header"><Link to={paths.preview ? `${paths.base}/login` : '/'} className="jp-auth-brand"><TruckOutlined /> JINGPO 鲸破</Link><Text type="secondary">账号与访问权限</Text></header>
+    <header className="jp-auth-header"><Link to={paths.preview ? `${paths.base}/login` : '/'} className="jp-auth-brand"><TruckOutlined /> 返回首页</Link></header>
     <div className="jp-auth-content">
       {paths.preview && <Alert showIcon type="warning" message="独立交互预览 · 数据仅保存在当前页面内存，刷新即重置；不会调用 BE 或 Agent。" className="jp-auth-environment" />}
       {paths.preview && <div className="jp-auth-preview-controls"><label htmlFor="jp-preview-role">预览角色</label><Select id="jp-preview-role" placeholder="选择角色后进入个人账号" value={session?.user.role} onChange={selectRole} options={roles.map(role => ({ value: role, label: roleLabels[role] }))} className="jp-auth-preview-select" /><Link to={`${paths.base}/login`}>登录流程</Link><Link to={`${paths.base}/register`}>注册流程</Link><Link to={`${paths.base}/oauth/google/callback`}>Google 回调</Link></div>}
-      {protectedPage && session && session.user.emailVerified && <nav className="jp-auth-nav" aria-label="账号导航"><Link to={`${paths.base}/account`}>个人账号</Link>{paths.preview && <Link to={`${paths.base}/permissions`}>角色交互</Link>}{canManageUsers(session.user.role) && <Link to={`${paths.base}/admin/users`}>用户管理</Link>}</nav>}
       <main className={`jp-auth-surface${location.pathname.endsWith('/admin/users') ? ' jp-auth-wide' : ''}`} key={protectedPage ? session ? `${session.user.id}:${session.user.role}:${session.user.authVersion}` : 'anonymous' : 'public-auth'}>
         {loading ? <div className="jp-auth-loading"><Spin /></div> : <Routes>
           <Route path="login" element={<Login paths={paths} />} />
@@ -280,6 +295,7 @@ function Workspace({ paths, selectRole }: { paths: Paths; selectRole?: (role: Ro
           <Route path="verify-email" element={<VerifyEmail paths={paths} />} />
           <Route path="forgot-password" element={<PasswordPage key="forgot" paths={paths} />} />
           <Route path="reset-password" element={<PasswordPage key="reset" paths={paths} reset />} />
+          <Route path="change-password" element={<Gate paths={paths}><ChangePasswordPage /></Gate>} />
           <Route path="account" element={<Gate paths={paths}><AccountPage paths={paths} /></Gate>} />
           <Route path="admin/users" element={<Gate paths={paths} admin><UserManagement /></Gate>} />
           <Route path="permissions" element={<Gate paths={paths}><PermissionsPreview /></Gate>} />
@@ -288,7 +304,6 @@ function Workspace({ paths, selectRole }: { paths: Paths; selectRole?: (role: Ro
           <Route path="*" element={<Navigate to={`${paths.base}/login`} replace />} />
         </Routes>}
       </main>
-      <footer className="jp-auth-footer"><Link to="/"><ArrowLeftOutlined /> 返回物流系统</Link><Text type="secondary">角色权限由管理员统一分配</Text></footer>
     </div>
   </div>
 }

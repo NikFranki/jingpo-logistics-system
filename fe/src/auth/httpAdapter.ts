@@ -31,6 +31,10 @@ export const httpAuthAdapter: AuthAdapter = {
   verifyEmail: async token => { await authRequest('/auth/verify-email', post({ token }), false); syncIdentityTabs() },
   requestPasswordReset: async email => { await authRequest('/auth/forgot-password', post({ email }), false) },
   resetPassword: async (token, password) => { await authRequest('/auth/reset-password', post({ token, password }), false); syncIdentityTabs() },
+  changePassword: async (currentPassword, password) => {
+    await authRequest('/auth/change-password', post({ current_password: currentPassword, password }))
+    syncIdentityTabs()
+  },
   startGoogle: async intent => {
     const result = await authRequest<{ authorization_url: string }>(intent === 'bind' ? '/auth/google/bind/start' : '/auth/google/start', intent === 'bind' ? post() : {}, intent === 'bind')
     return { redirectUrl: result.authorization_url }

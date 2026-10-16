@@ -13,6 +13,7 @@ export const disconnectedAdapter: AuthAdapter = {
   verifyEmail: notConnected,
   requestPasswordReset: notConnected,
   resetPassword: notConnected,
+  changePassword: notConnected,
   startGoogle: notConnected,
   completeGoogle: notConnected,
   listUsers: notConnected,
@@ -68,6 +69,7 @@ export function createPreviewAdapter(): AuthAdapter & { selectRole: (role: Role)
       if (token !== 'preview-reset') throw new Error('重置链接无效或已过期，请重新申请。')
       current = null
     },
+    changePassword: async () => { requireSession(); throw new Error('预览模式不会保存或验证密码，请在正式账号中操作。') },
     startGoogle: async () => { throw new Error('Google 登录和绑定需等待后端接入；预览模式不会跳转到第三方。') },
     completeGoogle: async username => {
       if (accounts.some(account => account.username === username)) throw new Error('此预览用户名已被使用，请更换。')

@@ -124,3 +124,7 @@ git diff --check
 | 本地身份配置 | `AUTH_FRONTEND_URL=http://localhost:5173`、`AUTH_COOKIE_SECURE=false`，仅用于本机 HTTP 开发 |
 
 尚未创建管理员，也未配置 SMTP 或 Google 客户端。需在服务器交互执行 `DATABASE_URL='postgresql+psycopg:///jingpo_logistics' .venv/bin/python -m auth.admin init --username <用户名> --email <邮箱>`，由使用者输入密码，不生成默认密码。业务登录、正式邮件/Google 与 FE/Agent 联调仍需后续验收。
+
+### 2026-10-16 更改密码接口
+
+新增 `POST /auth/change-password`：要求已验证网页会话、CSRF 和当前密码；新密码沿用 12～128 位且含字母和数字的规则，不能与旧密码相同。成功保留当前会话，撤销该用户其他会话及派生凭据，提升 `auth_version`，审计不含密码。`py_compile` 通过，未运行后端测试或真实改密流程。

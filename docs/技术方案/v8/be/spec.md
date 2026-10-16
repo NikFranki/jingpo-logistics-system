@@ -59,6 +59,7 @@ flowchart LR
 | POST `/auth/resend-verification` | `{email}` → 202 |
 | POST `/auth/forgot-password` | `{email}` → 202 |
 | POST `/auth/reset-password` | `{token,password}` → 撤销全部会话，需重新登录；Google 用户也可通过此方式设置本地密码 |
+| POST `/auth/change-password` | 已验证网页登录身份和 CSRF；`{current_password,password}` → 修改密码，保留当前设备会话并撤销其他会话 |
 | POST `/auth/complete-profile` | `{username}`，仅需补用户名的已登录账号可调用 |
 | POST `/auth/agent-token` | 仅已验证完整网页身份；返回只读 Bearer、到期时间与用户 |
 | POST `/auth/recheck` | `{auth_version}` → `{valid:true,auth_version}`；版本不同返回 409 |
@@ -73,6 +74,8 @@ flowchart LR
 session_id 是当前凭据对应的独立随机 UUID，login_session_id 是其来源网页登录会话的随机 UUID（CLI 等独立登录时二者相同）。它们不使用凭据或其摘要生成，不能代替登录凭据。Agent 用 `(user.id, login_session_id, user.auth_version)` 绑定对话；重新领取同一网页登录派生的只读 token 不改变来源登录 ID。只读凭据返回的 permissions 仅含 business:read。
 
 错误沿用 `{error:{code,message,details},request_id}`：401 未登录/失效/停用；403 未验证、无权操作、只读凭据写入、CSRF 拒绝；不可见对象 404；状态/版本冲突 409；参数 422；限流 429；邮件/外部配置不可用 503。CLI token 轮询遵守设备授权的错误格式（见下）。
+
+更改密码时必须验证当前密码，新密码不能与当前密码相同；成功后保留当前网页登录会话、撤销该账号其他设备及其派生凭据，并提升 `auth_version`。密码不写入审计记录。
 
 ## Google 登录与绑定
 

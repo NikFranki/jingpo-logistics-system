@@ -37,6 +37,11 @@ class ResetPassword(TokenRequest):
     password: Password
 
 
+class ChangePassword(Input):
+    current_password: SecretStr = Field(min_length=1, max_length=128)
+    password: Password
+
+
 class CompleteProfile(Input):
     username: Username
 

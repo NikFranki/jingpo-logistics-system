@@ -31,7 +31,8 @@ flowchart LR
 | /verify-email | 未登录也可提交邮件 token、重发验证邮件；成功后返回登录或个人账号 |
 | /forgot-password | 注册邮箱与中性邮件反馈，不泄露账号是否存在 |
 | /reset-password | 新密码确认、过期反馈、重置成功后重新登录 |
-| /account | 身份、邮箱验证、单角色、范围、登录到期时间、Google 绑定、本地密码与退出 |
+| /account | 身份、邮箱验证、单角色、范围、登录到期时间、Google 绑定、本地密码；已设置本地密码的账号可进入更改密码 |
+| /change-password | 验证当前密码并设置新密码；当前设备保持登录，其他设备退出；账号页面不显示面包屑或额外返回按钮 |
 | /admin/users | 仅 admin；服务端搜索分页、修改单角色、启停确认、保护唯一 admin |
 | /oauth/google/callback | 从 BE 当前身份决定补用户名、验证邮箱或进入账号 |
 | /cli/authorize | 显示当前账号，输入 8 位授权码，主动允许或拒绝只读 CLI 登录 |
@@ -40,7 +41,7 @@ flowchart LR
 
 新密码遵守 BE 的 12～128 位、包含字母和数字规则；用户名只限制为 1～40 位，不限制字符种类。验证/重置 token 读取到临时状态后从地址栏移除，不写浏览器存储；刷新后需要重新打开邮件链接。
 
-账号表单宽度最多 560px，用户管理使用宽表格；窄屏缩小边距，表格支持横向滚动。保留加载、空状态、错误、键盘焦点及确认步骤；操作成功才更新界面。
+账号表单宽度最多 560px，用户管理使用宽表格；窄屏缩小边距，表格支持横向滚动。账号区页眉只保留“返回首页”入口，不额外显示 Agent 说明或页脚返回链接；需要返回时使用浏览器后退。保留加载、空状态、错误、键盘焦点及确认步骤；操作成功才更新界面。
 
 ## 3. 内部模型与 HTTP 映射
 
@@ -51,7 +52,7 @@ AuthAdapter 是界面接入边界，httpAdapter.ts 映射 BE 的下划线字段�
 | Account | 用户 ID、用户名、邮箱、单角色、启用/验证/Google 绑定、needsUsername、authVersion、permissions、hasPassword |
 | LoginSession | 当前用户、来源网页登录会话 ID、绝对到期时间 |
 | UserChange | user/ops/developer 角色或 enabled，不允许设置 admin |
-| AuthAdapter | 当前身份、登录/注册/退出、验证/重发、找回/重置、Google、服务端用户分页/修改、CLI 批准 |
+| AuthAdapter | 当前身份、登录/注册/退出、验证/重发、找回/重置/更改密码、Google、服务端用户分页/修改、CLI 批准 |
 
 正式应用使用全局 HTTP adapter；只有预览分支使用独立内存 adapter。浏览器使用 HttpOnly 会话 Cookie，不保存网页登录 access_token。
 
@@ -62,6 +63,7 @@ AuthAdapter 是界面接入边界，httpAdapter.ts 映射 BE 的下划线字段�
 | 登录和当前账号 | POST /auth/login，GET /auth/me，POST /auth/logout |
 | 注册、验证与重发 | POST /auth/register、/auth/verify-email、/auth/resend-verification |
 | 找回与重置 | POST /auth/forgot-password、/auth/reset-password |
+| 更改密码 | POST /auth/change-password，提交 current_password 和 password |
 | Google | GET /auth/google/start，POST /auth/google/bind/start；成功回调后读取 /auth/me，POST /auth/complete-profile 补用户名 |
 | 用户管理 | GET /admin/users，search/page/page_size；PATCH /admin/users/{id} |
 | CLI 确认 | POST /auth/cli/approve，user_code 和 approve |

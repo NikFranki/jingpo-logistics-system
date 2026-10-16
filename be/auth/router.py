@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from auth.dependencies import COOKIE, CSRF_COOKIE, business_user, current_user
 from auth.models import AuthAudit, EmailToken, LoginSession, User
-from auth.schemas import CompleteProfile, EmailRequest, Login, Recheck, Register, ResetPassword, TokenRequest, UserUpdate
+from auth.schemas import ChangePassword, CompleteProfile, EmailRequest, Login, Recheck, Register, ResetPassword, TokenRequest, UserUpdate
 from auth.security import digest, password_hash, password_matches, throttle
 from auth.service import audit, consume_email_token, create_email_token, fail, issue_session, resolve_session, revoke_all, send_email, user_body
 from business_time import server_now
@@ -165,6 +165,33 @@ def reset_password(body: ResetPassword, request: Request):
         revoke_all(session, user)
         audit(session, user, 'RESET_PASSWORD', {}, user.id)
     return {'message': '密码已更新，请重新登录'}
+
+
+@router.post('/change-password')
+def change_password(body: ChangePassword, request: Request, principal: Business):
+    if principal.read_only:
+        fail('FORBIDDEN', '只读凭据不能更改密码', 403)
+    limited(request, 'change-password', str(principal.user_id))
+    with SessionLocal.begin() as session:
+        login, user = resolve_session(session, principal.token_hash, lock=True)
+        current_password = body.current_password.get_secret_value()
+        new_password = body.password
+        if not user.password_hash:
+            fail('PASSWORD_NOT_SET', '此账号尚未设置本地密码，请通过邮箱设置密码', 409)
+        if not password_matches(current_password, user.password_hash):
+            fail('CURRENT_PASSWORD_INVALID', '当前密码不正确', 400)
+        if password_matches(new_password, user.password_hash):
+            fail('PASSWORD_UNCHANGED', '新密码不能与当前密码相同', 400)
+        user.password_hash = password_hash(new_password)
+        now = server_now()
+        session.execute(update(LoginSession).where(
+            LoginSession.user_id == user.id,
+            LoginSession.token_hash != login.token_hash,
+            LoginSession.revoked_at.is_(None),
+        ).values(revoked_at=now))
+        user.auth_version += 1
+        audit(session, user, 'CHANGE_PASSWORD', {}, user.id)
+    return {'message': '密码已更改，当前设备保持登录，其他登录已退出'}
 
 
 @router.post('/complete-profile')
