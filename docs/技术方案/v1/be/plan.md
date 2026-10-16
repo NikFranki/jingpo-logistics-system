@@ -234,7 +234,7 @@ S11 提前引入 transport_tasks 仅为已有 DDL 的 tracking_events.task_id �
 - 修改：shipments/service.py，增加地址更新事务和 PICKUP 事件
 - 修改：shipments/router.py，增加 PATCH /address 和 POST /events
 - 修改：be/errors.py，增加 InvalidShipmentStateError
-- 验证：揽收前可修改运单地址且不回写订单；揽收后地址修改返回 409；PICKUP 将阶段改为 PICKED_UP 并追加轨迹
+- 验证：揽收前可修改运单地址且不回写订单；揽收后地址修改返回 409；PICKUP 将阶段改为 PICKED_UP 并追加轨迹。
 - 防重复：同 key 和新 key 重复揽收都不会增加轨迹
 - 审计：地址修改记录前后值；揽收记录状态变化
 - 待自动化验证：地址修改和揽收真正并发时的锁顺序

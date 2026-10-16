@@ -1,0 +1,35 @@
+.jp-auth-root { min-height: 100dvh; background: #f3f6fa; color: #172b45; }
+.jp-auth-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 32px; background: #fff; border-bottom: 1px solid #e6ebf1; }
+.jp-auth-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 650; color: #172b45; }
+.jp-auth-brand .anticon { color: #1557a8; font-size: 26px; }
+.jp-auth-content { max-width: 1120px; margin-inline: auto; padding: 32px 24px; }
+.jp-auth-environment { margin-bottom: 20px; }
+.jp-auth-preview-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.jp-auth-preview-select { width: 260px; }
+.jp-auth-nav { display: flex; gap: 24px; flex-wrap: wrap; max-width: 560px; margin: 0 auto 16px; }
+.jp-auth-surface { max-width: 560px; margin: 0 auto; padding: 36px; background: #fff; border: 1px solid #d8e0ea; border-radius: 8px; overflow-wrap: anywhere; }
+.jp-auth-wide { max-width: none; }
+.jp-auth-surface h2 { margin-top: 0; }
+.jp-auth-surface .ant-form { margin-top: 24px; }
+.jp-auth-surface .ant-input, .jp-auth-surface .ant-input-affix-wrapper, .jp-auth-surface .ant-btn { min-height: 40px; }
+.jp-auth-surface .ant-input-affix-wrapper .ant-input { min-height: auto; }
+.jp-auth-feedback { margin-bottom: 16px; }
+.jp-auth-secondary { display: flex; justify-content: flex-end; margin: -8px 0 20px; }
+.jp-auth-footnote { margin-top: 20px; margin-bottom: 0; }
+.jp-auth-submit { margin-top: 20px; }
+.jp-auth-section { margin-top: 24px; margin-bottom: 24px; }
+.jp-auth-full { width: 100%; }
+.jp-auth-search { max-width: 420px; margin: 8px 0 24px; }
+.jp-auth-role-select { width: 152px; }
+.jp-auth-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 24px; font-size: 13px; }
+.jp-auth-loading { padding: 64px 16px; text-align: center; }
+.jp-auth-root a:focus-visible, .jp-auth-root button:focus-visible { outline: 2px solid #1557a8; outline-offset: 4px; }
+.jp-auth-root ::selection { color: #172b45; background: #c5d8f0; }
+@media (max-width: 640px) {
+  .jp-auth-header { padding: 16px; align-items: flex-start; flex-direction: column; gap: 4px; }
+  .jp-auth-content { padding: 20px 12px; }
+  .jp-auth-surface { padding: 24px 20px; }
+  .jp-auth-preview-controls { align-items: stretch; }
+  .jp-auth-preview-select { width: 100%; }
+  .jp-auth-nav { gap: 20px; }
+}

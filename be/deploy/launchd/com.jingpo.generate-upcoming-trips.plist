@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jingpo.generate-upcoming-trips</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/franki/personal/jingpo-logistics-system/be/.venv/bin/python</string>
+        <string>-m</string>
+        <string>lines.generate_upcoming_trips</string>
+        <string>--days</string>
+        <string>7</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/franki/personal/jingpo-logistics-system/be</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DATABASE_URL</key>
+        <string>postgresql+psycopg:///jingpo_logistics</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>0</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/jingpo-generate-upcoming-trips.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jingpo-generate-upcoming-trips.err</string>
+</dict>
+</plist>

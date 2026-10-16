@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -7,22 +7,27 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Body,
 )
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
+from network.schemas import NetworkCode
+from logistics_types import TaskStatus
 from errors import (
     IdempotencyKeyReusedError,
     InvalidExpectedArrivalError,
     InvalidTaskShipmentError,
     NetworkDataNotInitializedError,
-    SimulationClockNotInitializedError,
     TransportTaskNotFoundError,
     InvalidTransportTaskStateError,
 )
 from transport.schemas import (
     CandidateShipmentListResponse,
     TransportTaskCreateRequest,
+    TransportTaskCancelRequest,
+    TransportTaskDepartRequest,
     TransportTaskResponse,
     TransportTaskDetailResponse,
     TransportTaskListResponse,
@@ -34,6 +39,7 @@ from transport.service import (
     list_candidate_shipments,
     depart_transport_task,
     arrive_transport_task,
+    cancel_transport_task,
     list_transport_tasks,
 )
 
@@ -51,36 +57,26 @@ router = APIRouter(
 def read_transport_tasks(
     session: Annotated[Session, Depends(get_db)],
     task_no: str | None = None,
-    route_code: Literal["AB", "BC"] | None = None,
-    status: Literal[
-        "PENDING_DEPARTURE",
-        "IN_TRANSIT",
-        "ARRIVED",
-    ] | None = None,
+    route_code: NetworkCode | None = None,
+    status: TaskStatus | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> TransportTaskListResponse:
-    try:
-        items, total, simulation_time = list_transport_tasks(
-            session=session,
-            page=page,
-            page_size=page_size,
-            task_no=task_no,
-            route_code=route_code,
-            status=status,
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
+    items, total, server_time = list_transport_tasks(
+        session=session,
+        page=page,
+        page_size=page_size,
+        task_no=task_no,
+        route_code=route_code,
+        status=status,
+    )
 
     return TransportTaskListResponse(
         items=items,
         total=total,
         page=page,
         page_size=page_size,
-        simulation_time=simulation_time,
+        server_time=server_time,
     )
 
 @router.get(
@@ -88,7 +84,7 @@ def read_transport_tasks(
     response_model=CandidateShipmentListResponse,
 )
 def read_candidate_shipments(
-    route_code: Literal["AB", "BC"],
+    route_code: NetworkCode,
     session: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -125,7 +121,7 @@ def create_task(
     request: TransportTaskCreateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> TransportTaskResponse:
@@ -135,11 +131,6 @@ def create_task(
             request=request,
             idempotency_key=idempotency_key,
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -148,7 +139,7 @@ def create_task(
     except InvalidExpectedArrivalError:
         raise HTTPException(
             status_code=409,
-            detail="Expected arrival must be after simulation time",
+            detail="Expected arrival must be after server time",
         )
     except InvalidTaskShipmentError:
         raise HTTPException(
@@ -165,21 +156,23 @@ def create_task(
 
 @router.post(
     "/{task_id}/depart",
-    response_model=TransportTaskResponse,
+    response_model=TransportTaskDetailResponse,
 )
 def depart_task(
     task_id: int,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
-) -> TransportTaskResponse:
+    request: TransportTaskDepartRequest | None = Body(default=None),
+) -> TransportTaskDetailResponse:
     try:
         response_body = depart_transport_task(
             session=session,
             task_id=task_id,
             idempotency_key=idempotency_key,
+            expected_schedule_revision=request.expected_schedule_revision if request else None,
         )
     except TransportTaskNotFoundError:
         raise HTTPException(
@@ -196,11 +189,6 @@ def depart_task(
             status_code=409,
             detail="Task shipments are invalid",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -212,20 +200,20 @@ def depart_task(
             detail="Idempotency-Key was reused with different content",
         )
 
-    return TransportTaskResponse.model_validate(response_body)
+    return TransportTaskDetailResponse.model_validate(response_body)
 
 @router.post(
     "/{task_id}/arrive",
-    response_model=TransportTaskResponse,
+    response_model=TransportTaskDetailResponse,
 )
 def arrive_task(
     task_id: int,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
-) -> TransportTaskResponse:
+) -> TransportTaskDetailResponse:
     try:
         response_body = arrive_transport_task(
             session=session,
@@ -247,11 +235,6 @@ def arrive_task(
             status_code=409,
             detail="Task shipments are invalid",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except NetworkDataNotInitializedError:
         raise HTTPException(
             status_code=503,
@@ -263,7 +246,7 @@ def arrive_task(
             detail="Idempotency-Key was reused with different content",
         )
 
-    return TransportTaskResponse.model_validate(response_body)
+    return TransportTaskDetailResponse.model_validate(response_body)
 
 @router.get(
     "/{task_id}",
@@ -283,12 +266,28 @@ def read_transport_task(
             status_code=404,
             detail="Transport task not found",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
 
     return TransportTaskDetailResponse.model_validate(
         response_body
     )
+
+@router.post("/{task_id}/cancel", response_model=TransportTaskDetailResponse)
+def cancel_task(
+    task_id: int,
+    request: TransportTaskCancelRequest,
+    idempotency_key: Annotated[UUID, Depends(scoped_key)],
+    session: Annotated[Session, Depends(get_db)],
+) -> TransportTaskDetailResponse:
+    try:
+        body = cancel_transport_task(session, task_id, request, idempotency_key)
+    except TransportTaskNotFoundError:
+        raise HTTPException(404, "Transport task not found")
+    except InvalidTransportTaskStateError:
+        raise HTTPException(409, "Task cannot be cancelled or cancellation reason conflicts")
+    except InvalidTaskShipmentError:
+        raise HTTPException(409, "Task shipment associations or locations conflict")
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+    except NetworkDataNotInitializedError:
+        raise HTTPException(503, "Network data is not initialized")
+    return TransportTaskDetailResponse.model_validate(body)

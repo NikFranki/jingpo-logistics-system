@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -11,12 +11,15 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
+from logistics_types import ShipmentStage
+from transport.schemas import ShipmentTaskHistoryResponse
 
 from errors import (
     IdempotencyKeyReusedError,
     InvalidShipmentStateError,
+    InvalidShipmentDestinationError,
     ShipmentNotFoundError,
-    SimulationClockNotInitializedError,
     NetworkDataNotInitializedError,
 )
 from shipments.schemas import (
@@ -24,6 +27,9 @@ from shipments.schemas import (
     ShipmentDetailResponse,
     ShipmentEventRequest,
     ShipmentListResponse,
+    ShipmentDestinationUpdateRequest,
+    DestinationChangeListResponse,
+    GlobalDestinationChangeListResponse,
 )
 from shipments.service import (
     build_shipment_response_body,
@@ -32,6 +38,10 @@ from shipments.service import (
     process_shipment_event,
     build_shipment_list_item,
     list_shipments,
+    list_shipment_transport_tasks,
+    update_shipment_destination,
+    list_destination_changes,
+    list_all_destination_changes,
 )
 
 
@@ -39,6 +49,50 @@ router = APIRouter(
     prefix="/api/v1/shipments",
     tags=["shipments"],
 )
+
+
+@router.get("/destination-changes", response_model=GlobalDestinationChangeListResponse)
+def read_all_destination_changes(
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> GlobalDestinationChangeListResponse:
+    items, total = list_all_destination_changes(session, page, page_size)
+    return GlobalDestinationChangeListResponse(
+        items=items, total=total, page=page, page_size=page_size,
+    )
+
+
+@router.patch("/{shipment_id}/destination", response_model=ShipmentDetailResponse)
+def update_destination(
+    shipment_id: int,
+    request: ShipmentDestinationUpdateRequest,
+    idempotency_key: Annotated[UUID, Depends(scoped_key)],
+    session: Annotated[Session, Depends(get_db)],
+) -> ShipmentDetailResponse:
+    try:
+        body = update_shipment_destination(session, shipment_id, request, idempotency_key)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    except InvalidShipmentDestinationError as error:
+        raise HTTPException(409, str(error))
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+    return ShipmentDetailResponse.model_validate(body)
+
+
+@router.get("/{shipment_id}/destination-changes", response_model=DestinationChangeListResponse)
+def read_destination_changes(
+    shipment_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> DestinationChangeListResponse:
+    try:
+        items, total = list_destination_changes(session, shipment_id, page, page_size)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    return DestinationChangeListResponse(items=items, total=total, page=page, page_size=page_size)
 
 @router.patch(
     "/{shipment_id}/address",
@@ -49,7 +103,7 @@ def update_address(
     request: ShipmentAddressUpdateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
@@ -70,11 +124,6 @@ def update_address(
             status_code=409,
             detail="Shipment address is no longer editable",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -94,7 +143,7 @@ def create_shipment_event(
     request: ShipmentEventRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
@@ -120,11 +169,6 @@ def create_shipment_event(
             status_code=409,
             detail="Shipment event is not allowed in the current stage",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -142,17 +186,7 @@ def create_shipment_event(
 def read_shipments(
     session: Annotated[Session, Depends(get_db)],
     shipment_no: str | None = None,
-    stage: Literal[
-        "PENDING_PICKUP",
-        "PICKED_UP",
-        "AT_A",
-        "IN_TRANSIT_AB",
-        "AT_B",
-        "IN_TRANSIT_BC",
-        "AT_C",
-        "OUT_FOR_DELIVERY",
-        "SIGNED",
-    ] | None = None,
+    stage: ShipmentStage | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ShipmentListResponse:
@@ -197,7 +231,22 @@ def read_shipment(
 
     return ShipmentDetailResponse.model_validate(
         build_shipment_response_body(
+            session=session,
             shipment=shipment,
             events=events,
         )
     )
+
+
+@router.get("/{shipment_id}/transport-tasks", response_model=ShipmentTaskHistoryResponse)
+def read_shipment_transport_tasks(
+    shipment_id: int,
+    session: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ShipmentTaskHistoryResponse:
+    try:
+        items, total = list_shipment_transport_tasks(session, shipment_id, page, page_size)
+    except ShipmentNotFoundError:
+        raise HTTPException(404, "Shipment not found")
+    return ShipmentTaskHistoryResponse(items=items, total=total, page=page, page_size=page_size)

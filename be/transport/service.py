@@ -1,58 +1,35 @@
+import business_time
 import hashlib
 import json
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, aliased
+from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 from errors import (
+    NetworkError,
     IdempotencyKeyReusedError,
     InvalidExpectedArrivalError,
     InvalidTaskShipmentError,
     NetworkDataNotInitializedError,
-    SimulationClockNotInitializedError,
     TransportTaskNotFoundError,
     InvalidTransportTaskStateError,
 )
 from models import (
     OperationLog,
     Shipment,
-    SimulationSettings,
     Station,
     TaskShipment,
     TransportRoute,
     TransportTask,
     TrackingEvent,
+    ShipmentScheduleLeg,
 )
-from transport.schemas import TransportTaskCreateRequest
-
-DEPARTURE_RULES = {
-    "AB": {
-        "required_shipment_stage": "AT_A",
-        "next_shipment_stage": "IN_TRANSIT_AB",
-        "event_type": "DEPART_AB",
-    },
-    "BC": {
-        "required_shipment_stage": "AT_B",
-        "next_shipment_stage": "IN_TRANSIT_BC",
-        "event_type": "DEPART_BC",
-    },
-}
-
-ARRIVAL_RULES = {
-    "AB": {
-        "required_shipment_stage": "IN_TRANSIT_AB",
-        "next_shipment_stage": "AT_B",
-        "event_type": "ARRIVE_B",
-    },
-    "BC": {
-        "required_shipment_stage": "IN_TRANSIT_BC",
-        "next_shipment_stage": "AT_C",
-        "event_type": "ARRIVE_C",
-    },
-}
-
+from transport.schemas import TransportTaskCreateRequest, TransportTaskCancelRequest
+from scheduling.schedule_support import current_schedule_legs, leg_state
+from network.service import require_enabled_route
 
 def list_candidate_shipments(
     session: Session,
@@ -72,24 +49,45 @@ def list_candidate_shipments(
     ).one_or_none()
 
     if result is None:
-        raise NetworkDataNotInitializedError
+        raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "线路不存在", 404)
 
-    _, origin_station = result
-    required_stage = f"AT_{origin_station.code}"
+    route, origin_station = result
+    require_enabled_route(session, route)
+    required_stage = ShipmentStage.AT_STATION
 
     occupied = (
         select(TaskShipment.id)
         .where(
             TaskShipment.shipment_id == Shipment.id,
-            TaskShipment.released_at.is_(None),
+            TaskShipment.association_state == "ACTIVE",
         )
         .exists()
     )
 
+    arrived = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
+        TaskShipment.schedule_leg_id == ShipmentScheduleLeg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+    first_leg = select(ShipmentScheduleLeg.id).where(
+        ShipmentScheduleLeg.shipment_id == Shipment.id, ShipmentScheduleLeg.superseded_at.is_(None), ~arrived
+        ).order_by(ShipmentScheduleLeg.position).limit(1).correlate(Shipment).scalar_subquery()
+    follows_schedule = select(ShipmentScheduleLeg.id).where(
+        ShipmentScheduleLeg.id == first_leg, ShipmentScheduleLeg.route_id == route.id).exists()
+    future_leg, future_route = aliased(ShipmentScheduleLeg), aliased(TransportRoute)
+    future_origin, future_destination = aliased(Station), aliased(Station)
+    completed_future = select(TaskShipment.id).join(TransportTask,TaskShipment.task_id == TransportTask.id).where(
+        TaskShipment.schedule_leg_id == future_leg.id, TransportTask.status == TaskStatus.ARRIVED).exists()
+    blocked_future = select(future_leg.id).join(future_route,future_leg.route_id == future_route.id).join(
+        future_origin,future_route.origin_station_id == future_origin.id).join(
+        future_destination,future_route.destination_station_id == future_destination.id).where(
+        future_leg.shipment_id == Shipment.id, future_leg.superseded_at.is_(None), ~completed_future,
+        or_(future_route.enabled.is_(False),future_origin.enabled.is_(False),future_destination.enabled.is_(False))).exists()
     filters = (
+        Shipment.schedule_version > 0,
         Shipment.stage == required_stage,
         Shipment.last_scanned_station_id == origin_station.id,
+        Shipment.destination_station_id != origin_station.id,
         ~occupied,
+        follows_schedule,
+        ~blocked_future,
     )
 
     total = session.scalar(
@@ -120,6 +118,7 @@ def build_candidate_response(shipment: Shipment) -> dict:
         "recipient_address": shipment.recipient_address,
         "region_code": shipment.region_code,
         "stage": shipment.stage,
+        "destination_station_id": str(shipment.destination_station_id),
         "last_scanned_station_id": str(
             shipment.last_scanned_station_id
         ),
@@ -130,8 +129,7 @@ def build_candidate_response(shipment: Shipment) -> dict:
 def build_create_task_request_hash(
     request: TransportTaskCreateRequest,
 ) -> str:
-    content = json.dumps(
-        {
+    payload = {
             "route_code": request.route_code,
             "expected_arrival_at": (
                 request.expected_arrival_at
@@ -139,7 +137,11 @@ def build_create_task_request_hash(
                 .isoformat()
             ),
             "shipment_ids": sorted(request.shipment_ids),
-        },
+        }
+    if request.expected_schedule_versions is not None:
+        payload["expected_schedule_versions"] = request.expected_schedule_versions
+    content = json.dumps(
+        payload,
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -154,13 +156,20 @@ def build_task_response(
     destination: Station,
     shipments: list[Shipment],
 ) -> dict:
-    return {
+    body = {
         "id": str(task.id),
         "task_no": task.task_no,
+        "scheduling_source": task.scheduling_source,
+        "scheduled_trip_id": str(task.scheduled_trip_id) if task.scheduled_trip_id else None,
+        "planned_departure_at": task.planned_departure_at.isoformat() if task.planned_departure_at else None,
+        "schedule_revision": task.schedule_revision,
+        "delay_monitoring_enabled": task.delay_monitoring_enabled,
         "route_code": route.code,
         "origin_station_id": str(origin.id),
         "destination_station_id": str(destination.id),
         "status": task.status,
+        "cancelled_at": task.cancelled_at.isoformat() if task.cancelled_at else None,
+        "cancel_reason": task.cancel_reason,
         "expected_arrival_at": task.expected_arrival_at.isoformat(),
         "departed_at": (
             task.departed_at.isoformat()
@@ -182,6 +191,11 @@ def build_task_response(
             for shipment in shipments
         ],
     }
+    if task.scheduling_source == 'PLAN':
+        from sqlalchemy.orm import object_session
+        from scheduling.service import task_extra
+        body.update(task_extra(object_session(task), task))
+    return body
 
 def create_transport_task(
     session: Session,
@@ -191,14 +205,7 @@ def create_transport_task(
     request_hash = build_create_task_request_hash(request)
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -210,11 +217,25 @@ def create_transport_task(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
-        if request.expected_arrival_at <= clock.current_time:
+        if request.expected_arrival_at <= clock:
             raise InvalidExpectedArrivalError
 
+        shipments = list(session.scalars(select(Shipment).where(
+            Shipment.id.in_(request.shipment_ids)).order_by(Shipment.id).with_for_update()))
+        if len(shipments) != len(request.shipment_ids):
+            raise InvalidTaskShipmentError
+        if request.expected_schedule_versions is not None and any(
+            request.expected_schedule_versions[str(s.id)] != s.schedule_version for s in shipments):
+            raise InvalidTaskShipmentError
+        route_code = request.route_code
+        if route_code is None:
+            legs = [next((leg for leg in current_schedule_legs(session, s.id)
+                          if leg_state(session, leg)[0] == 'PENDING'), None) for s in shipments]
+            if any(l is None for l in legs) or len({l.route_id for l in legs}) != 1:
+                raise InvalidTaskShipmentError
+            route_code = session.get(TransportRoute, legs[0].route_id).code
         origin = aliased(Station)
         destination = aliased(Station)
 
@@ -229,30 +250,20 @@ def create_transport_task(
                 TransportRoute.destination_station_id
                 == destination.id,
             )
-            .where(TransportRoute.code == request.route_code)
+            .where(TransportRoute.code == route_code)
         ).one_or_none()
 
         if route_result is None:
-            raise NetworkDataNotInitializedError
+            raise NetworkError("NETWORK_RESOURCE_NOT_FOUND", "线路不存在", 404)
 
         route, origin_station, destination_station = route_result
+        require_enabled_route(session, route)
 
-        shipments = list(
-            session.scalars(
-                select(Shipment)
-                .where(Shipment.id.in_(request.shipment_ids))
-                .order_by(Shipment.id)
-                .with_for_update()
-            )
-        )
-
-        if len(shipments) != len(request.shipment_ids):
-            raise InvalidTaskShipmentError
-
-        required_stage = f"AT_{origin_station.code}"
+        required_stage = ShipmentStage.AT_STATION
 
         if any(
-            shipment.stage != required_stage
+            shipment.destination_station_id == origin_station.id
+            or shipment.stage != required_stage
             or shipment.last_scanned_station_id
             != origin_station.id
             for shipment in shipments
@@ -266,15 +277,20 @@ def create_transport_task(
                 TaskShipment.shipment_id.in_(
                     request.shipment_ids
                 ),
-                TaskShipment.released_at.is_(None),
+                TaskShipment.association_state == "ACTIVE",
             )
         )
 
         if occupied_count:
             raise InvalidTaskShipmentError
 
+        schedule_legs = {s.id: next((leg for leg in current_schedule_legs(session, s.id)
+                                 if leg_state(session, leg)[0] == 'PENDING'), None) for s in shipments}
+        if any(leg is None or leg.route_id != route.id for leg in schedule_legs.values()):
+            raise InvalidTaskShipmentError
         task = TransportTask(
             route_id=route.id,
+            delay_monitoring_enabled=route.delay_monitoring_enabled,
             expected_arrival_at=request.expected_arrival_at,
         )
         session.add(task)
@@ -285,6 +301,7 @@ def create_transport_task(
                 TaskShipment(
                     task_id=task.id,
                     shipment_id=shipment.id,
+                    schedule_leg_id=schedule_legs[shipment.id].id,
                 )
                 for shipment in shipments
             ]
@@ -314,7 +331,7 @@ def create_transport_task(
                 },
                 response_body=response_body,
                 response_status=201,
-                occurred_at=clock.current_time,
+                occurred_at=clock,
             )
         )
 
@@ -327,13 +344,7 @@ def get_transport_task(
     origin = aliased(Station)
     destination = aliased(Station)
 
-    simulation_time = session.scalar(
-        select(SimulationSettings.current_time)
-        .where(SimulationSettings.id == 1)
-    )
-
-    if simulation_time is None:
-        raise SimulationClockNotInitializedError
+    server_time = business_time.server_now()
 
     result = session.execute(
         select(
@@ -375,14 +386,22 @@ def get_transport_task(
         )
     )
 
-    return build_task_detail_response(
+    body = build_task_detail_response(
         task=task,
         route=route,
         origin=origin_station,
         destination=destination_station,
         shipments=shipments,
-        simulation_time=simulation_time,
+        server_time=server_time,
     )
+    from scheduling.service import task_extra, departure_problem
+    body.update(task_extra(session, task, server_time))
+    problem = departure_problem(session, task, server_time)
+    if problem:
+        for action in body['allowed_actions']:
+            if action['action'] == 'DEPART':
+                action.update(enabled=False, reason_code=problem[0], reason=problem[1])
+    return body
 
 def build_depart_task_request_hash(task_id: int) -> str:
     content = f"DEPART_TRANSPORT_TASK:{task_id}"
@@ -392,18 +411,14 @@ def depart_transport_task(
     session: Session,
     task_id: int,
     idempotency_key: UUID,
+    expected_schedule_revision: int | None = None,
 ) -> dict:
     request_hash = build_depart_task_request_hash(task_id)
+    if expected_schedule_revision is not None:
+        request_hash = hashlib.sha256((request_hash + ':' + str(expected_schedule_revision)).encode()).hexdigest()
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -415,7 +430,7 @@ def depart_transport_task(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
         task = session.scalar(
             select(TransportTask)
@@ -426,7 +441,7 @@ def depart_transport_task(
         if task is None:
             raise TransportTaskNotFoundError
 
-        if task.status == "IN_TRANSIT":
+        if task.status == TaskStatus.IN_TRANSIT:
             response_body = get_transport_task(
                 session=session,
                 task_id=task.id,
@@ -443,13 +458,20 @@ def depart_transport_task(
                     after_data=None,
                     response_body=response_body,
                     response_status=200,
-                    occurred_at=clock.current_time,
+                    occurred_at=clock,
                 )
             )
 
             return response_body
 
-        if task.status != "PENDING_DEPARTURE":
+        if task.scheduling_source == 'PLAN':
+            from scheduling.service import departure_problem
+            if expected_schedule_revision != task.schedule_revision:
+                raise NetworkError('TASK_MEMBERSHIP_CONFLICT', '任务成员已变化，请重新确认发车名单')
+            problem = departure_problem(session, task, clock)
+            if problem:
+                raise NetworkError(*problem)
+        if task.status != TaskStatus.PENDING_DEPARTURE:
             raise InvalidTransportTaskStateError
 
         origin = aliased(Station)
@@ -473,14 +495,13 @@ def depart_transport_task(
             raise NetworkDataNotInitializedError
 
         route, origin_station, destination_station = route_result
-        rule = DEPARTURE_RULES[route.code]
 
         associations = list(
             session.scalars(
                 select(TaskShipment)
                 .where(
                     TaskShipment.task_id == task.id,
-                    TaskShipment.released_at.is_(None),
+                    TaskShipment.association_state == "ACTIVE",
                 )
                 .order_by(TaskShipment.shipment_id)
                 .with_for_update()
@@ -508,8 +529,8 @@ def depart_transport_task(
             raise InvalidTaskShipmentError
 
         if any(
-            shipment.stage
-            != rule["required_shipment_stage"]
+            shipment.stage != ShipmentStage.AT_STATION
+            or shipment.last_scanned_station_id != origin_station.id
             for shipment in shipments
         ):
             raise InvalidTaskShipmentError
@@ -532,24 +553,24 @@ def depart_transport_task(
             after_data=None,
             response_body={},
             response_status=200,
-            occurred_at=clock.current_time,
+            occurred_at=clock,
         )
         session.add(operation_log)
         session.flush()
 
-        task.status = "IN_TRANSIT"
-        task.departed_at = clock.current_time
+        task.status = TaskStatus.IN_TRANSIT
+        task.departed_at = clock
         updated_at = datetime.now(timezone.utc)
 
         for shipment in shipments:
-            shipment.stage = rule["next_shipment_stage"]
+            shipment.stage = ShipmentStage.IN_TRANSIT
             shipment.updated_at = updated_at
 
             session.add(
                 TrackingEvent(
                     shipment_id=shipment.id,
-                    event_type=rule["event_type"],
-                    occurred_at=clock.current_time,
+                    event_type=TrackingEventType.DEPART,
+                    occurred_at=clock,
                     station_id=origin_station.id,
                     task_id=task.id,
                     operation_id=operation_log.id,
@@ -558,12 +579,13 @@ def depart_transport_task(
 
         session.flush()
 
-        response_body = build_task_response(
+        response_body = build_task_detail_response(
             task=task,
             route=route,
             origin=origin_station,
             destination=destination_station,
             shipments=shipments,
+            server_time=clock,
         )
 
         operation_log.after_data = {
@@ -589,14 +611,7 @@ def arrive_transport_task(
     request_hash = build_arrive_task_request_hash(task_id)
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -608,7 +623,7 @@ def arrive_transport_task(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
         task = session.scalar(
             select(TransportTask)
@@ -619,7 +634,7 @@ def arrive_transport_task(
         if task is None:
             raise TransportTaskNotFoundError
 
-        if task.status == "ARRIVED":
+        if task.status == TaskStatus.ARRIVED:
             response_body = get_transport_task(
                 session=session,
                 task_id=task.id,
@@ -636,13 +651,13 @@ def arrive_transport_task(
                     after_data=None,
                     response_body=response_body,
                     response_status=200,
-                    occurred_at=clock.current_time,
+                    occurred_at=clock,
                 )
             )
 
             return response_body
 
-        if task.status != "IN_TRANSIT":
+        if task.status != TaskStatus.IN_TRANSIT:
             raise InvalidTransportTaskStateError
 
         origin = aliased(Station)
@@ -666,14 +681,13 @@ def arrive_transport_task(
             raise NetworkDataNotInitializedError
 
         route, origin_station, destination_station = route_result
-        rule = ARRIVAL_RULES[route.code]
 
         associations = list(
             session.scalars(
                 select(TaskShipment)
                 .where(
                     TaskShipment.task_id == task.id,
-                    TaskShipment.released_at.is_(None),
+                    TaskShipment.association_state == "ACTIVE",
                 )
                 .order_by(TaskShipment.shipment_id)
                 .with_for_update()
@@ -701,8 +715,8 @@ def arrive_transport_task(
             raise InvalidTaskShipmentError
 
         if any(
-            shipment.stage
-            != rule["required_shipment_stage"]
+            shipment.stage != ShipmentStage.IN_TRANSIT
+            or shipment.last_scanned_station_id != origin_station.id
             for shipment in shipments
         ):
             raise InvalidTaskShipmentError
@@ -725,20 +739,21 @@ def arrive_transport_task(
             after_data=None,
             response_body={},
             response_status=200,
-            occurred_at=clock.current_time,
+            occurred_at=clock,
         )
         session.add(operation_log)
         session.flush()
 
-        task.status = "ARRIVED"
-        task.arrived_at = clock.current_time
+        task.status = TaskStatus.ARRIVED
+        task.arrived_at = clock
         updated_at = datetime.now(timezone.utc)
 
         for association in associations:
-            association.released_at = clock.current_time
+            association.released_at = clock
+            association.association_state = "RELEASED"
 
         for shipment in shipments:
-            shipment.stage = rule["next_shipment_stage"]
+            shipment.stage = ShipmentStage.AT_STATION
             shipment.last_scanned_station_id = (
                 destination_station.id
             )
@@ -747,8 +762,8 @@ def arrive_transport_task(
             session.add(
                 TrackingEvent(
                     shipment_id=shipment.id,
-                    event_type=rule["event_type"],
-                    occurred_at=clock.current_time,
+                    event_type=TrackingEventType.ARRIVE,
+                    occurred_at=clock,
                     station_id=destination_station.id,
                     task_id=task.id,
                     operation_id=operation_log.id,
@@ -757,12 +772,16 @@ def arrive_transport_task(
 
         session.flush()
 
-        response_body = build_task_response(
+        for shipment in shipments:
+            from scheduling.service import activate_next
+            activate_next(session, shipment, clock, operation_log)
+        response_body = build_task_detail_response(
             task=task,
             route=route,
             origin=origin_station,
             destination=destination_station,
             shipments=shipments,
+            server_time=clock,
         )
 
         operation_log.after_data = {
@@ -778,19 +797,18 @@ def arrive_transport_task(
 
 def calculate_task_delay(
     task: TransportTask,
-    route_code: str,
-    simulation_time: datetime,
+    server_time: datetime,
 ) -> tuple[str, int | None]:
-    if route_code != "AB":
+    if task.status == TaskStatus.CANCELLED or not task.delay_monitoring_enabled:
         return "NOT_APPLICABLE", None
 
     if (
-        task.status == "IN_TRANSIT"
-        and simulation_time > task.expected_arrival_at
+        task.status == TaskStatus.IN_TRANSIT
+        and server_time > task.expected_arrival_at
     ):
         minutes = int(
             (
-                simulation_time
+                server_time
                 - task.expected_arrival_at
             ).total_seconds()
             // 60
@@ -798,7 +816,7 @@ def calculate_task_delay(
         return "OVERDUE", minutes
 
     if (
-        task.status == "ARRIVED"
+        task.status == TaskStatus.ARRIVED
         and task.arrived_at is not None
         and task.arrived_at > task.expected_arrival_at
     ):
@@ -819,7 +837,7 @@ def build_task_detail_response(
     origin: Station,
     destination: Station,
     shipments: list[Shipment],
-    simulation_time: datetime,
+    server_time: datetime,
 ) -> dict:
     response_body = build_task_response(
         task=task,
@@ -831,13 +849,12 @@ def build_task_detail_response(
 
     delay_status, delay_minutes = calculate_task_delay(
         task=task,
-        route_code=route.code,
-        simulation_time=simulation_time,
+        server_time=server_time,
     )
 
     response_body.update(
         {
-            "simulation_time": simulation_time.isoformat(),
+            "server_time": server_time.isoformat(),
             "delay_status": delay_status,
             "delay_minutes": delay_minutes,
             "allowed_actions": build_task_allowed_actions(task.status),
@@ -848,14 +865,16 @@ def build_task_detail_response(
 
 def build_task_allowed_actions(status: str) -> list[dict]:
     rules = [
+        ("CANCEL", status in (TaskStatus.PENDING_DEPARTURE,TaskStatus.WAITING_CARGO,TaskStatus.WAITING_PREDECESSOR),
+         "Cancellation requires PENDING_DEPARTURE status"),
         (
             "DEPART",
-            status == "PENDING_DEPARTURE",
+            status == TaskStatus.PENDING_DEPARTURE,
             "Departure requires PENDING_DEPARTURE status",
         ),
         (
             "ARRIVE",
-            status == "IN_TRANSIT",
+            status == TaskStatus.IN_TRANSIT,
             "Arrival requires IN_TRANSIT status",
         ),
     ]
@@ -878,13 +897,7 @@ def list_transport_tasks(
     route_code: str | None,
     status: str | None,
 ) -> tuple[list[dict], int, datetime]:
-    simulation_time = session.scalar(
-        select(SimulationSettings.current_time)
-        .where(SimulationSettings.id == 1)
-    )
-
-    if simulation_time is None:
-        raise SimulationClockNotInitializedError
+    server_time = business_time.server_now()
 
     filters = []
 
@@ -924,16 +937,18 @@ def list_transport_tasks(
     for task, route in rows:
         delay_status, delay_minutes = calculate_task_delay(
             task=task,
-            route_code=route.code,
-            simulation_time=simulation_time,
+            server_time=server_time,
         )
 
         items.append(
             {
                 "id": str(task.id),
                 "task_no": task.task_no,
+                "delay_monitoring_enabled": task.delay_monitoring_enabled,
                 "route_code": route.code,
                 "status": task.status,
+                "cancelled_at": task.cancelled_at,
+                "cancel_reason": task.cancel_reason,
                 "expected_arrival_at": task.expected_arrival_at,
                 "departed_at": task.departed_at,
                 "arrived_at": task.arrived_at,
@@ -943,4 +958,79 @@ def list_transport_tasks(
             }
         )
 
-    return items, total, simulation_time
+    from scheduling.service import task_extra
+    cache = {}
+    for item, (task, _) in zip(items, rows):
+        item.update(task_extra(session, task, server_time, cache))
+    return items, total, server_time
+
+
+def cancel_transport_task(
+    session: Session,
+    task_id: int,
+    request: TransportTaskCancelRequest,
+    idempotency_key: UUID,
+) -> dict:
+    content = json.dumps({"action": "CANCEL_TRANSPORT_TASK", "task_id": task_id,
+                          "reason": request.reason}, sort_keys=True, separators=(",", ":"))
+    if request.expected_schedule_revision is not None or request.cancel_token is not None:
+        content = json.dumps({'legacy_content':content, 'expected_schedule_revision':request.expected_schedule_revision,
+                             'cancel_token':request.cancel_token}, sort_keys=True)
+    request_hash = hashlib.sha256(content.encode()).hexdigest()
+    with session.begin():
+        clock = business_time.begin_business_write(session)
+        existing = session.scalar(select(OperationLog).where(
+            OperationLog.idempotency_key == idempotency_key))
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise IdempotencyKeyReusedError
+            return business_time.normalize_cached_response(existing.response_body)
+        task = session.scalar(select(TransportTask).where(
+            TransportTask.id == task_id).with_for_update())
+        if task is None:
+            raise TransportTaskNotFoundError
+        if task.scheduling_source == 'PLAN':
+            from scheduling.service import cancel_planned
+            return cancel_planned(session, task, request, clock, idempotency_key, request_hash)
+        before = {"status": task.status}
+        released_ids = []
+        if task.status == TaskStatus.CANCELLED:
+            if task.cancel_reason != request.reason:
+                raise InvalidTransportTaskStateError
+        elif task.status == TaskStatus.PENDING_DEPARTURE:
+            # Lock all original associations: a partially released pending task is invalid.
+            associations = list(session.scalars(select(TaskShipment).where(
+                TaskShipment.task_id == task_id).order_by(
+                TaskShipment.shipment_id).with_for_update()))
+            if not associations or any(a.released_at is not None for a in associations):
+                raise InvalidTaskShipmentError
+            shipments = list(session.scalars(select(Shipment).where(
+                Shipment.id.in_([a.shipment_id for a in associations])).order_by(
+                Shipment.id).with_for_update()))
+            route = session.get(TransportRoute, task.route_id)
+            if route is None:
+                raise NetworkDataNotInitializedError
+            if len(shipments) != len(associations) or any(
+                p.stage != ShipmentStage.AT_STATION or
+                p.last_scanned_station_id != route.origin_station_id for p in shipments):
+                raise InvalidTaskShipmentError
+            before["association_ids"] = [str(a.id) for a in associations]
+            task.status = TaskStatus.CANCELLED
+            task.cancelled_at = clock
+            task.cancel_reason = request.reason
+            for association in associations:
+                association.released_at = clock
+                association.association_state = "RELEASED"
+                released_ids.append(str(association.id))
+            session.flush()
+        else:
+            raise InvalidTransportTaskStateError
+        response = get_transport_task(session, task_id)
+        session.add(OperationLog(
+            idempotency_key=idempotency_key, request_hash=request_hash,
+            action="CANCEL_TRANSPORT_TASK", resource_type="TRANSPORT_TASK", resource_id=task_id,
+            before_data=before, after_data={"status": task.status,
+                "cancelled_at": task.cancelled_at.isoformat(), "cancel_reason": task.cancel_reason,
+                "released_association_ids": released_ids}, response_body=response,
+            response_status=200, occurred_at=clock))
+    return response

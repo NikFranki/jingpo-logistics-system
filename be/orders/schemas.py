@@ -1,8 +1,10 @@
+from regions.addresses import AddressSelection, AddressResponse, REGION_FIELDS, validate_patch
 from typing import Annotated, Self
 
 from datetime import datetime
 
 from pydantic import (
+    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -11,7 +13,10 @@ from pydantic import (
 )
 
 
-class OrderResponse(BaseModel):
+class OrderResponse(AddressResponse):
+    created_by_user_id: str | None = None
+    cancelled_at: datetime | None = None
+    cancel_reason: str | None = None
     id: str
     order_no: str
     product_name: str
@@ -20,6 +25,8 @@ class OrderResponse(BaseModel):
     sender_address: str
     recipient_name: str
     recipient_address: str
+    earliest_handover_at: AwareDatetime | None = None
+    latest_delivery_at: AwareDatetime | None = None
     region_code: str
     status: str
     created_at: datetime
@@ -50,7 +57,7 @@ AddressText = Annotated[
     ),
 ]
 
-class OrderCreateRequest(BaseModel):
+class OrderCreateRequest(AddressSelection):
     model_config = ConfigDict(extra="forbid")
 
     product_name: NameText
@@ -59,8 +66,16 @@ class OrderCreateRequest(BaseModel):
     sender_address: AddressText
     recipient_name: NameText
     recipient_address: AddressText
+    earliest_handover_at: AwareDatetime | None = None
+    latest_delivery_at: AwareDatetime | None = None
 
-class OrderUpdateRequest(BaseModel):
+    @model_validator(mode="after")
+    def validate_delivery_window(self) -> Self:
+        if self.earliest_handover_at and self.latest_delivery_at and self.earliest_handover_at > self.latest_delivery_at:
+            raise ValueError("最早可交运时间不能晚于最晚送达时间")
+        return self
+
+class OrderUpdateRequest(AddressSelection):
     model_config = ConfigDict(extra="forbid")
 
     product_name: NameText | None = None
@@ -69,6 +84,8 @@ class OrderUpdateRequest(BaseModel):
     sender_address: AddressText | None = None
     recipient_name: NameText | None = None
     recipient_address: AddressText | None = None
+    earliest_handover_at: AwareDatetime | None = None
+    latest_delivery_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def validate_changes(self) -> Self:
@@ -77,8 +94,16 @@ class OrderUpdateRequest(BaseModel):
         if not changes:
             raise ValueError("At least one field must be provided")
 
-        if any(value is None for value in changes.values()):
+        validate_patch(changes)
+
+        window_fields = {"earliest_handover_at", "latest_delivery_at"}
+        if any(value is None for key, value in changes.items() if key not in REGION_FIELDS and key not in window_fields):
             raise ValueError("Fields cannot be null")
+
+        earliest = changes.get("earliest_handover_at")
+        latest = changes.get("latest_delivery_at")
+        if earliest and latest and earliest > latest:
+            raise ValueError("最早可交运时间不能晚于最晚送达时间")
 
         return self
 
@@ -86,6 +111,11 @@ class OrderShipmentSummary(BaseModel):
     id: str
     shipment_no: str
     stage: str
+
+
+class OrderCancelRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 class OrderDetailResponse(OrderResponse):

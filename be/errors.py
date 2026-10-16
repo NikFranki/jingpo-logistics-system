@@ -1,6 +1,3 @@
-class SimulationClockNotInitializedError(Exception):
-    pass
-
 
 class IdempotencyKeyReusedError(Exception):
     pass
@@ -18,6 +15,10 @@ class ShipmentNotFoundError(Exception):
 class InvalidShipmentStateError(Exception):
     pass
 
+
+class InvalidShipmentDestinationError(Exception):
+    """A destination correction conflicts with the current fulfillment facts."""
+
 class NetworkDataNotInitializedError(Exception):
     pass
 
@@ -34,3 +35,10 @@ class InvalidTaskShipmentError(Exception):
 
 class InvalidTransportTaskStateError(Exception):
     pass
+
+class NetworkError(Exception):
+    def __init__(self, code: str, message: str, status: int = 409):
+        self.code = code
+        self.message = message
+        self.status = status
+        super().__init__(message)

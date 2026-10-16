@@ -1,19 +1,27 @@
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_URL
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from db import get_db
+from auth.dependencies import scoped_key
 from models import Order
-from shipments.schemas import ShipmentDetailResponse
+from regions.addresses import address_body
+from logistics_types import ShipmentStage
+from shipments.schemas import ShipmentDetailResponse, ShipmentCreateRequest
 from shipments.service import create_shipment
+from lines.service_schedules import shipment_service_options
+from scheduling.schemas import SchedulePreviewRequest, ScheduleConfirmRequest
+from scheduling.service import preview_schedule, confirm_schedule
+import business_time
 
 from errors import (
     IdempotencyKeyReusedError,
-    SimulationClockNotInitializedError,
     OrderNotEditableError,
     OrderNotFoundError,
+    NetworkError,
 )
 from orders.schemas import (
     OrderCreateRequest,
@@ -21,6 +29,7 @@ from orders.schemas import (
     OrderResponse,
     OrderUpdateRequest,
     OrderDetailResponse,
+    OrderCancelRequest,
 )
 from orders.service import (
     create_order as create_order_service,
@@ -28,6 +37,7 @@ from orders.service import (
     list_orders,
     update_order as update_order_service,
     get_order_detail,
+    cancel_order,
 )
 
 
@@ -37,8 +47,41 @@ router = APIRouter(
 )
 
 
+def auto_schedule_shipment(session: Session, shipment_id: int, idempotency_key: UUID) -> None:
+    from_date = business_time.server_now().date()
+    options = shipment_service_options(
+        session, shipment_id, from_date, from_date + timedelta(days=29)
+    )
+    if not options["items"]:
+        return
+
+    preview = preview_schedule(
+        session,
+        shipment_id,
+        SchedulePreviewRequest(scheduled_trip_id=int(options["items"][0]["trip_id"])),
+    )
+    if not preview["can_confirm"]:
+        return
+
+    session.rollback()
+    confirm_schedule(
+        session,
+        shipment_id,
+        ScheduleConfirmRequest(
+            preview_token=preview["preview_token"],
+            reason="订单创建后自动安排最近可用班次",
+            acknowledged_warning_codes=[item["code"] for item in preview["warnings"]],
+        ),
+        uuid5(NAMESPACE_URL, f"jingpo:auto-schedule:{idempotency_key}"),
+    )
+
+
 def to_order_response(order: Order) -> OrderResponse:
     return OrderResponse(
+        created_by_user_id=str(order.created_by_user_id) if order.created_by_user_id else None,
+        cancelled_at=order.cancelled_at,
+        cancel_reason=order.cancel_reason,
+        **address_body(order),
         id=str(order.id),
         order_no=order.order_no,
         product_name=order.product_name,
@@ -47,6 +90,8 @@ def to_order_response(order: Order) -> OrderResponse:
         sender_address=order.sender_address,
         recipient_name=order.recipient_name,
         recipient_address=order.recipient_address,
+        earliest_handover_at=order.earliest_handover_at,
+        latest_delivery_at=order.latest_delivery_at,
         region_code=order.region_code,
         status=order.status,
         created_at=order.created_at,
@@ -61,17 +106,7 @@ def read_orders(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     order_no: str | None = None,
     shipment_no: str | None = None,
-    stage: Literal[
-        "PENDING_PICKUP",
-        "PICKED_UP",
-        "AT_A",
-        "IN_TRANSIT_AB",
-        "AT_B",
-        "IN_TRANSIT_BC",
-        "AT_C",
-        "OUT_FOR_DELIVERY",
-        "SIGNED",
-    ] | None = None,
+    stage: ShipmentStage | None = None,
 ) -> OrderListResponse:
     orders, total = list_orders(
         session=session,
@@ -98,7 +133,7 @@ def create_order(
     request: OrderCreateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> OrderResponse:
@@ -108,11 +143,28 @@ def create_order(
             request=request,
             idempotency_key=idempotency_key,
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
+        try:
+            shipment_body, _ = create_shipment(
+                session=session,
+                order_id=int(response_body["id"]),
+                idempotency_key=uuid5(NAMESPACE_URL, f"jingpo:auto-shipment:{idempotency_key}"),
+            )
+            response_body["status"] = "SHIPMENT_CREATED"
+            try:
+                auto_schedule_shipment(
+                    session,
+                    int(shipment_body["id"]),
+                    uuid5(NAMESPACE_URL, f"jingpo:auto-schedule-key:{idempotency_key}"),
+                )
+            except NetworkError:
+                pass
+        except NetworkError as error:
+            if error.code not in {
+                "DESTINATION_ADDRESS_REQUIRED",
+                "DESTINATION_NOT_FOUND",
+                "DESTINATION_CONFLICT",
+            }:
+                raise
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -131,7 +183,7 @@ def update_order(
     request: OrderUpdateRequest,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> OrderResponse:
@@ -152,11 +204,6 @@ def update_order(
             status_code=409,
             detail="Order is no longer editable",
         )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
-        )
     except IdempotencyKeyReusedError:
         raise HTTPException(
             status_code=409,
@@ -172,10 +219,11 @@ def update_order(
 )
 def create_order_shipment(
     order_id: int,
+    request: ShipmentCreateRequest,
     response: Response,
     idempotency_key: Annotated[
         UUID,
-        Header(alias="Idempotency-Key"),
+        Depends(scoped_key),
     ],
     session: Annotated[Session, Depends(get_db)],
 ) -> ShipmentDetailResponse:
@@ -184,6 +232,7 @@ def create_order_shipment(
             session=session,
             order_id=order_id,
             idempotency_key=idempotency_key,
+            destination_station_id=request.destination_station_id,
         )
     except OrderNotFoundError:
         raise HTTPException(
@@ -194,11 +243,6 @@ def create_order_shipment(
         raise HTTPException(
             status_code=409,
             detail="Order cannot create a shipment",
-        )
-    except SimulationClockNotInitializedError:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation clock is not initialized",
         )
     except IdempotencyKeyReusedError:
         raise HTTPException(
@@ -211,6 +255,17 @@ def create_order_shipment(
     return ShipmentDetailResponse.model_validate(
         response_body
     )
+
+@router.post('/{order_id}/cancel', response_model=OrderResponse)
+def cancel_order_endpoint(order_id: int, request: OrderCancelRequest,
+    idempotency_key: Annotated[UUID, Depends(scoped_key)], session: Annotated[Session, Depends(get_db)]):
+    try:
+        return OrderResponse.model_validate(cancel_order(session, order_id, request, idempotency_key))
+    except OrderNotFoundError:
+        raise HTTPException(404, 'Order not found')
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, 'Idempotency-Key was reused with different content')
+
 
 @router.get(
     "/{order_id}",

@@ -3,3 +3,5 @@ uvicorn
 sqlalchemy
 psycopg[binary]
 alembic
+google-auth[requests]>=2.40,<3
+python-dotenv>=1.0,<2

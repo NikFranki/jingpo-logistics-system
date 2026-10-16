@@ -1,64 +1,98 @@
 from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from uuid import UUID
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
-
 from db import get_db
-from models import Station
-from network.schemas import (
-    StationResponse,
-    TransportRouteResponse,
-)
-from network.service import (
-    list_routes as list_routes_service,
-    list_stations as list_stations_service,
-)
+from auth.dependencies import scoped_key
+from errors import IdempotencyKeyReusedError
+from network.schemas import (StationResponse, StationListResponse, TransportRouteResponse,
+    TransportRouteListResponse, StationCreateRequest,
+    StationUpdateRequest, RouteCreateRequest, RouteUpdateRequest)
+from network.service import list_stations, list_routes, station_body, route_body, write_network
+from network.coverage import (ServiceAreaCreate, ServiceAreaUpdate, ServiceAreaResponse,
+    DestinationMatchResponse, OriginMatchResponse, order_origin_preview,
+    list_areas, write_area, order_destination_preview)
+
+router = APIRouter(prefix="/api/v1", tags=["network"])
+DB = Annotated[Session, Depends(get_db)]
+Key = Annotated[UUID, Depends(scoped_key)]
 
 
-router = APIRouter(
-    prefix="/api/v1",
-    tags=["network"],
-)
+@router.get('/ordering-options')
+def ordering_options(session: DB):
+    return {'stations': [{'id': str(station.id), 'code': station.code, 'name': station.name,
+            'allows_first_arrival': station.allows_first_arrival, 'allows_delivery': station.allows_delivery}
+            for station in list_stations(session, True)]}
+
+@router.get("/stations", response_model=list[StationResponse] | StationListResponse)
+def read_stations(session: DB, enabled: bool | None = None,
+                  page: Annotated[int | None, Query(ge=1)] = None,
+                  page_size: Annotated[int | None, Query(ge=1, le=100)] = None):
+    if page is None and page_size is None:
+        return [station_body(station) for station in list_stations(session, enabled)]
+    stations, total = list_stations(session, enabled, page, page_size)
+    items = [station_body(station) for station in stations]
+    return dict(items=items, total=total, page=page or 1, page_size=page_size or 20)
 
 
-def to_station_response(station: Station) -> StationResponse:
-    return StationResponse(
-        id=str(station.id),
-        code=station.code,
-        name=station.name,
-    )
+@router.get('/stations/{station_id}/service-areas', response_model=list[ServiceAreaResponse])
+def read_service_areas(station_id: int, session: DB, enabled: bool | None = None):
+    return list_areas(session, station_id, enabled)
 
 
-@router.get(
-    "/stations",
-    response_model=list[StationResponse],
-)
-def read_stations(
-    session: Annotated[Session, Depends(get_db)],
-) -> list[StationResponse]:
-    stations = list_stations_service(session)
-
-    return [
-        to_station_response(station)
-        for station in stations
-    ]
+@router.post('/stations/{station_id}/service-areas', response_model=ServiceAreaResponse, status_code=201)
+def create_service_area(station_id: int, request: ServiceAreaCreate, idempotency_key: Key, session: DB):
+    try:
+        return write_area(session, station_id, request, idempotency_key)
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, 'Idempotency-Key was reused with different content')
 
 
-@router.get(
-    "/routes",
-    response_model=list[TransportRouteResponse],
-)
-def read_routes(
-    session: Annotated[Session, Depends(get_db)],
-) -> list[TransportRouteResponse]:
-    routes = list_routes_service(session)
+@router.patch('/stations/{station_id}/service-areas/{area_id}', response_model=ServiceAreaResponse)
+def update_service_area(station_id: int, area_id: int, request: ServiceAreaUpdate, idempotency_key: Key, session: DB):
+    try:
+        return write_area(session, station_id, request, idempotency_key, area_id)
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, 'Idempotency-Key was reused with different content')
 
-    return [
-        TransportRouteResponse(
-            id=str(route.id),
-            code=route.code,
-            origin=to_station_response(origin),
-            destination=to_station_response(destination),
-        )
-        for route, origin, destination in routes
-    ]
+
+@router.get('/orders/{order_id}/destination-match', response_model=DestinationMatchResponse)
+def preview_destination(order_id: int, session: DB):
+    return order_destination_preview(session, order_id)
+
+@router.get("/routes", response_model=list[TransportRouteResponse] | TransportRouteListResponse, deprecated=True)
+def read_routes(session: DB, enabled: bool | None = None,
+                page: Annotated[int | None, Query(ge=1)] = None,
+                page_size: Annotated[int | None, Query(ge=1, le=100)] = None):
+    if page is None and page_size is None:
+        return [route_body(session, route) for route, _, _ in list_routes(session, enabled)]
+    routes, total = list_routes(session, enabled, page, page_size)
+    items = [route_body(session, route) for route, _, _ in routes]
+    return dict(items=items, total=total, page=page or 1, page_size=page_size or 20)
+
+def write(session, kind, request, key, resource_id=None):
+    try:
+        return write_network(session, kind, request, key, resource_id)
+    except IdempotencyKeyReusedError:
+        raise HTTPException(409, "Idempotency-Key was reused with different content")
+
+@router.post("/stations", response_model=StationResponse, status_code=201)
+def create_station(request: StationCreateRequest, idempotency_key: Key, session: DB):
+    return write(session, "STATION", request, idempotency_key)
+
+@router.patch("/stations/{station_id}", response_model=StationResponse)
+def update_station(station_id: int, request: StationUpdateRequest, idempotency_key: Key, session: DB):
+    return write(session, "STATION", request, idempotency_key, station_id)
+
+@router.post("/routes", response_model=TransportRouteResponse, status_code=201, deprecated=True)
+def create_route(request: RouteCreateRequest, idempotency_key: Key, session: DB):
+    return write(session, "ROUTE", request, idempotency_key)
+
+@router.patch("/routes/{route_id}", response_model=TransportRouteResponse, deprecated=True)
+def update_route(route_id: int, request: RouteUpdateRequest, idempotency_key: Key, session: DB):
+    return write(session, "ROUTE", request, idempotency_key, route_id)
+
+
+@router.get('/orders/{order_id}/origin-match', response_model=OriginMatchResponse)
+def preview_origin(order_id: int, session: DB):
+    return order_origin_preview(session, order_id)

@@ -1,3 +1,5 @@
+import business_time
+from regions.addresses import address_body, request_body, resolve_changes
 import hashlib
 import json
 from uuid import UUID
@@ -7,15 +9,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from models import (
-    OperationLog, Order, SimulationSettings, Shipment,
+    OperationLog, Order, Shipment,
 )
 
 from errors import (
     IdempotencyKeyReusedError,
+    NetworkError,
     OrderNotEditableError,
     OrderNotFoundError,
-    SimulationClockNotInitializedError,
-)
+    )
 from orders.schemas import OrderCreateRequest, OrderUpdateRequest
 
 
@@ -90,11 +92,12 @@ def build_create_order_request_hash(
     content = json.dumps(
         {
             "action": "CREATE_ORDER",
-            "body": request.model_dump(),
+            "body": request_body(request, create=True),
         },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+        default=lambda value: value.isoformat() if isinstance(value, datetime) else str(value),
     )
 
     return hashlib.sha256(content.encode()).hexdigest()
@@ -109,15 +112,7 @@ def create_order(
 
     # 正常结束后才真正提交
     with session.begin():
-        clock_statement = (
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-        clock = session.scalar(clock_statement)
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -129,16 +124,9 @@ def create_order(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
-        order = Order(
-            product_name=request.product_name,
-            quantity=request.quantity,
-            sender_name=request.sender_name,
-            sender_address=request.sender_address,
-            recipient_name=request.recipient_name,
-            recipient_address=request.recipient_address,
-        )
+        order = Order(**resolve_changes(session, request_body(request, create=True)))
         session.add(order)
         # 把 INSERT 发给数据库，但事务还没提交
         session.flush()
@@ -157,7 +145,7 @@ def create_order(
                 after_data=response_body,
                 response_body=response_body,
                 response_status=201,
-                occurred_at=clock.current_time,
+                occurred_at=clock,
             )
         )
 
@@ -165,6 +153,10 @@ def create_order(
 
 def build_order_response_body(order: Order) -> dict:
     return {
+        'created_by_user_id': str(order.created_by_user_id) if order.created_by_user_id else None,
+        'cancelled_at': order.cancelled_at.isoformat() if order.cancelled_at else None,
+        'cancel_reason': order.cancel_reason,
+        **address_body(order),
         "id": str(order.id),
         "order_no": order.order_no,
         "product_name": order.product_name,
@@ -173,11 +165,69 @@ def build_order_response_body(order: Order) -> dict:
         "sender_address": order.sender_address,
         "recipient_name": order.recipient_name,
         "recipient_address": order.recipient_address,
+        "earliest_handover_at": order.earliest_handover_at.isoformat() if order.earliest_handover_at else None,
+        "latest_delivery_at": order.latest_delivery_at.isoformat() if order.latest_delivery_at else None,
         "region_code": order.region_code,
         "status": order.status,
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }
+
+
+def cancel_order(session, order_id, request, idempotency_key):
+    from models import TaskShipment, TransportTask
+    from scheduling.service import UNSTARTED, cancel_empty, release_entry
+    request_hash = hashlib.sha256(json.dumps({'action': 'CANCEL_ORDER', 'order_id': order_id,
+        'reason': request.reason}, sort_keys=True).encode()).hexdigest()
+    with session.begin():
+        clock = business_time.begin_business_write(session)
+        replay = session.scalar(select(OperationLog).where(OperationLog.idempotency_key == idempotency_key))
+        if replay:
+            if replay.request_hash != request_hash:
+                raise IdempotencyKeyReusedError
+            return replay.response_body
+        order = session.get(Order, order_id, with_for_update=True)
+        if not order:
+            raise OrderNotFoundError
+        if order.status == 'CANCELLED':
+            if order.cancel_reason != request.reason:
+                raise NetworkError('ORDER_ALREADY_CANCELLED', '订单已取消，不能覆盖原原因')
+        elif order.status not in ('PENDING_SHIPMENT', 'SHIPMENT_CREATED'):
+            raise NetworkError('ORDER_NOT_CANCELLABLE', '当前订单状态不可取消')
+        shipment = session.scalar(select(Shipment).where(Shipment.order_id == order_id).with_for_update())
+        if shipment and shipment.stage not in ('PENDING_PICKUP', 'CANCELLED'):
+            raise NetworkError('ORDER_NOT_CANCELLABLE', '货物已揽收，不能取消订单')
+        if shipment:
+            associations = session.execute(select(TaskShipment, TransportTask).join(TransportTask,
+                TaskShipment.task_id == TransportTask.id).where(TaskShipment.shipment_id == shipment.id)).all()
+            if any(task.departed_at or task.arrived_at for _, task in associations):
+                raise NetworkError('ORDER_NOT_CANCELLABLE', '已发生运输事实，不能取消订单')
+            affected = {}
+            for entry, task in associations:
+                if entry.association_state == 'RELEASED':
+                    continue
+                if task.status not in UNSTARTED:
+                    raise NetworkError('ORDER_NOT_CANCELLABLE', '运输任务已执行，不能取消订单')
+                release_entry(session, entry, clock, request.reason)
+                task.schedule_revision += 1
+                affected[task.id] = task
+            session.flush()
+            for task in affected.values():
+                cancel_empty(session, task, clock, '关联订单取消')
+            shipment.stage = 'CANCELLED'
+            shipment.schedule_status = 'BLOCKED'
+            shipment.schedule_reason = '订单已取消'
+            shipment.updated_at = clock
+        before = {'status': order.status}
+        order.status, order.cancelled_at, order.cancel_reason = 'CANCELLED', order.cancelled_at or clock, request.reason
+        order.updated_at = clock
+        session.flush()
+        body = build_order_response_body(order)
+        session.add(OperationLog(idempotency_key=idempotency_key, request_hash=request_hash,
+            action='CANCEL_ORDER', resource_type='ORDER', resource_id=order.id,
+            before_data=before, after_data={'status': order.status}, response_body=body,
+            response_status=200, occurred_at=clock))
+        return body
 
 def build_update_order_request_hash(
     order_id: int,
@@ -187,11 +237,12 @@ def build_update_order_request_hash(
         {
             "action": "UPDATE_ORDER",
             "order_id": order_id,
-            "body": request.model_dump(exclude_unset=True),
+            "body": request_body(request),
         },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+        default=lambda value: value.isoformat() if isinstance(value, datetime) else str(value),
     )
 
     return hashlib.sha256(content.encode()).hexdigest()
@@ -208,14 +259,7 @@ def update_order(
     )
 
     with session.begin():
-        clock = session.scalar(
-            select(SimulationSettings)
-            .where(SimulationSettings.id == 1)
-            .with_for_update()
-        )
-
-        if clock is None:
-            raise SimulationClockNotInitializedError
+        clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
             select(OperationLog).where(
@@ -227,7 +271,7 @@ def update_order(
             if existing_log.request_hash != request_hash:
                 raise IdempotencyKeyReusedError
 
-            return existing_log.response_body
+            return business_time.normalize_cached_response(existing_log.response_body)
 
         order = session.scalar(
             select(Order)
@@ -241,9 +285,13 @@ def update_order(
         if order.status != "PENDING_SHIPMENT":
             raise OrderNotEditableError
 
-        changes = request.model_dump(exclude_unset=True)
+        changes = resolve_changes(session, request_body(request))
+        earliest_handover_at = changes.get("earliest_handover_at", order.earliest_handover_at)
+        latest_delivery_at = changes.get("latest_delivery_at", order.latest_delivery_at)
+        if earliest_handover_at and latest_delivery_at and earliest_handover_at > latest_delivery_at:
+            raise NetworkError("INVALID_DELIVERY_WINDOW", "最早可交运时间不能晚于最晚送达时间", 422)
         before_data = {
-            field: getattr(order, field)
+            field: getattr(order, field).isoformat() if isinstance(getattr(order, field), datetime) else getattr(order, field)
             for field in changes
         }
 
@@ -255,7 +303,7 @@ def update_order(
         session.refresh(order)
 
         after_data = {
-            field: getattr(order, field)
+            field: getattr(order, field).isoformat() if isinstance(getattr(order, field), datetime) else getattr(order, field)
             for field in changes
         }
         response_body = build_order_response_body(order)
@@ -271,7 +319,7 @@ def update_order(
                 after_data=after_data,
                 response_body=response_body,
                 response_status=200,
-                occurred_at=clock.current_time,
+                occurred_at=clock,
             )
         )
 
