@@ -128,3 +128,9 @@ git diff --check
 ### 2026-10-16 更改密码接口
 
 新增 `POST /auth/change-password`：要求已验证网页会话、CSRF 和当前密码；新密码沿用 12～128 位且含字母和数字的规则，不能与旧密码相同。成功保留当前会话，撤销该用户其他会话及派生凭据，提升 `auth_version`，审计不含密码。`py_compile` 通过，未运行后端测试或真实改密流程。
+
+### 2026-10-16 Gmail API 邮件发送通道
+
+保留默认 SMTP（本地 Mailpit/Gmail SMTP 可继续使用），新增 `EMAIL_PROVIDER=gmail_api`。发信时服务端用配置的 refresh token 换取短期 access token，再通过 Gmail API HTTPS 发送原有验证/重置邮件；凭据缺失、provider 拼错或远程失败均返回 503，注册和找回接口在缺配置时不会先写入账号或邮件 token。未做 SMTP 自动回退，避免不确定投递结果时重复发信。
+
+隔离的单元测试 `./.venv/bin/python -m unittest discover -s tests -p 'test_email_delivery.py' -v`：3 项通过；`py_compile` 与 `git diff --check` 通过。只验证模拟的 Google HTTP 往返，尚未配置 Render secrets，也未做真实收件验收。部署需在 Render 配置 `EMAIL_PROVIDER=gmail_api`、`GMAIL_API_CLIENT_ID`、`GMAIL_API_CLIENT_SECRET`、`GMAIL_API_REFRESH_TOKEN`、`GMAIL_API_SENDER`；refresh token 必须单独授予 `gmail.send`。Google OAuth 同意屏幕为 Testing 时 refresh token 可能 7 天失效，需后续完成真实发件账号授权和到期策略。

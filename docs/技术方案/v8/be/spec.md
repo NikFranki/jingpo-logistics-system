@@ -41,7 +41,7 @@ flowchart LR
 
 注册只接受用户名、邮箱和密码，额外字段（包括 role）返回 422。默认角色 user。未验证账号可登录并处理个人验证事务，不能读取业务。Google 新用户还需补用户名。
 
-验证链接 60 分钟、重置链接 30 分钟，只能成功消费一次。重发使旧的同用途链接失效。邮件只包含 FE 链接，FE 将 token 通过 POST 请求体交给 BE。邮件失败返回 503 并作废该次 token；注册账号仍保留，可重发。注册冲突/未知邮箱采用相同 202 文案；不提供可用链接时发送中性说明邮件，SMTP 失败仍如实返回，避免通过邮箱存在与否区分发送故障。
+验证链接 60 分钟、重置链接 30 分钟，只能成功消费一次。重发使旧的同用途链接失效。邮件只包含 FE 链接，FE 将 token 通过 POST 请求体交给 BE。邮件失败返回 503 并作废该次 token；注册账号仍保留，可重发。注册冲突/未知邮箱采用相同 202 文案；不提供可用链接时发送中性说明邮件，发送失败仍如实返回，避免通过邮箱存在与否区分发送故障。
 
 注册、登录、邮件和验证按 IP/账号使用数据库限流，多进程共享；通常每 IP 每 15 分钟 60 次、同账号 10 次，超限 429。CLI 轮询单独为每 IP 15 分钟 300 次，且每设备至少间隔 5 秒。反向代理需保留真实连接边界，不接受客户端随意提供的 X-Forwarded-For 作为可信身份。
 
@@ -115,6 +115,8 @@ verification_uri 指向 FE `/cli/authorize`。FE 和 Agent 需按本契约接 HT
 
 迁移为 `f81a3d6c2907`，接 `e2a7c4b19d63`。发布时先停服务、pg_dump 备份、升级并执行结构检查，再通过 `python -m auth.admin init --username ... --email ...` 初始化唯一 admin（密码交互输入），最后启动服务。恢复用相同命令将 init 改为 restore，撤销全部管理员旧会话。命令只在服务器执行，无公开恢复接口；不把密码放命令行或环境日志。
 
-环境：AUTH_FRONTEND_URL、AUTH_COOKIE_SECURE；SMTP_HOST、SMTP_PORT、SMTP_FROM、SMTP_STARTTLS、SMTP_SSL、SMTP_USERNAME、SMTP_PASSWORD；GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、GOOGLE_REDIRECT_URI。Docker 本地邮件容器为 Mailpit，SMTP 1025、查看页面 localhost:8025；正式 SMTP 必须启用 TLS。
+邮件发送通过 `EMAIL_PROVIDER` 选择，默认 `smtp` 以兼容本地 Mailpit 和现有部署；`smtp` 使用 SMTP_HOST、SMTP_PORT、SMTP_FROM、SMTP_STARTTLS、SMTP_SSL、SMTP_USERNAME、SMTP_PASSWORD。生产 Render Free 可使用 `EMAIL_PROVIDER=gmail_api`，配置 GMAIL_API_CLIENT_ID、GMAIL_API_CLIENT_SECRET、GMAIL_API_REFRESH_TOKEN、GMAIL_API_SENDER；服务通过 HTTPS 刷新 access token 并调用 Gmail API `users.messages.send`。发信授权需包含 `https://www.googleapis.com/auth/gmail.send`，发件地址必须是获授权的 Gmail 账号。该授权与用户点击“Google 登录”的 OIDC 授权分开；可复用 Google Cloud OAuth 客户端 ID/Secret，但必须单独取得具备发信 scope 的 refresh token。绝不将 refresh token 写入代码或日志。Google OAuth 同意屏幕处于 Testing 时 refresh token 可能 7 天失效，生产长期使用需要处理应用发布/验证或定期重新授权。邮箱配置缺失/无效时注册、重发验证和找回密码接口在创建令牌前返回 503。
 
-FE/Agent 接入前不能宣称三端验收完成。Google 真账号、真实 SMTP、CLI 浏览器完整流程和历史开发库升级需分别记录证据。开发库已于 2026-10-15 按用户指令备份升级并重启，历史数据对账和发布边界见 [plan](plan.md)；尚需初始化管理员并配置邮件/Google。
+其他 HTTPS 邮件服务可按同一 provider 分支扩展；暂不自动回退，以免服务端超时但上游已接受邮件时造成重复发送。Docker 本地 Mailpit 使用 SMTP 1025、查看页面 localhost:8025。
+
+FE/Agent 接入前不能宣称三端验收完成。Google 真账号、真实邮件发送、CLI 浏览器完整流程和历史开发库升级需分别记录证据。开发库已于 2026-10-15 按用户指令备份升级并重启，历史数据对账和发布边界见 [plan](plan.md)；线上 Gmail API 凭据配置及真实收件验收仍待完成。

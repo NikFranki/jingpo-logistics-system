@@ -2,7 +2,7 @@
 
 ## 本机配置
 
-BE 启动时会自动读取本目录 `.env`。首次使用可复制 `.env.example` 为 `.env`，再填写 SMTP 或 Google OAuth 配置。`.env` 已加入 Git 忽略列表，不会提交密钥；终端里已设置的同名变量优先级更高，可用于临时覆盖。
+BE 启动时会自动读取本目录 `.env`。首次使用可复制 `.env.example` 为 `.env`，本地默认用 Mailpit SMTP；线上可设置 `EMAIL_PROVIDER=gmail_api`，通过 Gmail API 的 HTTPS 请求发送验证/重置邮件。Google 登录 OAuth 与 Gmail 发信授权用途不同，发信需要单独授权 `gmail.send` 并配置 refresh token。`.env` 已加入 Git 忽略列表，不会提交密钥；终端里已设置的同名变量优先级更高，可用于临时覆盖。
 
 ```bash
 cp .env.example .env
@@ -16,7 +16,7 @@ cp .env.example .env
 
 接口与部署配置见 [V8 BE spec](../docs/技术方案/v8/be/spec.md)，验证和交付边界见 [V8 BE plan](../docs/技术方案/v8/be/plan.md)。迁移 `f81a3d6c2907` 增加身份表、订单归属/取消和操作者。订单取消仅限未揽收，释放本票未执行关联并保留历史。FE/Agent 需接入真实身份接口，不能直接沿用匿名调用。
 
-发布前停服务、备份、升级，随后运行 `python -m auth.admin init --username <用户名> --email <邮箱>` 交互设置唯一管理员；恢复使用 `restore`，撤销旧登录。开发库已于 2026-10-15 备份并升级到 `f81a3d6c2907`，原 19 张业务表对账一致，后端已重启且就绪；管理员尚未初始化，SMTP/Google 尚未配置。备份及发布证据见 V8 plan。测试依赖安装 `pip install -r requirements-dev.txt`；隔离库验证命令见 V8 plan。
+发布前停服务、备份、升级，随后运行 `python -m auth.admin init --username <用户名> --email <邮箱>` 交互设置唯一管理员；恢复使用 `restore`，撤销旧登录。开发库已于 2026-10-15 备份并升级到 `f81a3d6c2907`，原 19 张业务表对账一致，后端已重启且就绪；管理员尚未初始化。生产发信配置见 `.env.example` 与 V8 BE spec。测试依赖安装 `pip install -r requirements-dev.txt`；隔离库验证命令见 V8 plan。
 
 ## 统一运输线路
 

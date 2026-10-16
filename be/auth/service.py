@@ -1,9 +1,12 @@
+import base64
+import json
 import os
 import smtplib
 from dataclasses import dataclass
 from datetime import timedelta
 from email.message import EmailMessage
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from sqlalchemy import select, update
 
@@ -103,20 +106,41 @@ def create_email_token(session, user, purpose):
     return raw
 
 
+def email_provider():
+    return os.getenv('EMAIL_PROVIDER', 'smtp').strip().lower()
+
+
+def email_is_configured():
+    provider = email_provider()
+    if provider == 'smtp':
+        return bool(os.getenv('SMTP_HOST'))
+    if provider == 'gmail_api':
+        return all(os.getenv(key) for key in (
+            'GMAIL_API_CLIENT_ID', 'GMAIL_API_CLIENT_SECRET',
+            'GMAIL_API_REFRESH_TOKEN', 'GMAIL_API_SENDER',
+        ))
+    return False
+
+
 def send_email(address, purpose, raw):
-    host = os.getenv('SMTP_HOST')
-    if not host:
+    provider = email_provider()
+    if not email_is_configured():
         fail('EMAIL_UNAVAILABLE', '邮件服务未配置，请稍后重试', 503)
     base = os.getenv('AUTH_FRONTEND_URL', 'http://localhost:5173').rstrip('/')
     path = '/verify-email' if purpose == 'verify' else '/reset-password'
     message = EmailMessage()
     message['Subject'] = 'JINGPO 邮箱验证' if purpose == 'verify' else 'JINGPO 重置密码'
-    message['From'] = os.getenv('SMTP_FROM', 'noreply@jingpo.local')
+    message['From'] = (os.getenv('GMAIL_API_SENDER') if provider == 'gmail_api'
+                       else os.getenv('SMTP_FROM', 'noreply@jingpo.local'))
     message['To'] = address
     message.set_content(('请打开链接完成操作：\n' + base + path + '?' + urlencode({'token': raw})
                         + '\n如果不是你本人操作，请忽略此邮件。') if raw else
                         '本次请求没有产生可用的操作链接。请检查注册资料，或登录已有账号后操作。')
+    if provider == 'gmail_api':
+        _send_gmail_api(message)
+        return
     try:
+        host = os.environ['SMTP_HOST']
         port = int(os.getenv('SMTP_PORT', '587'))
         smtp_class = smtplib.SMTP_SSL if os.getenv('SMTP_SSL', 'false').lower() == 'true' else smtplib.SMTP
         with smtp_class(host, port, timeout=10) as smtp:
@@ -126,6 +150,37 @@ def send_email(address, purpose, raw):
                 smtp.login(os.environ['SMTP_USERNAME'], os.environ['SMTP_PASSWORD'])
             smtp.send_message(message)
     except (OSError, ValueError, smtplib.SMTPException):
+        fail('EMAIL_DELIVERY_FAILED', '邮件发送失败，请稍后重试', 503)
+
+
+def _send_gmail_api(message):
+    try:
+        token_request = Request(
+            'https://oauth2.googleapis.com/token',
+            data=urlencode({
+                'client_id': os.environ['GMAIL_API_CLIENT_ID'],
+                'client_secret': os.environ['GMAIL_API_CLIENT_SECRET'],
+                'refresh_token': os.environ['GMAIL_API_REFRESH_TOKEN'],
+                'grant_type': 'refresh_token',
+            }).encode(),
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            method='POST',
+        )
+        with urlopen(token_request, timeout=15) as response:
+            access_token = json.loads(response.read())['access_token']
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip('=')
+        send_request = Request(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+            data=json.dumps({'raw': raw_message}).encode(),
+            headers={
+                'Authorization': 'Bearer ' + access_token,
+                'Content-Type': 'application/json',
+            },
+            method='POST',
+        )
+        with urlopen(send_request, timeout=15):
+            pass
+    except (OSError, ValueError, KeyError, TypeError):
         fail('EMAIL_DELIVERY_FAILED', '邮件发送失败，请稍后重试', 503)
 
 

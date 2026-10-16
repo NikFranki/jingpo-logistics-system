@@ -9,7 +9,7 @@ from auth.dependencies import COOKIE, CSRF_COOKIE, business_user, current_user
 from auth.models import AuthAudit, EmailToken, LoginSession, User
 from auth.schemas import ChangePassword, CompleteProfile, EmailRequest, Login, Recheck, Register, ResetPassword, TokenRequest, UserUpdate
 from auth.security import digest, password_hash, password_matches, throttle
-from auth.service import audit, consume_email_token, create_email_token, fail, issue_session, resolve_session, revoke_all, send_email, user_body
+from auth.service import audit, consume_email_token, create_email_token, email_is_configured, fail, issue_session, resolve_session, revoke_all, send_email, user_body
 from business_time import server_now
 from db import SessionLocal
 
@@ -57,7 +57,7 @@ def deliver(user_id, address, purpose, raw):
 @router.post('/register', status_code=202)
 def register(body: Register, request: Request):
     limited(request, 'register', body.email)
-    if not os.getenv('SMTP_HOST'):
+    if not email_is_configured():
         fail('EMAIL_UNAVAILABLE', '邮件服务未配置，请稍后重试', 503)
     raw, user_id = None, None
     encoded = password_hash(body.password)
@@ -144,7 +144,7 @@ def forgot_password(body: EmailRequest, request: Request):
 
 def email_action(body, request, purpose):
     limited(request, purpose, body.email)
-    if not os.getenv('SMTP_HOST'):
+    if not email_is_configured():
         fail('EMAIL_UNAVAILABLE', '邮件服务未配置，请稍后重试', 503)
     raw, user_id = None, None
     with SessionLocal.begin() as session:
