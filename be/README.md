@@ -1,5 +1,15 @@
 # BE
 
+## 本机配置
+
+BE 启动时会自动读取本目录 `.env`。首次使用可复制 `.env.example` 为 `.env`，再填写 SMTP 或 Google OAuth 配置。`.env` 已加入 Git 忽略列表，不会提交密钥；终端里已设置的同名变量优先级更高，可用于临时覆盖。
+
+```bash
+cp .env.example .env
+# 编辑 .env 后启动
+./.venv/bin/python -m uvicorn main:app --reload
+```
+
 ## V8 登录与数据权限
 
 `auth/` 负责注册、密码/Google 登录、邮箱验证与重置、24 小时可撤销会话、CLI 浏览器授权、只读 Agent 凭据、固定角色与用户管理。业务路由统一登录校验，普通用户仅见自己创建的订单及关联运单；developer 全公司只读，ops/admin 按原业务规则操作。新订单和操作日志记录实际账号，历史归属不猜测回填。

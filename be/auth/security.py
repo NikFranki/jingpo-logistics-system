@@ -23,6 +23,7 @@ def secret():
 def normalize_username(value):
     if not isinstance(value, str):
         raise ValueError('用户名必须是文本')
+    value = value.strip()
     if not 1 <= len(value) <= 40:
         raise ValueError('用户名长度需为 1～40 位')
     return value

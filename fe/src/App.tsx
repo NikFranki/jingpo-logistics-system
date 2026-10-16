@@ -1,8 +1,8 @@
 import { lazy, Suspense, useCallback, useRef, useState } from 'react'
-import { Button, Result, Space, Spin, message } from 'antd'
-import { AppstoreOutlined, SwapOutlined, TruckOutlined } from '@ant-design/icons'
+import { Button, Dropdown, Result, Spin, message } from 'antd'
+import { AppstoreOutlined, LogoutOutlined, SwapOutlined, TruckOutlined, UserOutlined } from '@ant-design/icons'
 import { ProLayout } from '@ant-design/pro-components'
-import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { apiError, type Mutate } from './shared'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { httpAuthAdapter } from './auth/httpAdapter'
@@ -47,6 +47,7 @@ function LogisticsApp() {
   const user = session!.user
   useEffect(() => { clearNetworkCache(); return clearNetworkCache }, [])
   const location = useLocation()
+  const navigate = useNavigate()
   const [messageApi, contextHolder] = message.useMessage()
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
@@ -80,7 +81,6 @@ function LogisticsApp() {
         { path: '/network/stations', name: '站点管理' },
         { path: '/network/transport-lines', name: '运输线路' },
       ] }] : []),
-    { path: '/account', name: '个人账号' },
     ...(hasPermission(user, 'users:manage') ? [{ path: '/admin/users', name: '用户管理' }] : []),
   ]
   const activePath = location.pathname.startsWith('/network/stations') ? '/network/stations' : location.pathname.startsWith('/network') ? '/network/transport-lines' : location.pathname.startsWith('/tasks') ? '/tasks' : location.pathname.startsWith('/shipments') ? '/shipments' : '/orders'
@@ -92,8 +92,19 @@ function LogisticsApp() {
     location={{ pathname: activePath }}
     route={{ routes: menuData }}
     menuItemRender={(item, dom) => item.path ? <Link to={item.path}>{dom}</Link> : dom}
-    avatarProps={{ title: user.username, size: 'small' }}
-    actionsRender={() => [<Space key="account"><Link to="/account">{user.username}</Link><Button type="link" onClick={() => void signOut().catch(reason => messageApi.error(apiError(reason)))}>退出</Button></Space>]}
+    avatarProps={false}
+    actionsRender={() => [<Dropdown key="account-menu" trigger={['click']} menu={{
+      items: [
+        { key: 'account', icon: <UserOutlined />, label: '个人信息设置' },
+        { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+      ],
+      onClick: ({ key }) => {
+        if (key === 'account') navigate('/account')
+        if (key === 'logout') void signOut().then(() => navigate('/login', { replace: true })).catch(reason => messageApi.error(apiError(reason)))
+      },
+    }}>
+      <Button type="text" aria-label={`用户菜单：${user.username}`}>{user.username}</Button>
+    </Dropdown>]}
     contentStyle={{ minHeight: 'calc(100vh - 56px)' }}
   >
     <Suspense fallback={<Spin size="large" style={{ display: 'block', margin: '64px auto' }} />}>

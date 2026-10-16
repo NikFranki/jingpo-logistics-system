@@ -79,7 +79,7 @@ def register(body: Register, request: Request):
 
 @router.post('/login')
 def login(body: Login, request: Request, response: Response):
-    username = body.username.strip().lower()
+    username = body.username.strip()
     limited(request, 'login', username)
     with SessionLocal.begin() as session:
         user = session.scalar(select(User).where(User.username == username).with_for_update())
