@@ -72,7 +72,9 @@ class IdentityTests(unittest.IsolatedAsyncioTestCase):
     async def test_introspection_real_schema_and_expiration(self):
         identity = actor()
         body = {'user': {'id': '1', 'role': 'ops', 'auth_version': 1, 'enabled': True,
-                        'email_verified': True, 'needs_username': False},
+                        'email_verified': True, 'needs_username': False,
+                        'data_scope': 'company', 'answer_style': 'business',
+                        'permissions': ['business:read']},
                 'session_id': str(uuid4()), 'login_session_id': identity.login_session_id,
                 'expires_at': identity.expires_at.isoformat(), 'read_only': True}
         original = httpx.AsyncClient

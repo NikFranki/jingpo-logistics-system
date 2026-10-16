@@ -129,8 +129,8 @@ def create_model_node(model_with_tools, own_model=None):
             async with asyncio.timeout(timeout):
                 identity = runtime.context.identity
                 selected_model = own_model if identity and identity.own_only else model_with_tools
-                style = ("当前可信身份为 developer。可说明业务 ID、关联关系、版本与执行状态。"
-                         if identity and identity.role == "developer" else "优先用业务语言解释进度，避免无关技术细节。")
+                style = ("当前可信身份的回答风格为 technical。可说明业务 ID、关联关系、版本与执行状态。"
+                         if identity and identity.answer_style == "technical" else "优先用业务语言解释进度，避免无关技术细节。")
                 scope = "仅能查询自己的订单和运单；不能查询全局任务或全局更正日志。延误用运单安全计划判断，不承诺精确任务延误。仅使用本次实际注册的工具；通用规则中未注册的工具不适用于当前身份。" if identity and identity.own_only else ""
                 response = await selected_model.ainvoke([
                     SystemMessage(content=SYSTEM_PROMPT + "\n" + style + scope),

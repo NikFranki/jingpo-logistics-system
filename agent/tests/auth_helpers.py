@@ -5,7 +5,10 @@ from identity import Identity, IdentityError
 
 def actor(user='1', role='ops', version=1, login=None):
     return Identity(user, login or str(uuid4()), version, role,
-                    datetime.now(timezone.utc) + timedelta(hours=1), 'test-token-' + user)
+                    datetime.now(timezone.utc) + timedelta(hours=1),
+                    'own' if role == 'user' else 'company',
+                    'technical' if role == 'developer' else 'business',
+                    'test-token-' + user)
 
 
 class Auth:

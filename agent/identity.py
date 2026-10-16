@@ -5,7 +5,7 @@ from uuid import UUID
 from time import monotonic
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, Literal, ValidationError
 
 
 class IdentityError(Exception):
@@ -22,6 +22,9 @@ class User(BaseModel):
     email_verified: bool
     needs_username: bool
     auth_version: int = Field(ge=0)
+    data_scope: Literal["own", "company"]
+    answer_style: Literal["business", "technical"]
+    permissions: list[str]
 
 
 class Introspection(BaseModel):
@@ -40,6 +43,8 @@ class Identity:
     auth_version: int
     role: str
     expires_at: datetime
+    data_scope: str
+    answer_style: str
     token: str = field(repr=False, compare=False)
 
     @property
@@ -48,7 +53,7 @@ class Identity:
 
     @property
     def own_only(self):
-        return self.role == "user"
+        return self.data_scope == "own"
 
 
 class IdentityClient:
@@ -81,11 +86,13 @@ class IdentityClient:
             user = info.user
             if (not info.read_only or user.role not in {"admin", "ops", "developer", "user"}
                     or not user.enabled or not user.email_verified or user.needs_username
+                    or "business:read" not in user.permissions
                     or expires.utcoffset() is None or expires <= datetime.now(timezone.utc)):
                 raise IdentityError()
         except (ValueError, TypeError, ValidationError):
             raise IdentityError(503, "AUTH_SERVICE_UNAVAILABLE", "身份响应异常，请稍后重试。") from None
-        return Identity(user.id, info.login_session_id, user.auth_version, user.role, expires, token)
+        return Identity(user.id, info.login_session_id, user.auth_version, user.role, expires,
+                        user.data_scope, user.answer_style, token)
 
     async def recheck(self, identity):
         if identity.expires_at <= datetime.now(timezone.utc):

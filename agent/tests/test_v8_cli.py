@@ -38,7 +38,8 @@ class CLITests(unittest.IsolatedAsyncioTestCase):
             if path.endswith('/introspect'):
                 self.assertEqual(request.headers['Authorization'], 'Bearer private-cli-token')
                 return httpx.Response(200, json={'user': {'id': '1', 'role': 'user', 'enabled': True,
-                    'email_verified': True, 'needs_username': False, 'auth_version': 1}, 'read_only': True,
+                    'email_verified': True, 'needs_username': False, 'auth_version': 1,
+                    'data_scope': 'own', 'answer_style': 'business', 'permissions': ['business:read']}, 'read_only': True,
                     'expires_at': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
                     'session_id': str(uuid4()), 'login_session_id': str(uuid4())})
             if path.endswith('/logout'):

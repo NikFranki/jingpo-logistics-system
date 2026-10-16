@@ -36,7 +36,7 @@ CLI 不再加载本地查询图或请求模型；模型密钥只由 Agent API �
 | FE → Agent | `Authorization: Bearer`，FE 从 BE `POST /api/v1/auth/agent-token` 获取，内存缓存；Agent 不接受网页登录 Cookie、自报角色或完整网页写凭据 |
 | CLI → Agent | 浏览器确认后取得 BE `cli` 只读 Bearer；Agent 与网页使用相同的校验入口 |
 | 校验 | `GET /api/v1/auth/introspect`，检查 user.id / role / enabled / email_verified / needs_username / auth_version、来源 login_session_id、expires_at 和 read_only |
-| 角色 | 只接受 admin、ops、developer、user；工具集合与表达风格由可信角色决定 |
+| 权限 | 只接受 admin、ops、developer、user；同时校验 BE 返回的 `data_scope`、`answer_style` 和 `permissions`。查询范围与回答风格直接使用这几个可信字段，且只接受包含 `business:read` 的只读身份 |
 | 复核 | `POST /api/v1/auth/recheck`，请求 `{auth_version}`，要求 `{valid:true,auth_version}`；身份服务错误或异常响应拒绝继续 |
 | 业务请求 | 每次固定 GET 独立携带当前 Bearer；请求前后复核身份，不使用全局共享身份头 |
 | 凭据 | `Identity` 隐藏 token repr；只进入执行上下文，不写 AgentState、检查点、模型消息、工具参数、响应或日志 |
