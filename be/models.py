@@ -139,7 +139,8 @@ class Order(StructuredAddressFields, Base):
     order_no: Mapped[str] = mapped_column(
         String(32),
         Computed(
-            "'ORD-' || lpad(id::text, greatest(6, length(id::text)), '0')"
+            "'ORD-' || lpad(id::text, greatest(6, length(id::text)), '0')",
+            persisted=True,
         ),
         unique=True,
     )
@@ -281,7 +282,8 @@ class Shipment(StructuredAddressFields, Base):
     shipment_no: Mapped[str] = mapped_column(
         String(32),
         Computed(
-            "'SHP-' || lpad(id::text, greatest(6, length(id::text)), '0')"
+            "'SHP-' || lpad(id::text, greatest(6, length(id::text)), '0')",
+            persisted=True,
         ),
         unique=True,
     )
@@ -346,7 +348,8 @@ class TransportTask(Base):
     task_no: Mapped[str] = mapped_column(
         String(32),
         Computed(
-            "'TRIP-' || lpad(id::text, greatest(6, length(id::text)), '0')"
+            "'TRIP-' || lpad(id::text, greatest(6, length(id::text)), '0')",
+            persisted=True,
         ),
         unique=True,
     )
