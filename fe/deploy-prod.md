@@ -9,11 +9,12 @@
 | Root directory | `fe` |
 | Build command | `npm ci && npm run build` |
 | Build output directory | `dist` |
-| `VITE_AGENT_V8_ENABLED` | `false`（Agent 尚未部署） |
+| `VITE_AGENT_V8_ENABLED` | Agent 部署且验收后设 `true`；部署前保持 `false` |
 | `VITE_API_BASE_URL` | 不设置，保持空白 |
 | Pages Functions 生产变量 `BE_API_ORIGIN` | `https://jingpo-be.onrender.com` |
+| Pages Functions 生产变量 `AGENT_API_ORIGIN` | Render `jingpo-agent` 服务的 HTTPS origin，例如 `https://jingpo-agent.onrender.com` |
 
-`BE_API_ORIGIN` 是 Pages Function 运行时变量，不是浏览器端的 `VITE_` 变量。每个变量单独添加。`fe/functions/api/[[path]].js` 把同源 `/api/*` 转发给 Render；`fe/public/_routes.json` 限定代理范围。不要让浏览器跨站直连 Render，否则登录 Cookie 可能被浏览器拦截。
+`BE_API_ORIGIN`、`AGENT_API_ORIGIN` 是 Pages Function 生产运行时变量，不是浏览器端的 `VITE_` 变量。Agent 服务创建及环境变量见 [V9 Agent Render 部署步骤](../docs/技术方案/v9/agent/spec.md)。`fe/functions/api/[[path]].js` 把同源 `/api/*` 转发到 BE；`fe/functions/agent/[[path]].js` 把 `/agent/*` 转发到 Agent 并直通 SSE 响应流；`fe/public/_routes.json` 限定两条代理路径。不要让浏览器跨站直连 Render，否则登录 Cookie 可能被浏览器拦截。
 
 ## 登录与 Google OAuth
 
@@ -25,4 +26,4 @@ Google 登录只申请 `openid email`，不负责发邮件。Google 登录的 Cl
 
 ## 发布后检查
 
-确认 Pages 部署成功后，打开站点验证：登录页加载、邮箱注册/验证、密码登录、Google 登录、刷新后会话仍有效。若 `/api/*` 报错，先确认 Pages 生产环境的 `BE_API_ORIGIN`；再检查 Render 变量和服务日志。
+确认 Pages 部署成功后，打开站点验证：登录页加载、邮箱注册/验证、密码登录、Google 登录、刷新后会话仍有效。Agent 上线时另外验证 `/agent/health`、无身份创建会话返回 401，以及登录后助手 SSE 完成 progress/result。若 `/api/*` 报错，检查 `BE_API_ORIGIN`；若 `/agent/*` 报错，检查 `AGENT_API_ORIGIN`、`VITE_AGENT_V8_ENABLED` 与 Render Agent 日志。

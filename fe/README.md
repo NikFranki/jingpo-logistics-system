@@ -8,7 +8,7 @@
 
 使用前由 BE 负责方备份、迁移到 V8 并初始化唯一管理员，再重启服务。开发默认前端为 `http://localhost:5173`，BE 的 `AUTH_FRONTEND_URL` 必须与浏览器访问地址一致，开发 HTTP 设置 `AUTH_COOKIE_SECURE=false`。通过同源 `/api` 代理访问，写请求自动带 CSRF；不要将密码或网页登录凭据放进 localStorage。
 
-Agent 服务已接入 V8 个人 Bearer 和会话隔离。助手开关仍需显式启用：在 `fe/.env.local` 设置 `VITE_AGENT_V8_ENABLED=true` 并重启开发服务；生产构建可传同名 Docker build arg，并配置 Agent 服务及同源 `/agent` 代理。启用后 FE 向 BE 领取只读个人 token，仅在内存保存并通过 Bearer 调用 Agent，不回退匿名接口。Google 需要后端真实配置；回调失败可能由 BE 直接返回 JSON 错误，不能将预览里的冲突状态切换视为真实 Google 验收。
+Agent 服务已接入 V8 个人 Bearer 和会话隔离。助手开关仍需显式启用：在 `fe/.env.local` 设置 `VITE_AGENT_V8_ENABLED=true` 并重启开发服务；生产 Cloudflare Pages 通过 `AGENT_API_ORIGIN` 和 `/agent` Pages Function 同源代理连接 Render Agent，具体步骤见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。启用后 FE 向 BE 领取只读个人 token，仅在内存保存并通过 Bearer 调用 Agent，不回退匿名接口。Google 需要后端真实配置；回调失败可能由 BE 直接返回 JSON 错误，不能将预览里的冲突状态切换视为真实 Google 验收。
 
 技术栈：React + TypeScript + Vite + Ant Design + ProComponents。订单、运单和运输任务各有独立详情页，业务操作回到所属详情页。V5 目的站更正、V6 完整路径和 V7 全程运输计划审核已接入后端接口。
 

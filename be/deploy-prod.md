@@ -5,11 +5,12 @@
 | 部分 | 平台 | 用途 |
 | --- | --- | --- |
 | API 服务 | Render，服务名 `jingpo-be` | FastAPI 后端 |
+| 查询 Agent | Render，服务名 `jingpo-agent` | 独立只读 FastAPI/SSE 服务，部署步骤见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md) |
 | PostgreSQL | Neon，生产分支 | 业务数据与账号会话 |
 | 前端 | Cloudflare Pages，`https://jingpo-fe.pages.dev` | 浏览器访问；通过 Pages Function 同源代理 `/api/*` 到 BE |
 | Google | Google Cloud OAuth Web client 与 Gmail API | 分别用于 Google 登录、验证/重置邮件 |
 
-Render 从 GitHub `main` 部署 BE。数据库连接使用 Neon 提供的 PostgreSQL 连接串；不要把生产数据库连接串提交到仓库。发布数据库变更前先备份，再由 BE 执行迁移。
+Render 从 GitHub `main` 部署 BE 和 Agent。数据库连接使用 Neon 提供的 PostgreSQL 连接串；不要把生产数据库连接串提交到仓库。Agent 不连接数据库，只通过个人 Bearer 调用 BE。建议 Agent 与 BE 放在同一 Render region，并在 Agent 环境变量中使用 Dashboard 的 BE 内部地址；若 BE 免费实例不能接收私有网络请求，则使用 BE HTTPS 公网地址。发布数据库变更前先备份，再由 BE 执行迁移。
 
 ## Render 环境变量
 

@@ -19,19 +19,20 @@ PRD 建议顺序：问题与目标 → 用户流程图/界面示意 → 范围�
 
 ```mermaid
 flowchart LR
-    U[用户] --> FE[前端 fe\n业务操作与演示]
+    U[用户] --> FE[Cloudflare Pages 前端 fe\n业务操作与演示]
     U --> CLI[查询 Agent agent\n自然语言问答]
-    CLI -->|个人只读 Bearer| API[独立 Agent API 服务\n身份与会话隔离、查询进度]
-    FE -->|个人只读 Bearer| PROXY[服务端代理]
-    PROXY --> API
+    CLI -->|HTTPS / 个人只读 Bearer| API[Render Agent API\n身份与会话隔离、查询进度]
+    FE -->|/api 与 /agent| PROXY[Cloudflare Pages Functions\n业务代理与 SSE 流转发]
+    PROXY -->|/agent| API
+    PROXY -->|/api| BE[Render 后端 be\n物流事实、运输安排与操作历史]
     API -->|introspect / recheck| AUTH
     API --> CORE[Agent 查询核心\n可信身份上下文、角色工具与查询预算]
     CORE <--> LLM[模型服务\n选择查询工具并组织回答]
-    FE -->|Cookie 登录与 CSRF 业务请求| BE[后端 be\n物流事实、运输安排与操作历史]
+    FE -->|Cookie 登录与 CSRF 业务请求| PROXY
     BE --> AUTH[auth 模块\n账号、可撤销会话与数据权限]
     AUTH --> DB
     CORE -->|携带个人 Bearer 的只读 HTTP 查询| BE
-    BE --> DB[(PostgreSQL\n业务数据、轨迹与操作日志)]
+    BE --> DB[(Neon PostgreSQL\n业务数据、轨迹与操作日志)]
     BE --> L[lines 模块\n统一运输线路管理与候选]
     L --> DB
     L --> LS[线路班次规则与计划车次快照]
@@ -62,9 +63,9 @@ flowchart LR
 
 | 项目 | 负责什么 | 入口 |
 | --- | --- | --- |
-| `fe/` | 业务页面与演示操作 | [前端 README](fe/README.md) |
-| `be/` | 业务规则、数据与接口 | [后端 README](be/README.md) |
-| `agent/` | CLI 与独立 HTTP 服务，供前端自然语言物流查询 | [查询 Agent README](agent/README.md) |
+| `fe/` | Cloudflare Pages 业务页面与 Pages Functions 代理 | [前端 README](fe/README.md)、[FE 生产部署](fe/deploy-prod.md) |
+| `be/` | Render 业务规则、数据与接口 | [后端 README](be/README.md)、[BE 生产部署](be/deploy-prod.md) |
+| `agent/` | Render 独立 HTTP 服务与 CLI，供前端自然语言物流查询 | [查询 Agent README](agent/README.md)、[Agent Render 部署规格](docs/技术方案/v9/agent/spec.md) |
 
 具体代码结构、业务规则、启动和验证方式看对应 README 及其链接的详细文档；相关规则变化时更新所属项目文档。
 
@@ -72,6 +73,7 @@ flowchart LR
 
 | 要了解什么 | 文档 |
 | --- | --- |
+| V9 Agent Render 部署、Pages SSE 代理和本地兼容 | [部署规格与操作步骤](docs/技术方案/v9/agent/spec.md) |
 | 运输线路统一契约及旧字段弃用策略 | [统一运输线路](docs/技术方案/v7/be/unified-transport-lines.md) |
 | 线路班次、车次生成和运单候选 | [班次与计划车次](docs/技术方案/v7/be/line-services.md) |
 | 订单时间窗与兼容任务共享规则 | [字段、匹配条件与迁移](docs/技术方案/v7/be/order-delivery-windows.md) |

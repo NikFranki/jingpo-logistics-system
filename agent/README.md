@@ -20,6 +20,10 @@ V7 适配支持读取运单完整分段计划、计划历史、目的站更正�
 
 网页助手与 CLI 已按 BE V8 接入个人只读身份、会话归属、权限版本复核和工具范围。Agent 校验 BE 的 `data_scope`、`answer_style`、`permissions`，按后端身份声明限制查询范围和回答风格。CLI 通过浏览器授权并统一调用 Agent API。受控测试和隔离真实 BE 联调通过；本轮权限字段适配未运行测试，真实模型、浏览器授权页面与完整容器运行仍待验收。详见 [V8 规格](../docs/技术方案/v8/agent/spec.md) 和 [交付记录](../docs/技术方案/v8/agent/plan.md)。
 
+## V9 Render 部署
+
+Agent 生产服务部署到 Render Web Service，浏览器通过 Cloudflare Pages Function 的 `/agent/*` 路径访问，CLI 直接使用 Render HTTPS 地址。服务创建、生产密钥、Pages 变量和验收步骤见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。生产部署完成前，FE 生产开关保持关闭；本地 Vite 与 Docker Compose 继续使用 8001 端口。
+
 ## 1. 先启动后端
 
 需要 PostgreSQL 和已升级 V8 的 BE 正常运行，并完成账号初始化/验证；旧匿名 BE 不满足 Agent 身份契约。首次准备数据库、迁移及 PostgreSQL 启动方式见 [BE README](../be/README.md) 第 1～5 节。已有环境不用重新建库或生成迁移。

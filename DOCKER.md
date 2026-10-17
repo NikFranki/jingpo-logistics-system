@@ -20,4 +20,4 @@ Mailpit 本地邮件测试服务可在 <http://localhost:8025> 查看验证和�
 
 数据库首次启动后是空的，需要按项目的地址库、线路和站点初始化说明准备演示数据。若要重置这个 Docker 演示库，先确认无需保留其中的数据，再执行 `docker compose down -v`。
 
-Agent V8 使用当前网页派生的个人只读凭据；Compose 已启用 FE 助手并将 `/agent/` 转发到独立 Agent 容器，保留 SSE。CLI 可将 `BE_BASE_URL` 和 `AGENT_BASE_URL` 同时配置为 `http://localhost:8080`，然后执行 `/login`；凭据保存到系统凭据库，不填写到模型配置中。当前只验证 Compose 配置，完整镜像构建和浏览器联调见 [Agent V8 记录](docs/技术方案/v8/agent/plan.md)。
+Agent V8 使用当前网页派生的个人只读凭据；Compose 已启用 FE 助手并将 `/agent/` 转发到独立 Agent 容器，保留 SSE。CLI 可将 `BE_BASE_URL` 和 `AGENT_BASE_URL` 同时配置为 `http://localhost:8080`，然后执行 `/login`；凭据保存到系统凭据库，不填写到模型配置中。Agent 容器未设置 `PORT` 时继续监听 `8001`；Render 使用平台 `PORT`。Cloudflare Pages 的生产代理与 Render 操作见 [V9 Agent 部署规格](docs/技术方案/v9/agent/spec.md)。当前只验证过 Compose 配置，完整镜像构建和浏览器联调见 [Agent V8 记录](docs/技术方案/v8/agent/plan.md)。
