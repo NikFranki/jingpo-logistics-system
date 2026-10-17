@@ -1,11 +1,12 @@
 """Online BE identity checks. Credentials never enter graph state or model messages."""
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID
 from time import monotonic
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, Literal, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 class IdentityError(Exception):
