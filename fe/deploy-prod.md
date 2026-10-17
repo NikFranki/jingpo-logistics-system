@@ -1,5 +1,11 @@
 # FE 生产部署
 
+## 快速入口
+
+| 用途 | 控制台 |
+| --- | --- |
+| 生产 Pages 项目与部署 | [Cloudflare Pages · jingpo-fe](https://dash.cloudflare.com/d318e6f2f4a817b7ca27249ebfee4afd/pages/view/jingpo-fe/4626deac-99f9-4e9b-b4c9-8b433ffcc476) |
+
 ## 平台与构建
 
 前端部署在 Cloudflare Pages，后端 API 仍由 Render 提供。Cloudflare 连接 GitHub 仓库 `jingpo-logistics-system` 的 `main` 分支：

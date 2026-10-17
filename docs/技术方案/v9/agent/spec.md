@@ -2,6 +2,15 @@
 
 > 2026-10-17 · 部署方案已确定，仓库配置已准备；Render 服务创建、Cloudflare 生产变量和线上验收由用户操作后完成。V8 身份与权限契约不变。
 
+## 快速入口
+
+| 用途 | 控制台 |
+| --- | --- |
+| Render 控制台（Agent 服务部署后可从服务列表进入） | [Render Dashboard](https://dashboard.render.com/) |
+| Cloudflare Pages 前端及 `/agent/*` 代理变量 | [Cloudflare Pages · jingpo-fe](https://dash.cloudflare.com/d318e6f2f4a817b7ca27249ebfee4afd/pages/view/jingpo-fe/4626deac-99f9-4e9b-b4c9-8b433ffcc476) |
+
+当前记录的 Render 服务直达链接是 `jingpo-be` 的部署页；尚未提供 `jingpo-agent` 的服务链接，创建后可补到这里。
+
 ## 要解决什么
 
 网页助手现在只在本地 Docker 和开发环境运行。把现有 Python Agent API 部署为 Render Web Service，让 Cloudflare Pages 上的前端通过同源 `/agent/*` 调用它；CLI 使用 Render HTTPS 地址。前端仍由 Cloudflare Pages 提供，业务后端和数据库均不迁移。

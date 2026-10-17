@@ -1,5 +1,17 @@
 # BE 生产部署
 
+## 快速入口
+
+| 用途 | 控制台 |
+| --- | --- |
+| 生产数据库与表 | [Neon · neondb](https://console.neon.tech/app/projects/spring-math-30709766/branches/br-icy-sound-b352a3gw/tables?database=neondb) |
+| BE 服务部署记录 | [Render · jingpo-be deploys](https://dashboard.render.com/web/srv-db9overbc2fs73cn4ln0/deploys) |
+| Google 登录 OAuth 客户端 | [Google Cloud · OAuth clients](https://console.cloud.google.com/auth/clients?project=data-honor-442414-v1) |
+| Google/Gmail API 凭据 | [Google Cloud · API credentials](https://console.cloud.google.com/apis/credentials?project=data-honor-442414-v1) |
+| Gmail 发信授权 | [OAuth Playground · gmail.send](https://developers.google.com/oauthplayground/?iss=https://accounts.google.com&scope=https://www.googleapis.com/auth/gmail.send) |
+
+OAuth Playground 链接仅保留授权范围，不保存一次性 `code` 参数；具体授权凭据应保存在 Render Secret 中。
+
 ## 平台
 
 | 部分 | 平台 | 用途 |
