@@ -12,7 +12,7 @@ cp .env.example .env
 
 ## V8 登录与数据权限
 
-`auth/` 负责注册、密码/Google 登录、邮箱验证与重置、24 小时可撤销会话、CLI 浏览器授权、只读 Agent 凭据、固定角色与用户管理。业务路由统一登录校验，普通用户仅见自己创建的订单及关联运单；developer 全公司只读，ops/admin 按原业务规则操作。新订单和操作日志记录实际账号，历史归属不猜测回填。
+`auth/` 负责注册、密码/Google 登录、邮箱验证与重置、24 小时可撤销会话、CLI 浏览器授权、只读 Agent 凭据、固定角色与用户管理。Google 登录采用 OAuth：FE 请求 `/api/v1/auth/google/start`，BE 生成授权地址，Google 回调 BE 配置的 `GOOGLE_REDIRECT_URI`；BE 校验身份并设置会话 Cookie，再跳转到 `AUTH_FRONTEND_URL`。登录只申请 `openid email`，用户可用已有账号主动绑定 Google；OAuth Client Secret 只保存在 BE。它与邮件发送授权分开，Gmail API 发信需独立的 `gmail.send` refresh token（OAuth Client 可复用）。生产平台和变量对应关系见 [BE 生产部署](deploy-prod.md)，FE 代理与登录页面行为见 [FE 生产部署](../fe/deploy-prod.md)。
 
 接口与部署配置见 [V8 BE spec](../docs/技术方案/v8/be/spec.md)，验证和交付边界见 [V8 BE plan](../docs/技术方案/v8/be/plan.md)。迁移 `f81a3d6c2907` 增加身份表、订单归属/取消和操作者。订单取消仅限未揽收，释放本票未执行关联并保留历史。FE/Agent 需接入真实身份接口，不能直接沿用匿名调用。
 

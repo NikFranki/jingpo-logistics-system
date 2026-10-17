@@ -4,7 +4,7 @@
 
 运行 `npm run dev` 后打开 `/v8-preview/login`，可模拟四角色、注册/邮箱验证、找回密码、个人账号和用户管理。预览不请求 BE/Agent、不保存密码、不发送邮件；数据只在当前工作区内存保留，刷新或离开后重置。顶部可直接切换角色。
 
-正式入口 `/login` 已接 BE V8：Cookie 登录、CSRF、邮箱验证/找回、Google 登录/补用户名、用户管理分页和 CLI 授权。业务页面要求登录，导航和动作按账号权限展示。HTTP 接入集中在 `src/auth/httpAdapter.ts`。详见 [FE spec](../docs/技术方案/v8/fe/spec.md) 与 [FE plan](../docs/技术方案/v8/fe/plan.md)。
+正式入口 `/login` 已接 BE V8：Cookie 登录、CSRF、邮箱验证/找回、Google 登录/补用户名、用户管理分页和 CLI 授权。Google 登录由前端发起 BE OAuth 流程；Google 回调经过同源 `/api` 代理回到 BE，BE 设置登录 Cookie 后再跳回前端。FE 不保存 Client Secret，也不直接处理 Google token。HTTP 接入集中在 `src/auth/httpAdapter.ts`。详见 [FE spec](../docs/技术方案/v8/fe/spec.md) 与 [FE plan](../docs/技术方案/v8/fe/plan.md)。
 
 使用前由 BE 负责方备份、迁移到 V8 并初始化唯一管理员，再重启服务。开发默认前端为 `http://localhost:5173`，BE 的 `AUTH_FRONTEND_URL` 必须与浏览器访问地址一致，开发 HTTP 设置 `AUTH_COOKIE_SECURE=false`。通过同源 `/api` 代理访问，写请求自动带 CSRF；不要将密码或网页登录凭据放进 localStorage。
 
@@ -26,9 +26,9 @@ npm run dev
 
 ## Cloudflare Pages 生产部署
 
-生产前端部署到 Cloudflare Pages，后端继续运行在 Render。Pages Function 将同源 `/api/*` 请求转发到 Render BE；不要在浏览器里跨站直连 BE，否则登录 Cookie 可能被浏览器跨站策略拦截。Cloudflare 创建项目时选择仓库 `main` 分支，Root directory 设为 `fe`，Build command 为 `npm ci && npm run build`，Build output directory 为 `dist`。构建变量 `BE_API_ORIGIN` 设为 `https://jingpo-be.onrender.com`；`VITE_API_BASE_URL` 留空/不设置，`VITE_AGENT_V8_ENABLED=false`（Agent 尚未部署时）。
+生产部署步骤、平台和变量对照见 [FE 生产部署](deploy-prod.md)。Cloudflare Pages Function 将同源 `/api/*` 请求转发到 Render BE；不要在浏览器里跨站直连 BE，否则登录 Cookie 可能被浏览器跨站策略拦截。
 
-`functions/api/[[path]].js` 代理 API，`public/_routes.json` 限定 Function 只处理 `/api/*`；Pages 自动将无对应静态文件的路由回退到 SPA 根页面。部署后将实际 `https://<项目名>.pages.dev` 地址配置到 BE 的 `AUTH_FRONTEND_URL` 和 `CORS_ORIGINS`，生产 Cookie 设 `AUTH_COOKIE_SECURE=true`。Google 登录的 `GOOGLE_REDIRECT_URI` 设为 `https://<项目名>.pages.dev/api/v1/auth/google/callback`，并将同一地址加入 OAuth Web client 的 Authorized redirect URIs；保留原本 localhost 和 OAuth Playground 回调。BE 与 Google 配置均更新后重新部署 BE，再验收登录、刷新、注册邮件和密码重置。
+`functions/api/[[path]].js` 代理 API，`public/_routes.json` 限定 Function 只处理 `/api/*`；Pages 自动将无对应静态文件的路由回退到 SPA 根页面。BE 与 Google OAuth 的地址需要互相匹配，完整变量和回调流程见 [FE 生产部署](deploy-prod.md) 与 [BE 生产部署](../be/deploy-prod.md)。
 
 ## 页面地址
 
