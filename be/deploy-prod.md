@@ -17,12 +17,25 @@ OAuth Playground 链接仅保留授权范围，不保存一次性 `code` 参数�
 | 部分 | 平台 | 用途 |
 | --- | --- | --- |
 | API 服务 | Render，服务名 `jingpo-be` | FastAPI 后端 |
-| 查询 Agent | Render，服务名 `jingpo-agent` | 独立只读 FastAPI/SSE 服务，部署步骤见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md) |
+| 查询 Agent | Render，服务名 `jingpo-agent` | 独立只读 FastAPI/SSE 服务，见 [Agent 生产部署](../agent/deploy-prod.md) 和 [V9 技术规格](../docs/技术方案/v9/agent/spec.md) |
 | PostgreSQL | Neon，生产分支 | 业务数据与账号会话 |
 | 前端 | Cloudflare Pages，`https://jingpo-fe.pages.dev` | 浏览器访问；通过 Pages Function 同源代理 `/api/*` 到 BE |
 | Google | Google Cloud OAuth Web client 与 Gmail API | 分别用于 Google 登录、验证/重置邮件 |
 
 Render 从 GitHub `main` 部署 BE 和 Agent。数据库连接使用 Neon 提供的 PostgreSQL 连接串；不要把生产数据库连接串提交到仓库。Agent 不连接数据库，只通过个人 Bearer 调用 BE。建议 Agent 与 BE 放在同一 Render region，并在 Agent 环境变量中使用 Dashboard 的 BE 内部地址；若 BE 免费实例不能接收私有网络请求，则使用 BE HTTPS 公网地址。发布数据库变更前先备份，再由 BE 执行迁移。
+
+## 限定自动部署路径
+
+BE 和 Agent 在同一仓库，但各自只需在自身目录变化时自动部署。分别打开 Render 服务的 **Settings → Build & Deploy** 配置：
+
+| 服务 | Root Directory | Dockerfile Path | Docker Build Context |
+| --- | --- | --- | --- |
+| `jingpo-be` | `be` | `Dockerfile` | `.` |
+| `jingpo-agent` | `agent` | `Dockerfile` | `.` |
+
+Dockerfile Path 和 Docker Build Context 相对于服务的 Root Directory；Root Directory 本身相对于仓库根目录。设置 Root Directory 后，服务目录外的改动不会触发该服务自动部署；也确认 **Auto-Deploy** 已开启。保存 Root Directory 时检查 Render 弹出的 Dockerfile/Context 是否仍分别是 `Dockerfile` 和 `.`，因为它们会改为相对于新目录解析。[Render Monorepo 部署说明](https://render.com/docs/monorepo-support)
+
+Root Directory 已足以隔离 BE 与 Agent。若还要避免测试、文档和一次性维护脚本触发部署，可在同一页配置 **Build Filters**：Included Paths 使用 `be/**`（BE）或 `agent/**`（Agent）；可选 Ignored Paths 分别填写 `be/tests/**`、`be/scripts/**`、`be/backups/**`、`be/**/*.md`，以及 Agent 的 `agent/tests/**`、`agent/**/*.md`。过滤路径相对于仓库根目录。保留 `be/migrations/**`、BE/Agent 源码和 Dockerfile 在 Included Paths 覆盖范围内，避免业务或迁移改动被漏掉。手动部署和服务设置变更仍会触发部署，不受过滤规则限制。[Render Build Filters 规则](https://render.com/docs/monorepo-support#setting-build-filters)
 
 ## Render 环境变量
 

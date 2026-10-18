@@ -20,7 +20,7 @@
 | Pages Functions 生产变量 `BE_API_ORIGIN` | `https://jingpo-be.onrender.com` |
 | Pages Functions 生产变量 `AGENT_API_ORIGIN` | Render `jingpo-agent` 服务的 HTTPS origin，例如 `https://jingpo-agent.onrender.com` |
 
-`BE_API_ORIGIN`、`AGENT_API_ORIGIN` 是 Pages Function 生产运行时变量，不是浏览器端的 `VITE_` 变量。Agent 服务创建及环境变量见 [V9 Agent Render 部署步骤](../docs/技术方案/v9/agent/spec.md)。`fe/functions/api/[[path]].js` 把同源 `/api/*` 转发到 BE；`fe/functions/agent/[[path]].js` 把 `/agent/*` 转发到 Agent 并直通 SSE 响应流；`fe/public/_routes.json` 限定两条代理路径。不要让浏览器跨站直连 Render，否则登录 Cookie 可能被浏览器拦截。
+`BE_API_ORIGIN`、`AGENT_API_ORIGIN` 是 Pages Function 生产运行时变量，不是浏览器端的 `VITE_` 变量。Agent 的 Render 设置见 [Agent 生产部署](../agent/deploy-prod.md)，技术细节见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。`fe/functions/api/[[path]].js` 把同源 `/api/*` 转发到 BE；`fe/functions/agent/[[path]].js` 把 `/agent/*` 转发到 Agent 并直通 SSE 响应流；`fe/public/_routes.json` 限定两条代理路径。不要让浏览器跨站直连 Render，否则登录 Cookie 可能被浏览器拦截。
 
 ## 登录与 Google OAuth
 

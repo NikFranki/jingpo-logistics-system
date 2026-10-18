@@ -1,6 +1,6 @@
 # V9 · Agent 部署到 Render
 
-> 2026-10-17 · 部署方案已确定，仓库配置已准备；Render 服务创建、Cloudflare 生产变量和线上验收由用户操作后完成。V8 身份与权限契约不变。
+> 2026-10-17 · V9 部署方案与配置说明。用户已确认 Render Agent 和 Cloudflare 网页助手已在线部署，并提供网页查询成功截图；Render 服务的自动部署路径设置见 [Agent 生产部署文档](../../../../agent/deploy-prod.md)。V8 身份与权限契约不变。
 
 ## 快速入口
 
@@ -13,7 +13,7 @@
 
 ## 要解决什么
 
-网页助手现在只在本地 Docker 和开发环境运行。把现有 Python Agent API 部署为 Render Web Service，让 Cloudflare Pages 上的前端通过同源 `/agent/*` 调用它；CLI 使用 Render HTTPS 地址。前端仍由 Cloudflare Pages 提供，业务后端和数据库均不迁移。
+网页助手通过 Render Web Service 提供 Python Agent API，Cloudflare Pages 前端通过同源 `/agent/*` 调用它；CLI 使用 Render HTTPS 地址。前端仍由 Cloudflare Pages 提供，业务后端和数据库均不迁移。
 
 ```mermaid
 flowchart LR
@@ -58,6 +58,8 @@ flowchart LR
 | Region | 与 `jingpo-be` 相同，以便通过 Render 私有网络访问 BE |
 | Health Check Path | `/agent/health` |
 | Instances | 保持单实例，不启用横向自动扩容 |
+
+如果 `jingpo-agent` 已经创建，仍可在服务 **Settings → Build & Deploy** 中检查相同配置。`Root Directory=agent` 会让仓库其他目录的改动不触发 Agent 自动部署。保持 **Auto-Deploy** 开启；如需进一步排除测试和文档，可选配 Build Filters：Included Paths 填 `agent/**`，Ignored Paths 填 `agent/tests/**`、`agent/**/*.md`。路径相对于仓库根目录。不要忽略 `agent/Dockerfile`、`agent/requirements.txt` 或 Python 源码。保存后确认 Dockerfile Path 为 `Dockerfile`、Docker Build Context 为 `.`，两者相对 `agent/` 目录。[Render Root Directory 与 Build Filters](https://render.com/docs/monorepo-support)
 
 Render Docker Web Service 会使用容器的 Dockerfile；Web Service 在 `0.0.0.0` 上监听平台提供的 `PORT`。本项目默认端口仍为 `8001`，Render 运行时传入的 `PORT` 会覆盖它。Render 支持设置 Root Directory 和 Dockerfile；相关路径以服务根目录为准。[Render Docker 部署](https://render.com/docs/docker)、[Render 单仓库配置](https://render.com/docs/monorepo-support)、[Render Web Service](https://render.com/docs/web-services)
 
@@ -125,4 +127,4 @@ FE 代码新增 `fe/functions/agent/[[path]].js`，`fe/public/_routes.json` 将 
 
 ## 已知边界与交付状态
 
-Agent 会话、检查点和响应缓存位于单个进程内存，服务重启或新版本部署会清空会话。当前部署固定单实例；增加实例前需实现共享会话存储与跨实例身份/缓存协调。云端密钥、Render 服务创建、Pages 变量设置和真实浏览器验收尚未完成，由用户按上述步骤操作后记录结果。
+Agent 会话、检查点和响应缓存位于单个进程内存，服务重启或新版本部署会清空会话。当前部署固定单实例；增加实例前需实现共享会话存储与跨实例身份/缓存协调。根据用户反馈，云端部署、Pages 变量和网页端查询已完成；Render 自动部署过滤是否已在控制台应用，仍需按 [Agent 生产部署文档](../../../../agent/deploy-prod.md)检查。

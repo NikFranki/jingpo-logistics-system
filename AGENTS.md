@@ -65,7 +65,7 @@ flowchart LR
 | --- | --- | --- |
 | `fe/` | Cloudflare Pages 业务页面与 Pages Functions 代理 | [前端 README](fe/README.md)、[FE 生产部署](fe/deploy-prod.md) |
 | `be/` | Render 业务规则、数据与接口 | [后端 README](be/README.md)、[BE 生产部署](be/deploy-prod.md) |
-| `agent/` | Render 独立 HTTP 服务与 CLI，供前端自然语言物流查询 | [查询 Agent README](agent/README.md)、[Agent Render 部署规格](docs/技术方案/v9/agent/spec.md) |
+| `agent/` | Render 独立 HTTP 服务与 CLI，供前端自然语言物流查询 | [查询 Agent README](agent/README.md)、[Agent 生产部署](agent/deploy-prod.md)、[详细部署规格](docs/技术方案/v9/agent/spec.md) |
 
 具体代码结构、业务规则、启动和验证方式看对应 README 及其链接的详细文档；相关规则变化时更新所属项目文档。
 

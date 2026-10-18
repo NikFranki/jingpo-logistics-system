@@ -22,7 +22,7 @@ V7 适配支持读取运单完整分段计划、计划历史、目的站更正�
 
 ## V9 Render 部署
 
-Agent 生产服务部署到 Render Web Service，浏览器通过 Cloudflare Pages Function 的 `/agent/*` 路径访问，CLI 直接使用 Render HTTPS 地址。服务创建、生产密钥、Pages 变量和验收步骤见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。生产部署完成前，FE 生产开关保持关闭；本地 Vite 与 Docker Compose 继续使用 8001 端口。
+Agent 生产服务部署到 Render Web Service，浏览器通过 Cloudflare Pages Function 的 `/agent/*` 路径访问，CLI 直接使用 Render HTTPS 地址。线上部署及网页助手可用状态已由用户确认。日常设置、环境变量和部署验收步骤见 [Agent 生产部署](deploy-prod.md)；完整架构和接口说明见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。本地 Vite 与 Docker Compose 继续使用 8001 端口。
 
 ## 1. 先启动后端
 
