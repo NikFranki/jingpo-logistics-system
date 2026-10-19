@@ -20,6 +20,17 @@
 | Pages Functions 生产变量 `BE_API_ORIGIN` | `https://jingpo-be.onrender.com` |
 | Pages Functions 生产变量 `AGENT_API_ORIGIN` | Render `jingpo-agent` 服务的 HTTPS origin，例如 `https://jingpo-agent.onrender.com` |
 
+### 自动部署的文件过滤
+
+仓库同时包含 FE、BE 和 Agent。为了避免只改后端或文档也触发前端构建，在 Cloudflare Pages 的 **Settings → Build → Build watch paths** 设置：
+
+| 项 | 值 |
+| --- | --- |
+| Include paths | `fe/*` |
+| Exclude paths | 留空 |
+
+路径相对于 Git 仓库根目录；`fe/*` 会匹配 `fe/` 下的文件和子目录。推送中只要有 FE 文件变化就会构建；仅改 `be/`、`agent/` 或仓库级文档则跳过前端构建。Cloudflare 对大型推送会绕过此过滤并执行构建，具体规则见 [Build watch paths 文档](https://developers.cloudflare.com/pages/configuration/build-watch-paths/)。单次临时跳过可在提交信息前加 `[CI Skip]`。
+
 `BE_API_ORIGIN`、`AGENT_API_ORIGIN` 是 Pages Function 生产运行时变量，不是浏览器端的 `VITE_` 变量。Agent 的 Render 设置见 [Agent 生产部署](../agent/deploy-prod.md)，技术细节见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。`fe/functions/api/[[path]].js` 把同源 `/api/*` 转发到 BE；`fe/functions/agent/[[path]].js` 把 `/agent/*` 转发到 Agent 并直通 SSE 响应流；`fe/public/_routes.json` 限定两条代理路径。不要让浏览器跨站直连 Render，否则登录 Cookie 可能被浏览器拦截。
 
 ## 登录与 Google OAuth
