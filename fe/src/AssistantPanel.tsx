@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { Alert, Button, Spin, Tooltip } from 'antd'
-import { ArrowsAltOutlined, DragOutlined, ExpandOutlined, MessageOutlined, MinusOutlined, PlusOutlined, SendOutlined, ShrinkOutlined, StopOutlined } from '@ant-design/icons'
+import { DragOutlined, ExpandOutlined, MessageOutlined, MinusOutlined, PlusOutlined, SendOutlined, ShrinkOutlined, StopOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -9,14 +9,36 @@ import './assistant.css'
 import { useAuth } from './auth/AuthContext'
 
 type Geometry = { x: number; y: number; width: number; height: number }
+type GestureMode = 'move' | 'nw' | 'ne' | 'sw' | 'se'
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; answer?: AssistantAnswer; error?: boolean; retry?: { text: string; messageId: string } }
 
 function constrain(box: Geometry): Geometry {
-  const maxWidth = Math.max(280, window.innerWidth - 32)
-  const maxHeight = Math.max(280, window.innerHeight - 32)
-  const width = Math.max(Math.min(360, maxWidth), Math.min(box.width, maxWidth))
-  const height = Math.max(Math.min(420, maxHeight), Math.min(box.height, maxHeight))
-  return { width, height, x: Math.max(16, Math.min(box.x, window.innerWidth - width - 16)), y: Math.max(16, Math.min(box.y, window.innerHeight - height - 16)) }
+  const viewportWidth = document.documentElement.clientWidth
+  const viewportHeight = document.documentElement.clientHeight
+  const maxWidth = Math.max(1, Math.floor(viewportWidth / 2))
+  const maxHeight = Math.max(1, viewportHeight)
+  const minWidth = Math.min(320, maxWidth)
+  const minHeight = Math.min(320, maxHeight)
+  const width = Math.max(minWidth, Math.min(box.width, maxWidth))
+  const height = Math.max(minHeight, Math.min(box.height, maxHeight))
+  return { width, height, x: Math.max(0, Math.min(box.x, viewportWidth - width)), y: Math.max(0, Math.min(box.y, viewportHeight - height)) }
+}
+
+function resizeFromCorner(box: Geometry, corner: Exclude<GestureMode, 'move'>, dx: number, dy: number): Geometry {
+  const west = corner.includes('w')
+  const north = corner.includes('n')
+  const next = constrain({
+    ...box,
+    x: west ? box.x + dx : box.x,
+    y: north ? box.y + dy : box.y,
+    width: box.width + (west ? -dx : dx),
+    height: box.height + (north ? -dy : dy),
+  })
+  return {
+    ...next,
+    x: west ? box.x + box.width - next.width : box.x,
+    y: north ? box.y + box.height - next.height : box.y,
+  }
 }
 
 export default function AssistantPanel() {
@@ -34,7 +56,7 @@ export default function AssistantPanel() {
   const input = useRef<HTMLTextAreaElement>(null)
   const launcher = useRef<HTMLButtonElement>(null)
   const log = useRef<HTMLDivElement>(null)
-  const gesture = useRef<{ mode: 'move' | 'resize'; x: number; y: number; box: Geometry } | null>(null)
+  const gesture = useRef<{ mode: GestureMode; x: number; y: number; box: Geometry } | null>(null)
 
   useEffect(() => {
     const resize = () => { setCompact(window.innerWidth <= 640); setGeometry(box => constrain(box)) }
@@ -51,9 +73,11 @@ export default function AssistantPanel() {
   }, [messages, busy, open])
 
   const collapse = () => { setOpen(false); requestAnimationFrame(() => launcher.current?.focus()) }
-  const beginGesture = (event: PointerEvent<HTMLButtonElement>, mode: 'move' | 'resize') => {
+  const beginGesture = (event: PointerEvent<HTMLButtonElement>, mode: GestureMode) => {
     if (compact || maximized || event.button !== 0) return
-    gesture.current = { mode, x: event.clientX, y: event.clientY, box: geometry }
+    const box = constrain(geometry)
+    setGeometry(box)
+    gesture.current = { mode, x: event.clientX, y: event.clientY, box }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const moveGesture = (event: PointerEvent<HTMLButtonElement>) => {
@@ -61,14 +85,18 @@ export default function AssistantPanel() {
     if (!current) return
     const dx = event.clientX - current.x
     const dy = event.clientY - current.y
-    setGeometry(constrain(current.mode === 'move' ? { ...current.box, x: current.box.x + dx, y: current.box.y + dy } : { ...current.box, width: current.box.width + dx, height: current.box.height + dy }))
+    setGeometry(current.mode === 'move'
+      ? constrain({ ...current.box, x: current.box.x + dx, y: current.box.y + dy })
+      : resizeFromCorner(current.box, current.mode, dx, dy))
   }
-  const keyboardGeometry = (event: KeyboardEvent<HTMLButtonElement>, mode: 'move' | 'resize') => {
+  const keyboardGeometry = (event: KeyboardEvent<HTMLButtonElement>, mode: GestureMode) => {
     if (compact || maximized || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
     event.preventDefault()
     const dx = event.key === 'ArrowLeft' ? -20 : event.key === 'ArrowRight' ? 20 : 0
     const dy = event.key === 'ArrowUp' ? -20 : event.key === 'ArrowDown' ? 20 : 0
-    setGeometry(box => constrain(mode === 'move' ? { ...box, x: box.x + dx, y: box.y + dy } : { ...box, width: box.width + dx, height: box.height + dy }))
+    setGeometry(box => mode === 'move'
+      ? constrain({ ...box, x: box.x + dx, y: box.y + dy })
+      : resizeFromCorner(box, mode, dx, dy))
   }
 
   const send = async (text: string, messageId: string = crypto.randomUUID(), retry = false) => {
@@ -109,11 +137,12 @@ export default function AssistantPanel() {
     input.current?.focus()
   }
 
-  const expandedStyle = maximized ? { inset: compact ? 8 : 24, width: 'auto', height: 'auto' } : compact ? { left: 8, right: 8, bottom: 8, width: 'auto', height: 'min(78dvh, 640px)' } : { left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height }
+  const visibleGeometry = constrain(geometry)
+  const expandedStyle = maximized ? { inset: compact ? 8 : 24, width: 'auto', height: 'auto' } : compact ? { left: 8, right: 8, bottom: 8, width: 'auto', height: 'min(78dvh, 640px)' } : { left: visibleGeometry.x, top: visibleGeometry.y, width: visibleGeometry.width, height: visibleGeometry.height }
 
   return <>
     {!open && <Button ref={launcher} className="jp-assistant-launcher" type="primary" icon={<MessageOutlined />} onClick={() => setOpen(true)} aria-label="打开物流查询助手">查询助手{busy && <Spin size="small" />}</Button>}
-    {open && <section className="jp-assistant" style={expandedStyle} role="region" aria-label="物流查询助手" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); collapse() } }}>
+    {open && <section className={`jp-assistant${!compact && !maximized ? ' jp-assistant-resizable' : ''}`} style={expandedStyle} role="region" aria-label="物流查询助手" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); collapse() } }}>
       <header className="jp-assistant-header">
         <button type="button" className="jp-assistant-move" aria-label="移动助手窗口，可用方向键调整位置" onPointerDown={event => beginGesture(event, 'move')} onPointerMove={moveGesture} onPointerUp={() => { gesture.current = null }} onPointerCancel={() => { gesture.current = null }} onKeyDown={event => keyboardGeometry(event, 'move')}>
           {!compact && !maximized && <DragOutlined />}
@@ -154,7 +183,7 @@ export default function AssistantPanel() {
         }} />
         <div className="jp-assistant-composer-bottom"><span>{draft.length > 3500 ? `${draft.length} / 4000` : 'Enter 发送 · Shift + Enter 换行'}</span>{busy ? <Button icon={<StopOutlined />} onClick={() => controller.current?.abort()}>停止查询</Button> : <Button type="primary" htmlType="submit" icon={<SendOutlined />} disabled={!draft.trim()}>发送</Button>}</div>
       </form>
-      {!compact && !maximized && <button type="button" className="jp-assistant-resize" aria-label="调整窗口大小，可用方向键调整" onPointerDown={event => beginGesture(event, 'resize')} onPointerMove={moveGesture} onPointerUp={() => { gesture.current = null }} onPointerCancel={() => { gesture.current = null }} onKeyDown={event => keyboardGeometry(event, 'resize')}><ArrowsAltOutlined /></button>}
+      {!compact && !maximized && (['nw', 'ne', 'sw', 'se'] as const).map(corner => <button key={corner} type="button" className={`jp-assistant-resize jp-assistant-resize-${corner}`} aria-label={`从${{ nw: '左上', ne: '右上', sw: '左下', se: '右下' }[corner]}角调整窗口大小，可用方向键调整`} onPointerDown={event => beginGesture(event, corner)} onPointerMove={moveGesture} onPointerUp={() => { gesture.current = null }} onPointerCancel={() => { gesture.current = null }} onKeyDown={event => keyboardGeometry(event, corner)} />)}
     </section>}
   </>
 }

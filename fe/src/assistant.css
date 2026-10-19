@@ -1,7 +1,9 @@
 .jp-assistant-launcher { position: fixed; right: 24px; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 1100; height: 44px; border-radius: 22px; padding-inline: 18px; box-shadow: 0 6px 20px rgb(23 43 69 / 18%); }
 .jp-assistant { position: fixed; z-index: 1100; display: flex; flex-direction: column; overflow: hidden; background: #fff; color: #172b45; border-radius: 12px; box-shadow: 0 12px 40px rgb(23 43 69 / 22%); font-size: 14px; line-height: 1.65; }
 .jp-assistant-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #e6ebf1; }
-.jp-assistant-move { display: flex; align-items: center; gap: 8px; padding: 8px 0; min-width: 0; color: #172b45; background: none; border: 0; font: inherit; font-weight: 600; cursor: grab; touch-action: none; }
+.jp-assistant-resizable .jp-assistant-header { padding-right: 32px; }
+.jp-assistant-move { display: flex; flex: 1; align-items: center; gap: 8px; padding: 8px 0; min-width: 0; color: #172b45; background: none; border: 0; font: inherit; font-weight: 600; text-align: left; cursor: grab; touch-action: none; }
+.jp-assistant-resizable .jp-assistant-move { padding-left: 24px; }
 .jp-assistant-move:active { cursor: grabbing; }
 .jp-assistant-actions { display: flex; flex-shrink: 0; gap: 2px; }
 .jp-assistant-scope { display: flex; align-items: center; gap: 10px; padding: 8px 20px; background: #eaf2fc; color: #174a82; font-size: 12px; }
@@ -44,7 +46,11 @@
 .jp-assistant-composer textarea:focus { border-color: #1557a8; outline: 2px solid #b8cce7; outline-offset: 1px; }
 .jp-assistant-composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
 .jp-assistant-composer-bottom > span { font-size: 11px; color: #4d617b; }
-.jp-assistant-resize { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; border: 0; background: transparent; color: #4d617b; cursor: nwse-resize; touch-action: none; }
+.jp-assistant-resize { position: absolute; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #4d617b; touch-action: none; }
+.jp-assistant-resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.jp-assistant-resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.jp-assistant-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.jp-assistant-resize-se { right: 0; bottom: 0; cursor: nwse-resize; }
 .jp-assistant :focus-visible { outline: 2px solid #1557a8; outline-offset: 2px; }
 .jp-assistant ::selection { background: #c5d8f0; color: #172b45; }
 .jp-assistant-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
