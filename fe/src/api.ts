@@ -59,7 +59,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   const timeoutController = new AbortController()
-  const timeout = setTimeout(() => timeoutController.abort(), 15_000)
+  const timeout = setTimeout(() => timeoutController.abort(), 60_000)
   try {
     const headers = new Headers(init?.headers)
     if (init?.method && init.method !== 'GET') Object.entries(csrfHeaders()).forEach(([key, value]) => headers.set(key, value))

@@ -264,6 +264,10 @@ def shipment_service_options(session, shipment_id, from_date, to_date):
         .join(TransportLine, TransportLine.id == ScheduledTrip.line_id).where(
         ScheduledTrip.status == "PLANNED", LineService.enabled.is_(True),
         LineService.version == ScheduledTrip.service_version, TransportLine.enabled.is_(True),
+        ScheduledTrip.stops_snapshot.contains([
+            {"station_id": str(origin)},
+            {"station_id": str(shipment.destination_station_id)},
+        ]),
         ScheduledTrip.service_date >= from_date - timedelta(days=30),
         ScheduledTrip.service_date <= to_date).order_by(ScheduledTrip.service_date, ScheduledTrip.id))
     options = []

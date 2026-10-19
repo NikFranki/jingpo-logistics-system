@@ -71,7 +71,7 @@ AuthAdapter 是界面接入边界，httpAdapter.ts 映射 BE 的下划线字段�
 | 下单公共选项 | GET /ordering-options，省市区仍调用对应区域接口 |
 | 助手个人凭据 | POST /auth/agent-token，只读 Bearer、到期时间 |
 
-所有账号与业务请求禁止缓存。Cookie 请求使用 credentials include；写请求从 jingpo_csrf 读取 X-CSRF-Token。使用同源 /api 代理，浏览器 Origin 必须与 BE AUTH_FRONTEND_URL 一致。Google 可信身份由 BE 验证，FE 不接受 URL 自报的邮箱或角色。
+所有账号与业务请求禁止缓存。Cookie 请求使用 credentials include；写请求从 jingpo_csrf 读取 X-CSRF-Token。正式账号和业务 HTTP 请求超时设为 60 秒，以覆盖线上服务唤醒和较重的排程请求；助手 SSE 查询仍保留 150 秒流超时。使用同源 /api 代理，浏览器 Origin 必须与 BE AUTH_FRONTEND_URL 一致。Google 可信身份由 BE 验证，FE 不接受 URL 自报的邮箱或角色。
 
 ## 4. 登录失效与权限控制
 

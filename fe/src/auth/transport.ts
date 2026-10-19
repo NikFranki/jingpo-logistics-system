@@ -48,7 +48,7 @@ export async function authRequest<T>(path: string, init: RequestInit = {}, ident
   if (init.method && !['GET', 'HEAD'].includes(init.method)) Object.entries(csrfHeaders()).forEach(([key, value]) => headers.set(key, value))
   let response: Response
   try {
-    response = await identityFetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(15_000) }, identityBound)
+    response = await identityFetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(60_000) }, identityBound)
   } catch (reason) {
     if (reason instanceof DOMException && reason.name === 'AbortError') throw reason
     throw new Error('账号服务连接失败或请求超时，请重试。', { cause: reason })

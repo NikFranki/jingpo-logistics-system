@@ -571,6 +571,8 @@ class ScheduledTrip(Base):
         CheckConstraint("jsonb_typeof(stops_snapshot) = 'array'", name="ck_scheduled_trips_stops_array"),
         CheckConstraint("jsonb_typeof(capacity_snapshot) = 'object'", name="ck_scheduled_trips_capacity_object"),
         Index("ix_scheduled_trips_date_status", "service_date", "status"),
+        Index("ix_scheduled_trips_stops_snapshot_gin", "stops_snapshot",
+              postgresql_using="gin", postgresql_ops={"stops_snapshot": "jsonb_path_ops"}),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     service_id: Mapped[int] = mapped_column(ForeignKey("line_services.id", ondelete="RESTRICT"))
