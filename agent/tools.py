@@ -32,6 +32,8 @@ class OrderSearchInput(BaseModel):
     stage: ShipmentStage | None = Field(default=None, description="关联运单阶段，不是订单状态")
     page: int = Field(default=1, ge=1, strict=True)
     page_size: int = Field(default=10, ge=1, le=20, strict=True)
+    all_pages: bool = Field(default=False, strict=True, description="明确要求全部/所有结果时设为 true")
+    include_shipment: bool = Field(default=False, strict=True, description="判断订单是否已创建运单时设为 true")
 
 
 class OrderDetailInput(BaseModel):
@@ -54,6 +56,7 @@ class ShipmentSearchInput(BaseModel):
     stage: ShipmentStage | None = None
     page: int = Field(default=1, ge=1, strict=True)
     page_size: int = Field(default=10, ge=1, le=100, strict=True)
+    all_pages: bool = Field(default=False, strict=True, description="明确要求全部/所有结果时设为 true")
 
 
 class ShipmentTrackingInput(BaseModel):
@@ -103,6 +106,89 @@ def _shipment_summary(item: dict) -> dict:
 
 def _pagination(data: dict) -> dict:
     return {key: data[key] for key in ("page", "page_size", "total")}
+
+
+def _destination_change_summary(items: list[dict], complete: bool) -> dict:
+    by_shipment: dict[str, dict] = {}
+    for item in items:
+        shipment_id = str(item.get("shipment_id"))
+        aggregate = by_shipment.setdefault(shipment_id, {
+            "shipment_id": shipment_id,
+            "shipment_no": item.get("shipment_no"),
+            "record_count": 0,
+        })
+        aggregate["record_count"] += 1
+    return {
+        "records_returned": len(items),
+        "distinct_shipments_returned": len(by_shipment),
+        "all_records_complete": complete,
+        "by_shipment": list(by_shipment.values()),
+    }
+
+
+async def _collect_pages(fetch_page, result: dict, page: int, page_size: int, all_pages: bool) -> tuple[list[dict], dict]:
+    """Fetch the requested page or all pages, while reporting exactly what was covered."""
+    first_page = 1 if all_pages else page
+    collected: list[dict] = []
+    seen: set[str] = set()
+    source_total = None
+    pages_fetched = 0
+    complete = False
+    current = first_page
+    while True:
+        try:
+            response = await fetch_page(current)
+        except BEClientError as exc:
+            if pages_fetched == 0:
+                raise
+            result["status"] = "partial"
+            if exc.request_id:
+                result["meta"]["request_ids"].append(exc.request_id)
+            result["warnings"].append("后续页面查询失败；已保留之前读取的记录，列表不完整。")
+            break
+        except TurnLimitError as exc:
+            result["status"] = "partial"
+            result["meta"]["stop_reason"] = exc.code
+            result["warnings"].append("本轮预算耗尽，列表未能完整读取。")
+            break
+        _record_request(result, response)
+        payload = response["data"]
+        if payload.get("server_time") is not None:
+            result["meta"]["server_time"] = payload["server_time"]
+        source_total = payload["total"]
+        pages_fetched += 1
+        for item in payload["items"]:
+            key = str(item.get("id", item.get("change_id", len(collected))))
+            if key not in seen:
+                seen.add(key)
+                collected.append(item)
+        if not all_pages:
+            complete = True
+            break
+        if len(collected) >= source_total:
+            complete = True
+            break
+        next_page = current + 1
+        if not payload["items"] or current * page_size >= source_total:
+            break
+        current = next_page
+    pagination = {
+        "page": first_page, "page_size": page_size, "total": source_total,
+        "pages_fetched": pages_fetched, "records_fetched": len(collected),
+        "complete": complete,
+        "all_records_complete": complete or (not all_pages and first_page == 1 and len(collected) >= (source_total or 0)),
+    }
+    if all_pages and not complete and source_total is not None:
+        result["status"] = "partial"
+        warning = f"仅读取 {len(collected)}/{source_total} 条记录；结果不完整。"
+        if warning not in result["warnings"]:
+            result["warnings"].append(warning)
+    result["meta"]["pagination"] = pagination
+    result["meta"].setdefault("collections", {})["items"] = {
+        "total": source_total, "returned": len(collected),
+        "complete": result["meta"]["pagination"]["all_records_complete"],
+    }
+    return collected, pagination
 
 
 def _schedule_summary(schedule: dict, leg_limit: int = 20) -> dict:
@@ -155,7 +241,14 @@ def _order_summary(item: dict) -> dict:
         "sender_province_name", "sender_city_name", "sender_district_name",
         "recipient_province_name", "recipient_city_name", "recipient_district_name",
     )
-    return {key: item.get(key) for key in keys if key in item}
+    summary = {key: item.get(key) for key in keys if key in item}
+    if "shipment" in item:
+        shipment = item["shipment"]
+        summary["shipment"] = (
+            {key: shipment.get(key) for key in ("id", "shipment_no", "stage")}
+            if shipment is not None else None
+        )
+    return summary
 
 
 def create_order_search_tool(base_url: str):
@@ -166,14 +259,40 @@ def create_order_search_tool(base_url: str):
         stage: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        all_pages: bool = False,
+        include_shipment: bool = False,
     ) -> dict:
-        """查询订单列表，按完整订单号、关联运单号或运单阶段筛选；支持分页，编号精确匹配。"""
+        """查询订单列表。用户要求全部/所有结果时设 all_pages=true；判断哪些订单没有运单时设 include_shipment=true。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
-            response = await list_orders(
-                base_url, context, order_no, shipment_no, stage, page, page_size,
+            items, pagination = await _collect_pages(
+                lambda requested_page: list_orders(base_url, context, order_no, shipment_no, stage, requested_page, page_size),
+                result, page, page_size, all_pages,
             )
+            if include_shipment:
+                associations_complete = True
+                associations_verified = 0
+                for item in items:
+                    try:
+                        detail = await read_order(base_url, int(item["id"]), context)
+                    except (BEClientError, TurnLimitError) as exc:
+                        result["status"] = "partial"
+                        associations_complete = False
+                        result["warnings"].append("部分订单关联运单未能核实，不能据此判断完整清单。")
+                        if isinstance(exc, TurnLimitError):
+                            result["meta"]["stop_reason"] = exc.code
+                        elif exc.request_id:
+                            result["meta"]["request_ids"].append(exc.request_id)
+                        break
+                    _record_request(result, detail)
+                    item["shipment"] = detail["data"].get("shipment")
+                    associations_verified += 1
+                result["meta"]["order_shipment_associations"] = {
+                    "requested": len(items),
+                    "verified": associations_verified,
+                    "complete": associations_complete and associations_verified == len(items),
+                }
         except BEClientError as exc:
             return _error(result, exc)
         except TurnLimitError as exc:
@@ -181,13 +300,10 @@ def create_order_search_tool(base_url: str):
             result["meta"]["stop_reason"] = exc.code
             result["warnings"].append("本轮预算已耗尽，订单列表查询未完成。")
             return result
-        _record_request(result, response)
-        data = response["data"]
-        result["data"] = {"items": [_order_summary(item) for item in data["items"]]}
-        result["meta"]["pagination"] = _pagination(data)
-        if not data["items"]:
+        result["data"] = {"items": [_order_summary(item) for item in items]}
+        if not items:
             result["status"] = "empty"
-            result["warnings"].append("当前页无结果，请结合 total 和页码判断；编号仅支持精确匹配。")
+            result["warnings"].append("当前查询无结果；请结合 total 和页码判断。")
         return result
 
     return search_orders
@@ -245,21 +361,20 @@ def create_shipment_search_tool(base_url: str):
         stage: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        all_pages: bool = False,
     ) -> dict:
-        """按完整运单号或阶段筛选运单列表，支持分页；运单号不支持模糊匹配。"""
+        """按完整运单号或阶段筛选运单列表；要求全部/所有结果时设 all_pages=true。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
-            response = await list_shipments(
-                base_url, context, shipment_no, stage, page, page_size,
+            items, pagination = await _collect_pages(
+                lambda requested_page: list_shipments(base_url, context, shipment_no, stage, requested_page, page_size),
+                result, page, page_size, all_pages,
             )
         except BEClientError as exc:
             return _error(result, exc)
-        _record_request(result, response)
-        data = response["data"]
-        result["data"] = {"items": [_shipment_summary(item) for item in data["items"]]}
-        result["meta"]["pagination"] = _pagination(data)
-        if not data["items"]:
+        result["data"] = {"items": [_shipment_summary(item) for item in items]}
+        if not items:
             result["status"] = "empty"
             result["warnings"].append("当前页无结果，请结合 total 和页码判断；编号仅支持精确匹配。")
         return result
@@ -272,23 +387,28 @@ class DestinationChangeShipmentScanInput(BaseModel):
 
     page: int = Field(default=1, ge=1, strict=True)
     page_size: int = Field(default=50, ge=1, le=100, strict=True)
+    all_pages: bool = Field(default=False, strict=True, description="明确要求所有更正记录时设为 true")
 
 
 def create_destination_change_shipment_scan_tool(base_url: str):
     @tool(args_schema=DestinationChangeShipmentScanInput)
     async def find_shipments_with_destination_changes(
-        page: int = 1, page_size: int = 50,
+        page: int = 1, page_size: int = 50, all_pages: bool = False,
     ) -> dict:
-        """分页查询目的站更正审计记录；每条记录直接包含对应运单号与运单 ID。"""
+        """分页查询目的站更正审计记录；用户要求所有记录时设 all_pages=true。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
-            response = await list_all_shipment_destination_changes(base_url, context, page, page_size)
-            _record_request(result, response)
-            data = response["data"]
-            result["data"] = {"items": data["items"]}
-            result["meta"]["pagination"] = _pagination(data)
-            if not data["items"]:
+            items, _ = await _collect_pages(
+                lambda requested_page: list_all_shipment_destination_changes(base_url, context, requested_page, page_size),
+                result, page, page_size, all_pages,
+            )
+            pagination = result["meta"].get("pagination") or {}
+            result["data"] = {
+                "summary": _destination_change_summary(items, pagination.get("all_records_complete", False)),
+                "items": items,
+            }
+            if not items:
                 result["status"] = "empty"
                 result["warnings"].append("当前页没有目的站更正记录；请结合 total 判断是否还有其他页。")
         except BEClientError as exc:
@@ -402,10 +522,15 @@ def create_shipment_tracking_tool(base_url: str):
                     result["status"] = "partial"
                     result["meta"]["stop_reason"] = exc.code
             summary = result["data"].get("schedule", {})
+            result["data"]["delay_assessment"] = {
+                "status": "NOT_CONFIRMED",
+                "delay_minutes": None,
+                "reason": "OWN_SCOPE_SAFE_SCHEDULE_ONLY",
+            }
             if summary.get("legs_truncated") or summary.get("configuration_risks_truncated"):
                 result["meta"]["truncated"] = True
                 result["warnings"].append("运输计划过长，返回的计划信息已裁剪。")
-            result["warnings"].append("仅查询当前运单的安全计划与进度，不读取共享任务详情；无法据此确认精确任务延误分钟数。")
+            result["warnings"].append("仅查询当前运单的安全计划与进度，不读取共享任务详情。延误状态和分钟数均未确认；禁止用服务器时间减计划到达时间推算延误分钟数。")
             return result
 
         if include_tasks:
@@ -529,6 +654,7 @@ class ShipmentScheduleInput(BaseModel):
     include_history: bool = Field(default=False, strict=True, description="是否同时查询运输计划历史")
     history_page: int = Field(default=1, ge=1, strict=True)
     history_page_size: int = Field(default=10, ge=1, le=50, strict=True)
+    history_all_pages: bool = Field(default=False, strict=True, description="查询全部计划历史时设为 true")
 
     @model_validator(mode="after")
     def validate_identifier(self) -> Self:
@@ -544,6 +670,7 @@ class DestinationChangesInput(BaseModel):
     shipment_no: ShipmentNumber | None = Field(default=None, description="完整运单号，与数据库 ID 二选一")
     page: int = Field(default=1, ge=1, strict=True)
     page_size: int = Field(default=10, ge=1, le=50, strict=True)
+    all_pages: bool = Field(default=False, strict=True, description="查询全部目的站更正历史时设为 true")
 
     @model_validator(mode="after")
     def validate_identifier(self) -> Self:
@@ -597,6 +724,7 @@ def create_shipment_schedule_tool(base_url: str):
         include_history: bool = False,
         history_page: int = 1,
         history_page_size: int = 10,
+        history_all_pages: bool = False,
     ) -> dict:
         """只读查询运单完整运输计划、计划/预测/实际分段时间与关联状态；可选读取计划历史。"""
         result = _result()
@@ -642,11 +770,10 @@ def create_shipment_schedule_tool(base_url: str):
 
             if include_history and not result["meta"].get("stop_reason"):
                 try:
-                    history_response = await list_shipment_schedule_history(
-                        base_url, shipment_id, context, history_page, history_page_size,
+                    history_items, _ = await _collect_pages(
+                        lambda requested_page: list_shipment_schedule_history(base_url, shipment_id, context, requested_page, history_page_size),
+                        result, history_page, history_page_size, history_all_pages,
                     )
-                    _record_request(result, history_response)
-                    history_items = history_response["data"]["items"]
                     result["data"]["history"] = [
                         {**{key: item.get(key) for key in (
                             "version", "reason", "occurred_at", "line_id", "line_version", "scheduled_trip_id",
@@ -664,8 +791,8 @@ def create_shipment_schedule_tool(base_url: str):
                             leg["destination_station"] = _station_name(stations, leg.get("destination_station_id"))
                             _warn_unresolved_station(result, leg.get("origin_station_id"), leg["origin_station"])
                             _warn_unresolved_station(result, leg.get("destination_station_id"), leg["destination_station"])
-                    result["meta"]["history_pagination"] = _pagination(history_response["data"])
-                    if not history_response["data"]["items"]:
+                    result["meta"]["history_pagination"] = result["meta"].get("pagination")
+                    if not history_items:
                         result["warnings"].append("该页没有计划历史记录；请结合 total 判断是否存在其他页。")
                 except BEClientError as exc:
                     result["status"] = "partial"
@@ -695,6 +822,7 @@ def create_destination_changes_tool(base_url: str):
         shipment_no: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        all_pages: bool = False,
     ) -> dict:
         """只读查询运单目的站更正历史，返回原目的站、新目的站、原因和记录时间。"""
         result = _result()
@@ -703,12 +831,11 @@ def create_destination_changes_tool(base_url: str):
             shipment_id = await _resolve_shipment_id(base_url, context, shipment_id, shipment_no, result)
             if shipment_id is None:
                 return result
-            response = await list_shipment_destination_changes(base_url, shipment_id, context, page, page_size)
-            _record_request(result, response)
-            data = response["data"]
-            changes = data["items"]
+            changes, _ = await _collect_pages(
+                lambda requested_page: list_shipment_destination_changes(base_url, shipment_id, context, requested_page, page_size),
+                result, page, page_size, all_pages,
+            )
             result["data"] = {"shipment_id": str(shipment_id), "items": changes}
-            result["meta"]["pagination"] = _pagination(data)
             if not changes:
                 result["status"] = "empty"
                 result["warnings"].append("当前页没有目的站更正记录；请结合 total 判断，不据此推断全部历史为空。")
@@ -756,6 +883,7 @@ class TransportTaskSearchInput(BaseModel):
     status: TaskStatus | None = Field(default=None, description="运输任务状态，不是运单阶段")
     page: int = Field(default=1, ge=1, strict=True)
     page_size: int = Field(default=10, ge=1, le=20, strict=True)
+    all_pages: bool = Field(default=False, strict=True, description="明确要求全部/所有结果时设为 true")
 
 
 class TransportTaskDetailInput(BaseModel):
@@ -797,24 +925,23 @@ def create_transport_task_search_tool(base_url: str):
         status: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        all_pages: bool = False,
     ) -> dict:
-        """按完整任务号、线路编码、任务状态筛选运输任务，返回分页、服务器时间和 BE 延误结果。"""
+        """按完整任务号、线路编码、任务状态筛选；要求全部/所有结果时设 all_pages=true。"""
         result = _result()
         context = get_runtime(TurnContext).context
         try:
-            response = await list_transport_tasks(
-                base_url, context, task_no, route_code, status, page, page_size,
+            items, _ = await _collect_pages(
+                lambda requested_page: list_transport_tasks(base_url, context, task_no, route_code, status, requested_page, page_size),
+                result, page, page_size, all_pages,
             )
         except BEClientError as exc:
             return _error(result, exc)
-        _record_request(result, response)
-        data = response["data"]
         result["data"] = {
-            "items": [_task_summary(item) for item in data["items"]],
-            "server_time": data["server_time"],
+            "items": [_task_summary(item) for item in items],
+            "server_time": result["meta"].get("server_time"),
         }
-        result["meta"]["pagination"] = _pagination(data)
-        if not data["items"]:
+        if not items:
             result["status"] = "empty"
             result["warnings"].append("当前页无结果，请结合 total 和页码判断；任务号仅支持精确匹配。")
         return result

@@ -24,6 +24,24 @@ MAX_TOOL_CALLS = 8
 MAX_MESSAGE_BYTES = 64 * 1024
 
 
+def classify_model_error(exc):
+    status_code = getattr(exc, "status_code", None)
+    body = getattr(exc, "body", None)
+    error = body.get("error", {}) if isinstance(body, dict) else {}
+    code = error.get("code") if isinstance(error, dict) else None
+    code = code or (body.get("code") if isinstance(body, dict) else None)
+
+    if code == "AllocationQuota.FreeTierOnly":
+        return "MODEL_QUOTA_EXHAUSTED"
+    if status_code == 401:
+        return "MODEL_AUTH_ERROR"
+    if status_code == 403:
+        return "MODEL_PERMISSION_ERROR"
+    if status_code == 429:
+        return "MODEL_RATE_LIMIT"
+    return "MODEL_ERROR"
+
+
 def normalize_model_args(selected_tool, arguments):
     """Normalize only schema-declared scalar types emitted as strings by providers."""
     normalized = dict(arguments)
@@ -131,7 +149,7 @@ def create_model_node(model_with_tools, own_model=None):
                 selected_model = own_model if identity and identity.own_only else model_with_tools
                 style = ("当前可信身份的回答风格为 technical。可说明业务 ID、关联关系、版本与执行状态。"
                          if identity and identity.answer_style == "technical" else "优先用业务语言解释进度，避免无关技术细节。")
-                scope = "仅能查询自己的订单和运单；不能查询全局任务或全局更正日志。延误用运单安全计划判断，不承诺精确任务延误。仅使用本次实际注册的工具；通用规则中未注册的工具不适用于当前身份。" if identity and identity.own_only else ""
+                scope = "仅能查询自己的订单和运单；不能查询全局任务或全局更正日志。若用户要求公司/全体数据，只能报告当前账号可见范围，明确说明无法代替公司全量结果，禁止把个人查询 total 说成公司总数。未找到对象时只能说当前账号可见范围内未找到，不猜测对象不存在或尚未创建。用户问延误时只能报告运单安全计划事实；若 delay_assessment.status=NOT_CONFIRMED，必须明确说精确延误状态和分钟数无法确认，禁止用服务器时间减计划到达时间计算延误分钟数。仅使用本次实际注册的工具；通用规则中未注册的工具不适用于当前身份。" if identity and identity.own_only else ""
                 response = await selected_model.ainvoke([
                     SystemMessage(content=SYSTEM_PROMPT + "\n" + style + scope),
                     *messages,
@@ -146,8 +164,7 @@ def create_model_node(model_with_tools, own_model=None):
                 "stop_reason": "REQUEST_TIMEOUT",
             }
         except Exception as exc:
-            status_code = getattr(exc, "status_code", None)
-            reason = "MODEL_AUTH_ERROR" if status_code in (401, 403) else "MODEL_RATE_LIMIT" if status_code == 429 else "MODEL_ERROR"
+            reason = classify_model_error(exc)
             trace(runtime.context, "model", started, status=reason, model_calls=calls + 1)
             return {**updates, "model_calls": calls + 1, "stop_reason": reason}
 
@@ -291,7 +308,9 @@ def stop_node(state: AgentState) -> dict:
 
     explanations = {
         "MODEL_CALL_LIMIT": "已达到本轮模型调用上限，查询未完成。",
-        "MODEL_AUTH_ERROR": "模型认证失败，请检查密钥及权限。",
+        "MODEL_AUTH_ERROR": "模型认证失败，请检查 API Key 和服务地址。",
+        "MODEL_PERMISSION_ERROR": "模型账号没有调用权限，请检查模型授权和账号配置。",
+        "MODEL_QUOTA_EXHAUSTED": "模型免费额度已用完，请检查百炼额度或切换可用的付费配置。",
         "MODEL_RATE_LIMIT": "模型请求被限流，请稍后重试。",
         "MODEL_ERROR": "模型请求失败，查询未完成，请稍后重试。",
         "INVALID_RESPONSE": "模型返回格式异常，查询未完成。",

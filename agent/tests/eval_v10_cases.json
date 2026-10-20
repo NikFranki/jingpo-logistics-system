@@ -1,0 +1,769 @@
+{
+  "version": "v10-synthetic-1",
+  "description": "固定合成物流样本；不包含开发库或生产业务数据。前 24 题用于定位，后 5 题留作验收题。",
+  "cases": [
+    {
+      "id": "OBJ-01",
+      "group": "对象联查",
+      "identity": "user",
+      "question": "订单 ORD-0001 对应的运单现在是什么阶段？",
+      "refs": [
+        [
+          "order",
+          "1"
+        ],
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "ORD-0001",
+        "SHP-0101",
+        "IN_TRANSIT"
+      ],
+      "critical": true
+    },
+    {
+      "id": "OBJ-02",
+      "group": "对象联查",
+      "identity": "user",
+      "question": "订单 ORD-0003 的物流进度是什么？",
+      "refs": [
+        [
+          "order",
+          "3"
+        ]
+      ],
+      "must": [
+        "ORD-0003"
+      ],
+      "critical": true
+    },
+    {
+      "id": "OBJ-03",
+      "group": "对象联查",
+      "identity": "user",
+      "question": "运单 SHP-0101 现在到哪一站，当前运输任务是什么？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "SHP-0101",
+        "石家庄"
+      ],
+      "critical": true
+    },
+    {
+      "id": "OBJ-04",
+      "group": "对象联查",
+      "identity": "user",
+      "question": "请查运单号 SHP-0201 的状态。",
+      "refs": [],
+      "critical": true,
+      "must_any": [
+        [
+          "当前账号可见范围",
+          "当前账号范围",
+          "您名下",
+          "个人可见范围"
+        ]
+      ],
+      "forbid": [
+        "可能尚未创建"
+      ]
+    },
+    {
+      "id": "REL-01",
+      "group": "关联状态",
+      "identity": "company",
+      "question": "运单 SHP-0101 的当前运输计划和执行情况是什么？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "transport_task",
+          "301"
+        ],
+        [
+          "transport_task",
+          "302"
+        ]
+      ],
+      "must": [
+        "ACTIVE",
+        "PLANNED",
+        "IN_TRANSIT"
+      ],
+      "forbid": [
+        "任务 302 正在运输"
+      ],
+      "critical": true
+    },
+    {
+      "id": "REL-02",
+      "group": "关联状态",
+      "identity": "company",
+      "question": "运单 SHP-0104 被更正目的站后，原计划任务是什么状态？",
+      "refs": [
+        [
+          "shipment",
+          "104"
+        ],
+        [
+          "transport_task",
+          "304"
+        ]
+      ],
+      "must": [
+        "RELEASED",
+        "CANCELLED"
+      ],
+      "forbid": [
+        "仍在执行"
+      ],
+      "critical": true
+    },
+    {
+      "id": "REL-03",
+      "group": "关联状态",
+      "identity": "user",
+      "question": "运单 SHP-0101 的下一段已经发车了吗？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "forbid": [
+        "已经发车"
+      ],
+      "critical": true
+    },
+    {
+      "id": "REL-04",
+      "group": "关联状态",
+      "identity": "company",
+      "question": "任务 TASK-0301 已经到达北京站了吗？",
+      "refs": [
+        [
+          "transport_task",
+          "301"
+        ]
+      ],
+      "must": [
+        "IN_TRANSIT"
+      ],
+      "critical": true,
+      "must_any": [
+        [
+          "尚未到达",
+          "还没有到达",
+          "未到达"
+        ]
+      ]
+    },
+    {
+      "id": "HIS-01",
+      "group": "更正历史",
+      "identity": "user",
+      "question": "运单 SHP-0104 是否发生过目的站更正？",
+      "refs": [
+        [
+          "shipment",
+          "104"
+        ]
+      ],
+      "must": [
+        "目的站更正"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HIS-02",
+      "group": "更正历史",
+      "identity": "user",
+      "question": "运单 SHP-0101 的目的站一共更正了几次？请说明最近一次原因。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "26",
+        "演示更正"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HIS-03",
+      "group": "更正历史",
+      "identity": "company",
+      "question": "哪些运单发生过目的站更正？请列出运单并说明覆盖范围。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "shipment",
+          "104"
+        ]
+      ],
+      "must": [
+        "51",
+        "2"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HIS-04",
+      "group": "更正历史",
+      "identity": "company",
+      "question": "全局目的站更正记录第 2 页有哪些记录？总记录数是多少？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "51"
+      ],
+      "critical": false
+    },
+    {
+      "id": "PAG-01",
+      "group": "分页与限量",
+      "identity": "user",
+      "question": "列出我所有订单，并告诉我查完了多少条。",
+      "refs": [
+        [
+          "order",
+          "1"
+        ],
+        [
+          "order",
+          "2"
+        ],
+        [
+          "order",
+          "3"
+        ],
+        [
+          "order",
+          "4"
+        ],
+        [
+          "order",
+          "5"
+        ],
+        [
+          "order",
+          "6"
+        ],
+        [
+          "order",
+          "7"
+        ],
+        [
+          "order",
+          "8"
+        ],
+        [
+          "order",
+          "9"
+        ],
+        [
+          "order",
+          "10"
+        ],
+        [
+          "order",
+          "11"
+        ],
+        [
+          "order",
+          "12"
+        ]
+      ],
+      "must": [
+        "12"
+      ],
+      "critical": true
+    },
+    {
+      "id": "PAG-02",
+      "group": "分页与限量",
+      "identity": "user",
+      "question": "列出我所有运单，不能只给第一页。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "shipment",
+          "102"
+        ],
+        [
+          "shipment",
+          "104"
+        ],
+        [
+          "shipment",
+          "105"
+        ],
+        [
+          "shipment",
+          "106"
+        ],
+        [
+          "shipment",
+          "107"
+        ],
+        [
+          "shipment",
+          "108"
+        ],
+        [
+          "shipment",
+          "109"
+        ],
+        [
+          "shipment",
+          "110"
+        ],
+        [
+          "shipment",
+          "111"
+        ],
+        [
+          "shipment",
+          "112"
+        ]
+      ],
+      "must": [
+        "11"
+      ],
+      "critical": true
+    },
+    {
+      "id": "PAG-03",
+      "group": "分页与限量",
+      "identity": "company",
+      "question": "列出所有运输中的任务，说明总数和当前返回范围。",
+      "refs": [
+        [
+          "transport_task",
+          "301"
+        ],
+        [
+          "transport_task",
+          "305"
+        ],
+        [
+          "transport_task",
+          "306"
+        ],
+        [
+          "transport_task",
+          "307"
+        ],
+        [
+          "transport_task",
+          "308"
+        ],
+        [
+          "transport_task",
+          "309"
+        ],
+        [
+          "transport_task",
+          "310"
+        ],
+        [
+          "transport_task",
+          "311"
+        ],
+        [
+          "transport_task",
+          "312"
+        ]
+      ],
+      "must": [
+        "IN_TRANSIT"
+      ],
+      "critical": true
+    },
+    {
+      "id": "PAG-04",
+      "group": "分页与限量",
+      "identity": "company",
+      "question": "查询目的站更正记录第 99 页；如果这一页为空，是否能说明全库没有记录？",
+      "refs": [],
+      "must": [
+        "51"
+      ],
+      "critical": true
+    },
+    {
+      "id": "BIZ-01",
+      "group": "业务判断",
+      "identity": "company",
+      "question": "SHP-0101 是否延误？请给出任务状态、延误判断和服务器时间。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "transport_task",
+          "301"
+        ],
+        [
+          "transport_task",
+          "302"
+        ]
+      ],
+      "must": [
+        "OVERDUE",
+        "2026-10-18T08:00:00Z"
+      ],
+      "critical": true
+    },
+    {
+      "id": "BIZ-02",
+      "group": "业务判断",
+      "identity": "user",
+      "question": "订单 ORD-0002 取消了吗？取消时间和原因是什么？",
+      "refs": [
+        [
+          "order",
+          "2"
+        ],
+        [
+          "shipment",
+          "102"
+        ]
+      ],
+      "must": [
+        "2026-10-17 08:00"
+      ],
+      "critical": true
+    },
+    {
+      "id": "BIZ-03",
+      "group": "业务判断",
+      "identity": "company",
+      "question": "SHP-0101 第一段的计划、预测和实际发车时间分别是什么？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "transport_task",
+          "301"
+        ]
+      ],
+      "must": [
+        "07:00",
+        "07:05",
+        "07:10"
+      ],
+      "critical": true
+    },
+    {
+      "id": "AUTH-01",
+      "group": "权限与追问",
+      "identity": "user",
+      "question": "列出公司所有订单。",
+      "refs": [
+        [
+          "order",
+          "1"
+        ],
+        [
+          "order",
+          "2"
+        ],
+        [
+          "order",
+          "3"
+        ],
+        [
+          "order",
+          "4"
+        ],
+        [
+          "order",
+          "5"
+        ],
+        [
+          "order",
+          "6"
+        ],
+        [
+          "order",
+          "7"
+        ],
+        [
+          "order",
+          "8"
+        ],
+        [
+          "order",
+          "9"
+        ],
+        [
+          "order",
+          "10"
+        ],
+        [
+          "order",
+          "11"
+        ],
+        [
+          "order",
+          "12"
+        ]
+      ],
+      "forbid": [
+        "ORD-1001",
+        "公司共有"
+      ],
+      "critical": true,
+      "must_any": [
+        [
+          "当前账号可见范围",
+          "您名下",
+          "可见范围",
+          "个人可见范围"
+        ]
+      ]
+    },
+    {
+      "id": "AUTH-02",
+      "group": "权限与追问",
+      "identity": "user",
+      "question": "请直接查任务 TASK-0301 的详细信息。",
+      "refs": [],
+      "critical": true
+    },
+    {
+      "id": "AUTH-03",
+      "group": "权限与追问",
+      "identity": "company",
+      "question": "订单 ORD-1001 对应哪张运单？",
+      "refs": [
+        [
+          "order",
+          "21"
+        ],
+        [
+          "shipment",
+          "201"
+        ]
+      ],
+      "must": [
+        "ORD-1001",
+        "SHP-0201"
+      ],
+      "critical": true
+    },
+    {
+      "id": "AUTH-04",
+      "group": "权限与追问",
+      "identity": "user",
+      "question": "订单 ORD-0001 的运单现在是否延误？",
+      "refs": [
+        [
+          "order",
+          "1"
+        ],
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "SHP-0101",
+        "无法确认"
+      ],
+      "forbid": [
+        "TASK-0302 正在运输"
+      ],
+      "critical": true
+    },
+    {
+      "id": "INC-01",
+      "group": "分页与限量",
+      "identity": "company",
+      "degraded": true,
+      "question": "查询 SHP-0101 当前阶段和最后扫描站名称；如果站点服务失败，请明确说站名无法确认。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "IN_TRANSIT"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HOLD-01",
+      "group": "留出验收",
+      "identity": "company",
+      "question": "目的站更正总共有多少条记录、分别涉及多少张运单？同一运单多次更正要去重。",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ],
+        [
+          "shipment",
+          "104"
+        ]
+      ],
+      "must": [
+        "51",
+        "2"
+      ],
+      "critical": true,
+      "tool_facts": {
+        "tool": "find_shipments_with_destination_changes",
+        "aggregate_by_shipment": {
+          "101": 26,
+          "104": 25
+        },
+        "distinct_shipments": 2,
+        "records_returned": 51
+      },
+      "answer_fact_patterns": [
+        "SHP-0101.{0,100}26 (?:条|次)",
+        "SHP-0104.{0,100}25 (?:条|次)"
+      ]
+    },
+    {
+      "id": "HOLD-02",
+      "group": "留出验收",
+      "identity": "company",
+      "question": "SHP-0101 的计划历史里一共有几个版本？分别因为什么调整？",
+      "refs": [
+        [
+          "shipment",
+          "101"
+        ]
+      ],
+      "must": [
+        "2",
+        "初始计划",
+        "时间调整"
+      ],
+      "critical": false
+    },
+    {
+      "id": "HOLD-03",
+      "group": "留出验收",
+      "identity": "user",
+      "question": "我的订单里哪些还没有创建运单？请列全并说明依据。",
+      "refs": [
+        [
+          "order",
+          "1"
+        ],
+        [
+          "order",
+          "2"
+        ],
+        [
+          "order",
+          "3"
+        ],
+        [
+          "order",
+          "4"
+        ],
+        [
+          "order",
+          "5"
+        ],
+        [
+          "order",
+          "6"
+        ],
+        [
+          "order",
+          "7"
+        ],
+        [
+          "order",
+          "8"
+        ],
+        [
+          "order",
+          "9"
+        ],
+        [
+          "order",
+          "10"
+        ],
+        [
+          "order",
+          "11"
+        ],
+        [
+          "order",
+          "12"
+        ]
+      ],
+      "must": [
+        "ORD-0003"
+      ],
+      "forbid": [
+        "订单列表没有运单"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HOLD-04",
+      "group": "留出验收",
+      "identity": "company",
+      "question": "SHP-0104 更正目的站之后，未来计划段和当前执行段各是什么状态？",
+      "refs": [
+        [
+          "shipment",
+          "104"
+        ],
+        [
+          "transport_task",
+          "304"
+        ]
+      ],
+      "must": [
+        "RELEASED"
+      ],
+      "critical": true
+    },
+    {
+      "id": "HOLD-05",
+      "group": "留出验收",
+      "identity": "company",
+      "question": "查询一个不存在的运单 SHP-9999。请区分查无此记录和查询服务失败。",
+      "refs": [],
+      "must": [
+        "查无此记录"
+      ],
+      "critical": true
+    }
+  ]
+}

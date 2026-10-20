@@ -130,12 +130,18 @@ class HarnessTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertFalse(graph.checkpointer.writes)
 
     async def test_model_failures_and_invalid_protocol(self):
-        for code, reason in [(401, 'MODEL_AUTH_ERROR'), (403, 'MODEL_AUTH_ERROR'), (429, 'MODEL_RATE_LIMIT'), (503, 'MODEL_ERROR')]:
+        for code, reason in [(401, 'MODEL_AUTH_ERROR'), (403, 'MODEL_PERMISSION_ERROR'), (429, 'MODEL_RATE_LIMIT'), (503, 'MODEL_ERROR')]:
             exc = RuntimeError('SECRET')
             exc.status_code = code
             result, _ = await self.invoke(FakeModel([exc]))
             self.assertEqual(result['stop_reason'], reason)
             self.assertNotIn('SECRET', result['messages'][-1].content)
+        quota_error = RuntimeError('provider response')
+        quota_error.status_code = 403
+        quota_error.body = {'error': {'code': 'AllocationQuota.FreeTierOnly'}}
+        result, _ = await self.invoke(FakeModel([quota_error]))
+        self.assertEqual(result['stop_reason'], 'MODEL_QUOTA_EXHAUSTED')
+        self.assertIn('免费额度', result['messages'][-1].content)
         for output, expected in [(TimeoutError(), 'REQUEST_TIMEOUT'), ('bad', 'INVALID_RESPONSE'),
                                  (AIMessage(content=''), 'INVALID_RESPONSE'),
                                  (AIMessage(content='', invalid_tool_calls=[dict(name='noop', args='{', id='x', error='bad', type='invalid_tool_call')]), 'INVALID_RESPONSE')]:

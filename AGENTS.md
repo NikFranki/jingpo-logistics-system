@@ -73,7 +73,7 @@ flowchart LR
 
 | 要了解什么 | 文档 |
 | --- | --- |
-| V10 Agent 查询质量优化（规划，未实施） | [准确性、完整性与回答依据规格](docs/技术方案/v10/agent/spec.md)、[实施与验证计划](docs/技术方案/v10/agent/plan.md) |
+| V10 Agent 查询质量优化（分页、聚合和回答规则已实现；真实模型验收待完成） | [准确性、完整性与回答依据规格](docs/技术方案/v10/agent/spec.md)、[实施与验证计划](docs/技术方案/v10/agent/plan.md) |
 | V9 Agent Render 部署、Pages SSE 代理和本地兼容 | [部署规格与操作步骤](docs/技术方案/v9/agent/spec.md) |
 | 运输线路统一契约及旧字段弃用策略 | [统一运输线路](docs/技术方案/v7/be/unified-transport-lines.md) |
 | 线路班次、车次生成和运单候选 | [班次与计划车次](docs/技术方案/v7/be/line-services.md) |

@@ -24,6 +24,12 @@ V7 适配支持读取运单完整分段计划、计划历史、目的站更正�
 
 Agent 生产服务部署到 Render Web Service，浏览器通过 Cloudflare Pages Function 的 `/agent/*` 路径访问，CLI 直接使用 Render HTTPS 地址。线上部署及网页助手可用状态已由用户确认。日常设置、环境变量和部署验收步骤见 [Agent 生产部署](deploy-prod.md)；完整架构和接口说明见 [V9 Agent 部署规格](../docs/技术方案/v9/agent/spec.md)。本地 Vite 与 Docker Compose 继续使用 8001 端口。
 
+## V10 查询完整性（模型验收待完成）
+
+列表工具支持按需自动翻页，并在结果里标明页数、记录数及是否覆盖全部匹配数据；翻页仍计入每轮 24 次 HTTP 与 120 秒预算。查询“哪些订单没有运单”时才补读订单详情确认关联。全局目的站更正记录附带按运单聚合的记录数，避免模型从长列表估算。变更只涉及 Agent 内部工具和回答规则，不改变网页 API。
+
+固定合成问题集和评测命令见 [V10 Agent 规格](../docs/技术方案/v10/agent/spec.md) 与 [实施记录](../docs/技术方案/v10/agent/plan.md)。Qwen 曾完成一轮 29 题评测，后续因百炼免费额度耗尽中断。DeepSeek 官方 API 模型 ID `deepseek-flash` 已完成多轮全量评测，引用覆盖均为 89/89、无模型调用中断；BIZ-02 的 UTC 时间格式和 HOLD-05 的范围内查无结果说法未匹配固定短语，仍待人工确认并修正评测条件。44 项受控测试和评测预检通过。
+
 ## 1. 先启动后端
 
 需要 PostgreSQL 和已升级 V8 的 BE 正常运行，并完成账号初始化/验证；旧匿名 BE 不满足 Agent 身份契约。首次准备数据库、迁移及 PostgreSQL 启动方式见 [BE README](../be/README.md) 第 1～5 节。已有环境不用重新建库或生成迁移。
