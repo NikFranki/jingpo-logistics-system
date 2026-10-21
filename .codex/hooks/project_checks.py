@@ -47,6 +47,36 @@ def changed_paths(patch: str) -> list[str]:
     return normalized
 
 
+def git_changed_paths() -> list[str]:
+    """Return tracked and untracked paths changed in the working tree."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short", "--untracked-files=all", "-z"],
+            cwd=ROOT,
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+    entries = result.stdout.decode("utf-8", errors="replace").split("\0")
+    paths: list[str] = []
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if not entry:
+            continue
+        # Git uses a second NUL-delimited path for the source of a rename.
+        path = entry[3:] if len(entry) >= 4 else ""
+        if "R" in entry[:2] or "C" in entry[:2]:
+            index += 1
+        if path and path not in paths:
+            paths.append(path.replace("\\", "/"))
+    return paths
+
+
 def sensitive_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
     while normalized.startswith("./"):
@@ -93,7 +123,13 @@ def pre_tool(event: dict[str, Any]) -> int:
 def post_tool(event: dict[str, Any]) -> int:
     inputs = event.get("tool_input") or {}
     patch = str(inputs.get("command", "")) if isinstance(inputs, dict) else ""
+    # Patch tools provide exact target paths. Bash tools vary by command, so
+    # use the current working tree to catch scripts and shell redirections too.
     paths = changed_paths(patch)
+    if event.get("tool_name") == "Bash" or not paths:
+        for path in git_changed_paths():
+            if path not in paths:
+                paths.append(path)
     fe_files = [path for path in paths if path.startswith("fe/") and path.endswith((".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"))]
     python_files = [path for path in paths if path.startswith(("be/", "agent/")) and path.endswith(".py")]
     feedback = []
