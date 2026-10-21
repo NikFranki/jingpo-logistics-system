@@ -1,5 +1,9 @@
 # 文档导航
 
+
+本地统一检查和 GitHub CI 见 [检查说明](checks.md)。
+
+Session 交接模板与生成命令见 [handoffs](handoffs/README.md)。
 按任务选择下方入口；具体启动、开发和测试优先读取各子项目 README。
 
 | 入口 | 内容 |

@@ -1,5 +1,7 @@
 # BE
 
+统一检查入口：仓库根目录 `make check-be`；会创建并清理独立测试库，环境与覆盖范围见 [检查说明](../docs/checks.md)。
+
 ## 本机配置
 
 BE 启动时会自动读取本目录 `.env`。首次使用可复制 `.env.example` 为 `.env`，本地默认用 Mailpit SMTP；线上可设置 `EMAIL_PROVIDER=gmail_api`，通过 Gmail API 的 HTTPS 请求发送验证/重置邮件。Google 登录 OAuth 与 Gmail 发信授权用途不同，发信需要单独授权 `gmail.send` 并配置 refresh token。`.env` 已加入 Git 忽略列表，不会提交密钥；终端里已设置的同名变量优先级更高，可用于临时覆盖。

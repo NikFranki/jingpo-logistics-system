@@ -11,6 +11,8 @@
 | `agent/` | 自然语言只读查询、API 与 CLI；先读 [目录规则](agent/AGENTS.md)、[README](agent/README.md) |
 | `docs/` | 产品、架构与技术方案；从 [文档导航](docs/README.md) 按需查阅 |
 | `scripts/` | 仓库级辅助脚本；执行前确认作用范围 |
+| `Makefile` | 统一检查入口 `make check`；范围与环境见 [检查说明](docs/checks.md) |
+| Session 交接 | `make handoff SESSION_ID=<id> INPUT=<session-export.md>`；见 [交接说明](docs/handoffs/README.md) |
 | `docker-compose.yml` | 本地服务编排；使用说明见 [DOCKER.md](DOCKER.md) |
 
 ## 通用协作规则
