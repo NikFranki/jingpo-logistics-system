@@ -66,7 +66,9 @@ class LifecycleTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         client.new_session = AsyncMock()
         client.query = AsyncMock(return_value={'answer': 'accepted', 'usage': {'model_calls': 1, 'tool_calls': 0, 'http_calls': 0}})
         output = StringIO()
+        non_tty_stdin = type('NonTTYStdin', (), {'isatty': lambda self: False})()
         with patch('cli_client.CLIClient.configured', return_value=client), \
+             patch('cli.sys.stdin', non_tty_stdin), \
              patch('builtins.input', side_effect=['a' * 4001, 'a' * 4000, '/new', '/exit']), redirect_stdout(output):
             await cli.main()
         self.assertEqual(client.query.await_count, 1)

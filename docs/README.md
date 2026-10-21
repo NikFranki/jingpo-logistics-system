@@ -4,6 +4,8 @@
 
 Session 交接模板与生成命令见 [handoffs](handoffs/README.md)。
 
+重要架构取舍见 [ADR 决策记录](adr/README.md)。
+
 按任务选择下方入口；具体启动、开发和测试优先读取各子项目 README。
 
 | 入口 | 内容 |
