@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/project_checks.py\" pre",
+            "timeout": 5,
+            "statusMessage": "Checking repository safety rules"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/project_checks.py\" post",
+            "timeout": 90,
+            "statusMessage": "Checking changed files"
+          }
+        ]
+      }
+    ]
+  }
+}

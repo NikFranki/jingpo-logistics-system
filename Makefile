@@ -3,15 +3,20 @@ ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BE_PYTHON ?= $(if $(wildcard $(ROOT)be/.venv/bin/python),$(ROOT)be/.venv/bin/python,python3)
 AGENT_PYTHON ?= $(if $(wildcard $(ROOT)agent/.venv/bin/python),$(ROOT)agent/.venv/bin/python,python3)
 
-.PHONY: help check check-be check-fe check-agent handoff
+.PHONY: help check check-hooks check-be check-fe check-agent handoff
 help:
 	@echo 'make check        Run BE, FE and Agent checks'
+	@echo 'make check-hooks  Validate repository Codex hooks and safety rules'
 	@echo 'make check-be     Temporary PostgreSQL DB, migrations and BE tests'
 	@echo 'make check-fe     TypeScript, ESLint and production build'
 	@echo 'make check-agent  Controlled Agent tests (no real model)'
 	@echo 'make handoff SESSION_ID=<id> INPUT=<exported-session.md>  Generate a session handoff with Codex'
 
-check: check-be check-fe check-agent
+check: check-hooks check-be check-fe check-agent
+
+check-hooks:
+	python3 -m json.tool "$(ROOT).codex/hooks.json" >/dev/null
+	python3 -m unittest scripts.test_codex_hooks -v
 
 check-be:
 	"$(BE_PYTHON)" "$(ROOT)scripts/check.py" be

@@ -10,6 +10,15 @@
 | `make check-agent` | Python 依赖、模拟模型与 HTTP 的受控测试 |
 | `make handoff SESSION_ID=<id> INPUT=<session-export.md>` | 通过只读 `codex exec` 生成独立 session 交接记录 |
 
+## Codex 本地 Hooks
+
+仓库信任后，`.codex/hooks.json` 会启用两类轻量检查：
+
+- 写入前拦截通过补丁修改 `.env*`、密钥文件、备份/导出/日志目录，以及明显危险的数据库降级、删卷和清理命令。
+- 补丁写入后，仅对改动的 FE 文件运行 ESLint；对改动的 BE/Agent Python 文件做语法检查。它们只提供快速反馈，不代替完整测试。
+
+Hook 只覆盖 Codex 经过的工具调用，不能作为安全边界；shell 脚本、外部编辑器和其他进程仍需常规权限、备份和审查。完整验收继续使用 `make check-*` 与 GitHub CI。FE 依赖未安装时会提示并跳过定向 lint，不会自动安装依赖。
+
 ## 首次准备
 
 BE、Agent 使用 Python 3.12，各自按 README 建立 `.venv`，分别安装 `be/requirements-dev.txt` 和 `agent/requirements.txt`。FE 使用 Node.js 24，在根目录执行 `npm ci --prefix fe`。
