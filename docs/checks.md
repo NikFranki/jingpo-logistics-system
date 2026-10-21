@@ -35,7 +35,7 @@ TEST_DATABASE_URL='postgresql+psycopg://tester:password@127.0.0.1:5432/postgres'
 
 ## GitHub 上怎么看
 
-`.github/workflows/checks.yml` 在 push、PR 和手动触发时启动三个独立任务：`BE checks`、`FE checks`、`Agent checks`。后端使用独立 PostgreSQL service container，不需要生产密钥；每项失败可在 Actions 中查看日志。分支保护需要仓库管理员另行配置。
+`.github/workflows/checks.yml` 在 push、PR 和手动触发时并行运行 `Hook policy checks`、`BE checks`、`FE checks`、`Agent checks`，最后由稳定的 `Required checks` 汇总任务确认全部成功。分支保护只需要求 `Required checks` 通过；新增 CI job 时把它加入汇总任务，不用再改 GitHub 规则。后端使用独立 PostgreSQL service container，不需要生产密钥；分支保护仍需仓库管理员另行配置。
 
 ```mermaid
 flowchart LR

@@ -81,3 +81,22 @@ jobs:
           cache-dependency-path: agent/requirements.txt
       - run: python -m pip install -r agent/requirements.txt
       - run: make check-agent AGENT_PYTHON=python
+
+  required:
+    name: Required checks
+    if: ${{ always() }}
+    needs: [hooks, be, fe, agent]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to succeed
+        env:
+          CHECK_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          read -r -a check_results <<< "$CHECK_RESULTS"
+          for result in "${check_results[@]}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required workflow job did not succeed: $result"
+              exit 1
+            fi
+          done
