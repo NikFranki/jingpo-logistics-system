@@ -270,7 +270,7 @@ function GoogleCallback({ paths }: { paths: Paths }) {
     <Feedback {...action} />
     {stage === 'pending' && <Result status="info" title="正在确认登录状态" subTitle="请稍候。" />}
     {stage === 'failed' && <Result status="warning" title="Google 登录未完成" subTitle="你可以返回登录页重试，或使用用户名和密码登录。" />}
-      {stage === 'username' && <><Paragraph type="secondary">为新账号设置用户名，初始角色为普通用户。</Paragraph><Form layout="vertical" onFinish={(values: { username: string }) => void action.run(async () => { const result = await adapter.completeGoogle(values.username); acceptSession(result); navigate(`${paths.base}${result.user.emailVerified ? '/account' : '/verify-email'}`, { replace: true }) })}>
+    {stage === 'username' && <><Paragraph type="secondary">为新账号设置用户名，初始角色为普通用户。</Paragraph><Form layout="vertical" onFinish={(values: { username: string }) => void action.run(async () => { const result = await adapter.completeGoogle(values.username); acceptSession(result); navigate(`${paths.base}${result.user.emailVerified ? '/account' : '/verify-email'}`, { replace: true }) })}>
       <Form.Item label="用户名" name="username" rules={usernameRules}><Input autoComplete="username" autoFocus /></Form.Item><Button type="primary" htmlType="submit" loading={action.busy}>完成注册</Button>
     </Form></>}
     <Paragraph className="jp-auth-footnote"><Link to={`${paths.base}/login`}>返回登录</Link></Paragraph>

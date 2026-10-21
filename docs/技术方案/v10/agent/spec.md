@@ -1,6 +1,6 @@
 # V10 · Agent 查询准确性、完整性与回答依据
 
-> 2026-10-19 · Agent 内部分页与更正记录聚合已实现；受控及隔离 BE 回归通过。修复后的真实模型验收尚未完成，状态与证据见 [plan](plan.md)。V9 部署方案保留在 [V9 spec](../../v9/agent/spec.md)。
+> 2026-10-21 · V10 当前规格范围内的功能与验收已完成：65 项受控测试通过，合成一致性预检通过，两轮 DeepSeek 完整评测及逐题复核通过。结果限于本地固定合成样本；见 [验收记录](evaluation-redesign.md)、[两轮逐题证据](acceptance-v10-synthetic-2.json) 和 [实施计划](plan.md)。V9 部署方案保留在 [V9 spec](../../v9/agent/spec.md)。
 
 ## 1. 要解决什么问题
 

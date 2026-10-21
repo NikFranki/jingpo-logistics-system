@@ -56,7 +56,7 @@ export default function AssistantPanel() {
   const input = useRef<HTMLTextAreaElement>(null)
   const launcher = useRef<HTMLButtonElement>(null)
   const log = useRef<HTMLDivElement>(null)
-  const gesture = useRef<{ mode: GestureMode; x: number; y: number; box: Geometry } | null>(null)
+  const [gesture, setGesture] = useState<{ mode: GestureMode; x: number; y: number; box: Geometry } | null>(null)
 
   useEffect(() => {
     const resize = () => { setCompact(window.innerWidth <= 640); setGeometry(box => constrain(box)) }
@@ -77,11 +77,11 @@ export default function AssistantPanel() {
     if (compact || maximized || event.button !== 0) return
     const box = constrain(geometry)
     setGeometry(box)
-    gesture.current = { mode, x: event.clientX, y: event.clientY, box }
+    setGesture({ mode, x: event.clientX, y: event.clientY, box })
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const moveGesture = (event: PointerEvent<HTMLButtonElement>) => {
-    const current = gesture.current
+    const current = gesture
     if (!current) return
     const dx = event.clientX - current.x
     const dy = event.clientY - current.y
@@ -144,7 +144,7 @@ export default function AssistantPanel() {
     {!open && <Button ref={launcher} className="jp-assistant-launcher" type="primary" icon={<MessageOutlined />} onClick={() => setOpen(true)} aria-label="打开物流查询助手">查询助手{busy && <Spin size="small" />}</Button>}
     {open && <section className={`jp-assistant${!compact && !maximized ? ' jp-assistant-resizable' : ''}`} style={expandedStyle} role="region" aria-label="物流查询助手" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); collapse() } }}>
       <header className="jp-assistant-header">
-        <button type="button" className="jp-assistant-move" aria-label="移动助手窗口，可用方向键调整位置" onPointerDown={event => beginGesture(event, 'move')} onPointerMove={moveGesture} onPointerUp={() => { gesture.current = null }} onPointerCancel={() => { gesture.current = null }} onKeyDown={event => keyboardGeometry(event, 'move')}>
+        <button type="button" className="jp-assistant-move" aria-label="移动助手窗口，可用方向键调整位置" onPointerDown={event => beginGesture(event, 'move')} onPointerMove={moveGesture} onPointerUp={() => setGesture(null)} onPointerCancel={() => setGesture(null)} onKeyDown={event => keyboardGeometry(event, 'move')}>
           {!compact && !maximized && <DragOutlined />}
           <span>物流查询助手</span>
         </button>
@@ -183,7 +183,7 @@ export default function AssistantPanel() {
         }} />
         <div className="jp-assistant-composer-bottom"><span>{draft.length > 3500 ? `${draft.length} / 4000` : 'Enter 发送 · Shift + Enter 换行'}</span>{busy ? <Button icon={<StopOutlined />} onClick={() => controller.current?.abort()}>停止查询</Button> : <Button type="primary" htmlType="submit" icon={<SendOutlined />} disabled={!draft.trim()}>发送</Button>}</div>
       </form>
-      {!compact && !maximized && (['nw', 'ne', 'sw', 'se'] as const).map(corner => <button key={corner} type="button" className={`jp-assistant-resize jp-assistant-resize-${corner}`} aria-label={`从${{ nw: '左上', ne: '右上', sw: '左下', se: '右下' }[corner]}角调整窗口大小，可用方向键调整`} onPointerDown={event => beginGesture(event, corner)} onPointerMove={moveGesture} onPointerUp={() => { gesture.current = null }} onPointerCancel={() => { gesture.current = null }} onKeyDown={event => keyboardGeometry(event, corner)} />)}
+      {!compact && !maximized && (['nw', 'ne', 'sw', 'se'] as const).map(corner => <button key={corner} type="button" className={`jp-assistant-resize jp-assistant-resize-${corner}`} aria-label={`从${{ nw: '左上', ne: '右上', sw: '左下', se: '右下' }[corner]}角调整窗口大小，可用方向键调整`} onPointerDown={event => beginGesture(event, corner)} onPointerMove={moveGesture} onPointerUp={() => setGesture(null)} onPointerCancel={() => setGesture(null)} onKeyDown={event => keyboardGeometry(event, corner)} />)}
     </section>}
   </>
 }

@@ -1,9 +1,9 @@
 # 文档导航
 
-
 本地统一检查和 GitHub CI 见 [检查说明](checks.md)。
 
 Session 交接模板与生成命令见 [handoffs](handoffs/README.md)。
+
 按任务选择下方入口；具体启动、开发和测试优先读取各子项目 README。
 
 | 入口 | 内容 |
@@ -21,7 +21,7 @@ Session 交接模板与生成命令见 [handoffs](handoffs/README.md)。
 
 | 要了解什么 | 文档 |
 | --- | --- |
-| V10 Agent 查询质量优化（分页、聚合和回答规则已实现；真实模型验收待完成） | [准确性、完整性与回答依据规格](技术方案/v10/agent/spec.md)、[实施与验证计划](技术方案/v10/agent/plan.md) |
+| V10 Agent 查询质量优化（当前规格范围已实现并验收；生产数据表现待实际运营观察） | [准确性、完整性与回答依据规格](技术方案/v10/agent/spec.md)、[实施与验证计划](技术方案/v10/agent/plan.md) |
 | V9 Agent Render 部署、Pages SSE 代理和本地兼容 | [部署规格与操作步骤](技术方案/v9/agent/spec.md) |
 | 运输线路统一契约及旧字段弃用策略 | [统一运输线路](技术方案/v7/be/unified-transport-lines.md) |
 | 线路班次、车次生成和运单候选 | [班次与计划车次](技术方案/v7/be/line-services.md) |

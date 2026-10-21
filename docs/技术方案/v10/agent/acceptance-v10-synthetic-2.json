@@ -1,0 +1,3319 @@
+[
+  {
+    "round": "v10-v2-final-1",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "sample_version": "v10-synthetic-2",
+    "scoring_version": "v10-5",
+    "git_commit": "06309e55979549457f029adea7d9c45819230393",
+    "working_tree_code_sha256": "050eb89e54e52687794258a7ddc81ca71511928c1f795ad51c126e9e314727c0",
+    "source_report_sha256": "d6c259fea6401163cd6fb8d740cad8c534ba66e7667c4c65b4b68c02ef0ad379",
+    "rescored_report_sha256": "f3a8c65a228dbf1c1143903c9dff87f8985d0add67a3524df9def6a5a2de232d",
+    "case_count": 29,
+    "reference_coverage": {
+      "expected": 89,
+      "covered": 89
+    },
+    "machine_failures": [],
+    "additional_claims_review": "Codex逐题对照当前合成后端响应、工具调用和样本核对；非用户人工签核",
+    "cases": [
+      {
+        "id": "OBJ-01",
+        "group": "对象联查",
+        "answer": "订单 ORD-0001 对应的运单是 **SHP-0101**，当前阶段是 **运输中（IN_TRANSIT）**。\n\n- 当前执行任务为 301，线路是石家庄站→北京站，任务状态为运输中。\n- 最近扫描站点是石家庄站，但这并不代表实时位置。\n- 运单当前目的站是天津站；运单要到达天津站后，才能进行派送。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0001"
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_id": 101
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-02",
+        "group": "对象联查",
+        "answer": "订单 ORD-0003 目前状态为“已创建”，尚未关联运单，因此暂无物流进度和轨迹。\n\n订单明细：演示包裹 ×1；发货地：河北省石家庄市长安区；收货地：北京市朝阳区。",
+        "references": [
+          [
+            "order",
+            "3"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0003"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-03",
+        "group": "对象联查",
+        "answer": "**运单 SHP-0101**：阶段为 **IN_TRANSIT（运输中）**\n\n- **最后扫描站点**：石家庄站（SJZ）— 这只是最后扫描记录，不代表实时位置\n- **当前运输任务**：TASK-0301（ID 301），线路 SJZ-BJS，石家庄站 → 北京站，任务状态 **IN_TRANSIT**，实际发车 2026-10-18 07:10（UTC）；该运输计划的计划到达时间为 07:30（UTC），实际到达尚未记录\n- **下一段计划**：TASK-0302（BJS-TJS，北京站 → 天津站），关联状态 PLANNED（计划关联）、任务状态 WAITING_PREDECESSOR（前段未就绪），计划 08:00 发车、09:00 到达（UTC）\n- **运单目的站**：天津站（TJS），尚未到达\n- **延误**：当前延误状态未确认（NOT_CONFIRMED），无法给出精确延误分钟数",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-04",
+        "group": "对象联查",
+        "answer": "当前账号可见范围内未找到运单 SHP-0201，请核对完整运单号。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0201"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "empty",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 0
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-01",
+        "group": "关联状态",
+        "answer": "**运单 SHP-0101**：当前阶段为 **IN_TRANSIT（运输中）**，目的地为天津站；最后扫描站点为石家庄站，因此该位置不代表实时所在位置。计划为第 2 版（已确认，变更原因：时间调整），共 2 段。\n\n**第 1 段 石家庄站 → 北京站｜TASK-0301｜关联状态 ACTIVE｜任务状态 IN_TRANSIT**\n- 计划：10-18 07:00Z 发车，07:30Z 到达\n- 预测：07:05Z 发车，07:40Z 到达（预测未过期）\n- 实际：07:10Z 已发车，尚未到达\n- 延误：**OVERDUE，超时 30 分钟**（BE 服务器时间 2026-10-18 08:00Z）\n\n**第 2 段 北京站 → 天津站｜TASK-0302｜关联状态 PLANNED｜任务状态 WAITING_PREDECESSOR（前段未就绪）**\n- 计划：08:00Z 发车，09:00Z 到达\n- 尚无预测或实际时间\n- 延误：NOT_APPLICABLE（当前不适用）\n\n说明：以上时间均为分段计划或预测的到达时间，不等于买家签收时间；延误原因无法从这个接口确认。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-02",
+        "group": "关联状态",
+        "answer": "运单 SHP-0104 的原计划任务 **TASK-0304（线路 BJS-TJS，北京站→天津站）状态为 CANCELLED（已取消）**，该任务在计划中的关联状态为 RELEASED（已解除）。\n\n- 目的站更正：原北京站 → 现天津站（最近更正记录：2026-10-17 07:50 UTC，原因“演示更正 51”；该运单共 25 条更正记录）\n- 当前运输计划版本为 v2，状态为 NEEDS_RECONFIRMATION（需重新确认），原因：目的站更正\n- TASK-0304 未实际发车或到达；延误状态为 NOT_APPLICABLE（不适用）",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "transport_task",
+            "304"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          },
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          },
+          {
+            "name": "get_transport_task",
+            "args": {
+              "task_no": "TASK-0304"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_transport_task",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-03",
+        "group": "关联状态",
+        "answer": "**尚未发车。** 依据 SHP-0101 运输计划（版本 2，CONFIRMED）：\n\n- **第 1 段**：石家庄站 → 北京站（TASK-0301），关联状态 ACTIVE，任务状态为 IN_TRANSIT；实际已发车时间为 **2026-10-18 07:10（UTC）**，实际到达时间为空。\n- **第 2 段（下一段）**：北京站 → 天津站（TASK-0302），关联状态 **PLANNED**，任务状态为 **WAITING_PREDECESSOR（等待前段就绪）**；实际发车时间和实际到达时间均为空，计划发车时间为 08:00（UTC），计划到达时间为 09:00（UTC）。\n\n提示：该计划中的分段到达时间并不是买家签收时间；本次未确认精确延误状态。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          },
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          },
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-04",
+        "group": "关联状态",
+        "answer": "**尚未到达。** 任务 TASK-0301（线路 SJZ-BJS）当前状态为 **IN_TRANSIT（运输中）**，实际到达时间为空；该任务计划发车时间为 2026-10-18 07:00Z，实际发车时间为 07:10Z，预计到达时间为 07:30Z，动态预测到达时间为 07:40Z。以 BE 服务器时间 2026-10-18 08:00Z 计算，该任务已 **OVERDUE（超时）30 分钟**。关联运单 SHP-0101 也处于 IN_TRANSIT。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_transport_task",
+            "args": {
+              "task_no": "TASK-0301"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_transport_task",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-01",
+        "group": "更正历史",
+        "answer": "发生过目的站更正：运单 SHP-0104 共有 **25 条**目的站更正记录（本次仅展示最新 10 条）。\n\n最新一条：北京站(BJS) → 天津站(TJS)，原因“演示更正 51”，记录时间 2026-10-17 07:50:00Z。需要查看全部 25 条可继续查询。",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-02",
+        "group": "更正历史",
+        "answer": "运单 SHP-0101 的目的站共更正 26 次；已核对全部记录。\n\n最近一次：北京时间 2026-10-17 15:25，由北京站(BJS)改为天津站(TJS)，原因记录为“演示更正 26”。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 26,
+              "pages_fetched": 3,
+              "records_fetched": 26,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-03",
+        "group": "更正历史",
+        "answer": "发生过目的站更正的运单共 2 个，合计 51 条更正记录：\n\n- SHP-0101（ID 101）：26 条\n- SHP-0104（ID 104）：25 条\n\n覆盖范围：已按全部页查询完成（共 51 条记录，全量已核验）。这些更正的原因字段均为“演示更正 1–51”，时间为 2026-10-17T07:00:00Z 至 07:50:00Z，涉及目的站 ID 2 与 3 之间的互改。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 2,
+              "records_fetched": 51,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "records_returned": 51,
+              "distinct_shipments_returned": 2,
+              "all_records_complete": true,
+              "by_shipment": [
+                {
+                  "shipment_id": "104",
+                  "shipment_no": "SHP-0104",
+                  "record_count": 25
+                },
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 26
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-04",
+        "group": "更正历史",
+        "answer": "全局目的站更正记录第 2 页（每页 50 条）共有 1 条记录：\n\n- 运单 SHP-0101（ID 101）：从原目的站 3（记录中为站点 ID，未提供名称）更正为目的站 2（记录中为站点 ID，未提供名称），原因“演示更正 1”，记录时间 2026-10-17T07:00:00Z。\n\n总记录数为 51 条；本页返回 1 条，未覆盖全部记录。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "page": 2
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 2,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 1,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": {
+              "records_returned": 1,
+              "distinct_shipments_returned": 1,
+              "all_records_complete": false,
+              "by_shipment": [
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 1
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-01",
+        "group": "分页与限量",
+        "answer": "共有 12 条订单，已全部查完（12/12，覆盖完整）。\n\n| 订单号 | 商品 | 数量 | 订单状态 |\n|---|---|---|---|\n| ORD-0001 | 演示包裹 | 1 | SHIPPED |\n| ORD-0002 | 演示包裹 | 1 | CANCELLED（2026-10-17 08:00Z 取消，原因：演示取消）|\n| ORD-0003 | 演示包裹 | 1 | CREATED |\n| ORD-0004 | 演示包裹 | 1 | SHIPPED |\n| ORD-0005 | 演示包裹 | 1 | SHIPPED |\n| ORD-0006 | 演示包裹 | 1 | SHIPPED |\n| ORD-0007 | 演示包裹 | 1 | SHIPPED |\n| ORD-0008 | 演示包裹 | 1 | SHIPPED |\n| ORD-0009 | 演示包裹 | 1 | SHIPPED |\n| ORD-0010 | 演示包裹 | 1 | SHIPPED |\n| ORD-0011 | 演示包裹 | 1 | SHIPPED |\n| ORD-0012 | 演示包裹 | 1 | SHIPPED |\n\n说明：以上是当前账号可见范围内的订单。订单状态与运单阶段需分别查看，如需某单物流进度可告诉我订单号。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "all_pages": true,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 12,
+              "pages_fetched": 1,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-02",
+        "group": "分页与限量",
+        "answer": "当前账号可见范围内共有 **11 个运单**（已全部列出，all_records_complete=true）：\n\n| 运单号 | 阶段 |\n|---|---|\n| SHP-0101 | 运输中（IN_TRANSIT） |\n| SHP-0102 | 已取消（CANCELLED） |\n| SHP-0104 | 在站点（AT_STATION） |\n| SHP-0105 | 待提货（PENDING_PICKUP） |\n| SHP-0106 | 待提货 |\n| SHP-0107 | 待提货 |\n| SHP-0108 | 待提货 |\n| SHP-0109 | 待提货 |\n| SHP-0110 | 待提货 |\n| SHP-0111 | 待提货 |\n| SHP-0112 | 待提货 |\n\n说明：以上仅限本人可见范围，不代表公司全量数据。需要某个运单的轨迹或延误情况，告诉我运单号即可。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "102"
+          ],
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "shipment",
+            "105"
+          ],
+          [
+            "shipment",
+            "106"
+          ],
+          [
+            "shipment",
+            "107"
+          ],
+          [
+            "shipment",
+            "108"
+          ],
+          [
+            "shipment",
+            "109"
+          ],
+          [
+            "shipment",
+            "110"
+          ],
+          [
+            "shipment",
+            "111"
+          ],
+          [
+            "shipment",
+            "112"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_shipments",
+            "args": {
+              "all_pages": true,
+              "page": 1,
+              "page_size": 100
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_shipments",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 100,
+              "total": 11,
+              "pages_fetched": 1,
+              "records_fetched": 11,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-03",
+        "group": "分页与限量",
+        "answer": "运输中的任务共 **9 个**（状态均为 IN_TRANSIT），已全部返回（第1页，每页10条，all_records_complete=true）：\n\n| 任务号 | 线路 | 实际发车 | 计划到达 | 延误状态 |\n|---|---|---|---|---|\n| TASK-0301 | SJZ-BJS | 2026-10-18 07:10Z | 2026-10-18 07:30Z | OVERDUE，超时30分钟（监测中） |\n| TASK-0305 | SJZ-BJS | 07:10Z | 07:30Z | NONE |\n| TASK-0306 | BJS-TJS | 07:10Z | 07:30Z | NONE |\n| TASK-0307 | SJZ-BJS | 07:10Z | 07:30Z | NONE |\n| TASK-0308 | BJS-TJS | 07:10Z | 07:30Z | NONE |\n| TASK-0309 | SJZ-BJS | 07:10Z | 07:30Z | NONE |\n| TASK-0310 | BJS-TJS | 07:10Z | 07:30Z | NONE |\n| TASK-0311 | SJZ-BJS | 07:10Z | 07:30Z | NONE |\n| TASK-0312 | BJS-TJS | 07:10Z | 07:30Z | NONE |\n\n依据 BE 服务器时间 2026-10-18 08:00Z；动态预测到达时间均为 07:40Z，未过期。各任务均无等待其他运单的情况。",
+        "references": [
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "305"
+          ],
+          [
+            "transport_task",
+            "306"
+          ],
+          [
+            "transport_task",
+            "307"
+          ],
+          [
+            "transport_task",
+            "308"
+          ],
+          [
+            "transport_task",
+            "309"
+          ],
+          [
+            "transport_task",
+            "310"
+          ],
+          [
+            "transport_task",
+            "311"
+          ],
+          [
+            "transport_task",
+            "312"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_transport_tasks",
+            "args": {
+              "status": "IN_TRANSIT",
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_transport_tasks",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 9,
+              "pages_fetched": 1,
+              "records_fetched": 9,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-04",
+        "group": "分页与限量",
+        "answer": "**结论：不能。**第 99 页为空，只表示请求页码超出数据范围，不代表全库没有记录。\n\n依据：\n- 第 99 页（每页 50 条）：0 条记录，返回提示需结合 total 判断。\n- 同条件第 1 页：total=51 条，本页返回 50 条；按每页 50 条共 2 页。涉及 2 个运单：SHP-0104（25 条）、SHP-0101（25 条）。\n\n所以全库确实有 51 条目的站更正记录，只是第 99 页没有内容。如需看最后一条，可查第 2 页。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "page": 99,
+              "page_size": 50
+            }
+          },
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "page": 1,
+              "page_size": 50
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "empty",
+            "pagination": {
+              "page": 99,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 0,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": {
+              "records_returned": 0,
+              "distinct_shipments_returned": 0,
+              "all_records_complete": false,
+              "by_shipment": []
+            },
+            "without_order_ids": [],
+            "warning_count": 1
+          },
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 50,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": {
+              "records_returned": 50,
+              "distinct_shipments_returned": 2,
+              "all_records_complete": false,
+              "by_shipment": [
+                {
+                  "shipment_id": "104",
+                  "shipment_no": "SHP-0104",
+                  "record_count": 25
+                },
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 25
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-01",
+        "group": "业务判断",
+        "answer": "SHP-0101 当前处于运输中（IN_TRANSIT）。**存在延误**，情况如下：\n\n**TASK-0301（石家庄站→北京站，执行任务，状态 IN_TRANSIT）**\n- 延误判断：OVERDUE（已开启延误监测，运输中超时）\n- 延误时长：30 分钟\n- 计划到达 2026-10-18 07:30Z（北京站，北京时间 15:30），实际已 07:10Z 发车，尚未到达\n- 动态预测到达：2026-10-18 07:40Z（未过期）\n\n**TASK-0302（北京站→天津站，计划关联 PLANNED，状态 WAITING_PREDECESSOR，前段未就绪）**\n- 延误判断：NOT_APPLICABLE（不适用），延误分钟数无\n\n**服务器时间：2026-10-18T08:00:00Z（北京时间 16:00）**\n\n说明：该运单当前目的站为天津站；北京站只是中转站，不是当前目的站。以上为区段计划/预测时间，并非买家签收时间。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-02",
+        "group": "业务判断",
+        "answer": "已取消。\n\n- 订单号：ORD-0002，状态：CANCELLED，表示已取消\n- 取消时间：2026-10-17 08:00（UTC）\n- 取消原因：演示取消\n- 关联运单：SHP-0102，状态同样为 CANCELLED，表示已取消",
+        "references": [
+          [
+            "order",
+            "2"
+          ],
+          [
+            "shipment",
+            "102"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0002"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-03",
+        "group": "业务判断",
+        "answer": "SHP-0101 第一段线路为石家庄站 → 北京站，对应任务 TASK-0301，该任务状态为运输中，关联状态为 ACTIVE：\n\n- 计划发车：2026-10-18 07:00（UTC）\n- 预测发车：2026-10-18 07:05（UTC）\n- 实际发车：2026-10-18 07:10（UTC）\n\n该段计划到达为 07:30（UTC），预测到达为 07:40（UTC），目前尚无实际到达时间。以上时间为区段到发时间，不是买家签收时间。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-01",
+        "group": "权限与追问",
+        "answer": "说明：我只能查询当前账号可见范围内的订单，无法给出公司全量订单。\n\n当前账号可见订单共 12 条（已全部列出）：\n\n| 订单号 | 订单状态 | 商品 | 收件地 |\n|---|---|---|---|\n| ORD-0001 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0002 | CANCELLED（2026-10-17T08:00:00Z 取消，原因：演示取消） | 演示包裹 | 北京市朝阳区 |\n| ORD-0003 | CREATED | 演示包裹 | 北京市朝阳区 |\n| ORD-0004 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0005 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0006 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0007 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0008 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0009 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0010 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0011 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n| ORD-0012 | SHIPPED | 演示包裹 | 北京市朝阳区 |\n\n如需某单的物流轨迹，告诉我订单号即可。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "all_pages": true,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 12,
+              "pages_fetched": 1,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-02",
+        "group": "权限与追问",
+        "answer": "抱歉，当前可用工具中没有运输任务详情查询权限（无法调用任务详情接口），因此不能直接查询 TASK-0301 的任务信息。\n\n我能查询的内容如下：\n- 运单阶段、站点、轨迹（需运单号或运单 ID）\n- 运单完整运输计划及计划历史\n- 运单目的站更正历史\n\n如需，请提供运单号，我可以查询其关联的运输安排与任务情况。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [],
+        "tool_results": [],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-03",
+        "group": "权限与追问",
+        "answer": "订单 ORD-1001 对应运单 **SHP-0201**，当前阶段：运输中（IN_TRANSIT）。",
+        "references": [
+          [
+            "order",
+            "21"
+          ],
+          [
+            "shipment",
+            "201"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-1001"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-04",
+        "group": "权限与追问",
+        "answer": "无法确认精确延误状态：运单 **SHP-0101** 仍为 **IN_TRANSIT**，当前执行任务 **TASK-0301** 处于 **IN_TRANSIT**；延误评估为 **NOT_CONFIRMED**，系统仅提供安全计划，延误分钟数未知，不能据此判定“已延误”或“未延误”。\n\n可核对的时间事实：BE 服务器时间 **2026-10-18 08:00Z**；该区段计划到达 **07:30Z**、动态预测到达 **07:40Z**，实际已于 **07:10Z** 发车，尚未有实际到达。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0001",
+              "order_id": null
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_id": 101,
+              "shipment_no": null,
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "INC-01",
+        "group": "分页与限量",
+        "answer": "SHP-0101 当前阶段为**运输中（IN_TRANSIT）**，运单当前目的站是站点 ID 3。\n\n站点查询失败，最后扫描站名称**无法确认**；该站仅确认站点 ID 为 1，不能据此判断实时位置。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "partial",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 4
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-01",
+        "group": "留出验收",
+        "answer": "目的站更正记录共有 **51 条**，涉及 **2 张运单**（同一运单的多次更正已去重）：\n\n- SHP-0101（运单 ID 101）：26 条\n- SHP-0104（运单 ID 104）：25 条\n\n本次结果已完整覆盖全部 51 条记录。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 2,
+              "records_fetched": 51,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "records_returned": 51,
+              "distinct_shipments_returned": 2,
+              "all_records_complete": true,
+              "by_shipment": [
+                {
+                  "shipment_id": "104",
+                  "shipment_no": "SHP-0104",
+                  "record_count": 25
+                },
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 26
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-02",
+        "group": "留出验收",
+        "answer": "SHP-0101 的计划历史共有 **2 个版本**（已查完全部历史记录）：\n\n- **版本 1**（2026-10-18 06:00Z）：原因为“初始计划”；第一段计划发车时间为 06:50Z。\n- **版本 2**（2026-10-18 06:30Z）：原因为“时间调整”；第一段计划发车时间改为 07:00Z。这是当前生效的版本，计划状态为已确认（CONFIRMED）。\n\n系统只记录了上述原因，没有更细的调整说明。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_history": true,
+              "history_all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 2,
+              "pages_fetched": 1,
+              "records_fetched": 2,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-03",
+        "group": "留出验收",
+        "answer": "您当前账号可见的订单共 12 个，其中**尚未创建运单的只有 1 个：ORD-0003**。\n\n依据：\n- 已核实 12 个订单的运单关联，结果完整，没有读取失败或分页遗漏。\n- 有运单 11 个，其中 ORD-0003 的关联运单为空（shipment=null），其余 11 个订单均已关联运单，例如 ORD-0001→SHP-0101、ORD-0002→SHP-0102 等。\n- 未知情况 0 个，因此没有“无法判断”的订单被忽略。\n\n说明：这是当前账号可见范围内的关联核验结果；本结果只判断是否创建了运单，不涉及运输状态。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "include_shipment": true,
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 12,
+              "pages_fetched": 2,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "orders_total": 12,
+              "orders_fetched": 12,
+              "verified": 12,
+              "with_shipment": 11,
+              "without_shipment": 1,
+              "unknown": 0,
+              "unread": 0,
+              "all_records_complete": true,
+              "basis": "已核实详情中的 shipment=null 才计为无运单；未核实不计入。"
+            },
+            "without_order_ids": [
+              "3"
+            ],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-04",
+        "group": "留出验收",
+        "answer": "**结论：SHP-0104 目的站更正后，当前计划仍处于“需重新确认”状态，既没有生效的未来计划段，也没有当前执行段。**\n\n依据：\n- 计划版本为第 2 版，状态为 `NEEDS_RECONFIRMATION`（原因：目的站更正），目的站为天津站（TJS），运单 ID 为 104。\n- 计划共 1 个区段：北京站至天津站（线路 BJS-TJS），关联状态为 **RELEASED（已解除或失效）**，对应任务 TASK-0304 的状态为 **CANCELLED（已取消）**；该区段的计划、预测、实际发车和到达时间均为空，也没有动态预测。\n- 因此目前**没有状态为 PLANNED 的未来计划段，也没有状态为 ACTIVE 的当前执行段**，需要重新确认计划。\n- 目的站更正历史：最近一条记录于 2026-10-17T07:50:00Z 将北京站改为天津站（原因：“演示更正 51”）。该运单共有 25 条更正记录，本次仅显示最近 10 条。\n\n需要注意的是，区段计划时间不等于送达买家的时间；当前也没有可用的预测到达时间。",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "transport_task",
+            "304"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          },
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-05",
+        "group": "留出验收",
+        "answer": "查询结果：编号 SHP-9999 在本人可见范围内未找到对应运单，也没有候选记录。这属于“查无此记录”，并非查询服务失败；本次查询未出现接口错误或超时。请核对完整运单号后再试。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-9999"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "empty",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 0
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      }
+    ]
+  },
+  {
+    "round": "v10-v2-final-2",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "sample_version": "v10-synthetic-2",
+    "scoring_version": "v10-5",
+    "git_commit": "06309e55979549457f029adea7d9c45819230393",
+    "working_tree_code_sha256": "050eb89e54e52687794258a7ddc81ca71511928c1f795ad51c126e9e314727c0",
+    "source_report_sha256": "929fff1ef0d9ea856fba51d2615469f8ae60e2f687ae9eb7db7f129e382d1104",
+    "rescored_report_sha256": "ebd94544d452fc410a898e2867c8075cb1001df82b44f1ecdac93e31572b57f8",
+    "case_count": 29,
+    "reference_coverage": {
+      "expected": 89,
+      "covered": 89
+    },
+    "machine_failures": [],
+    "additional_claims_review": "Codex逐题对照当前合成后端响应、工具调用和样本核对；非用户人工签核",
+    "cases": [
+      {
+        "id": "OBJ-01",
+        "group": "对象联查",
+        "answer": "订单 ORD-0001 对应的运单是 **SHP-0101**，当前阶段为 **IN_TRANSIT（运输中）**。最后一次扫描站点为石家庄站，当前执行线路为石家庄站至北京站；运单目的站为天津站。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0001"
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_id": 101
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-02",
+        "group": "对象联查",
+        "answer": "订单 ORD-0003（演示包裹 ×1）状态为 CREATED，但**尚未创建运单**，因此目前没有物流轨迹或阶段信息。",
+        "references": [
+          [
+            "order",
+            "3"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0003"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-03",
+        "group": "对象联查",
+        "answer": "**运单 SHP-0101：运输中（IN_TRANSIT）**\n\n- **最后扫描站点**：石家庄站（SJZ）——仅为最后扫描记录，不代表实时位置\n- **目的站**：天津站（TJS）；尚未到达，因此还不能派送\n- **当前运输任务**：TASK-0301（任务 ID 301），线路 SJZ-BJS，石家庄站 → 北京站，任务状态 IN_TRANSIT；于 2026-10-18 07:10Z 实际发车，计划到达 07:30Z、预测到达 07:40Z\n\n**后续段**：TASK-0302（线路 BJS-TJS，北京站 → 天津站），状态为等待前段（WAITING_PREDECESSOR），关联系计划（PLANNED），计划到达 09:00Z。\n\n延误状态未确认（NOT_CONFIRMED），无法确认精确延误情况。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "OBJ-04",
+        "group": "对象联查",
+        "answer": "当前账号可见范围内未找到运单 SHP-0201，暂时无法给出物流状态。请核对完整运单号后我再查询。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0201"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "empty",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 0
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-01",
+        "group": "关联状态",
+        "answer": "运单 SHP-0101 当前阶段为 IN_TRANSIT（运输中），目的站为天津站。\n\n运输计划（第 2 版，已确认，变更原因：时间调整）：\n1. 第 1 段 SJZ-BJS 石家庄站→北京站，任务 TASK-0301：状态 IN_TRANSIT，关联状态 ACTIVE（当前执行）。计划发车 2026-10-18 07:00Z、计划到达 07:30Z；实际发车 07:10Z，尚未到达。\n2. 第 2 段 BJS-TJS 北京站→天津站，任务 TASK-0302：状态 WAITING_PREDECESSOR（等待前段），关联状态 PLANNED（尚未开始执行）。计划发车 08:00Z、计划到达 09:00Z，未发车。\n\n执行与延误：\n- TASK-0301 延误状态为 OVERDUE，按 BE 服务器时间 2026-10-18 08:00Z 计算已延误 30 分钟；该任务已开启延误监测。\n- TASK-0302 延误状态为 NOT_APPLICABLE（不适用），尚未发车。\n- 最新扫描仍是 07:10Z 在石家庄站发车；这只是最后扫描记录，不代表实时位置。\n\n以上分段到达时间不等于送达买家的时间；当前接口不提供买家签收 ETA。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-02",
+        "group": "关联状态",
+        "answer": "SHP-0104 的目的站更正记录共 25 条；最近一次记录在 2026-10-17 07:50:00Z，目的站由北京站改为天津站。\n\n当前运输计划（版本 2，因目的站更正而需要重新确认）中，原先关联的运输任务为 TASK-0304：\n\n- 关联状态：RELEASED，表示已解除\n- 任务状态：CANCELLED，表示已取消\n\n因此，原计划任务目前是已取消状态，现有计划仍在等待重新确认，尚未关联新的执行任务。",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "transport_task",
+            "304"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          },
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-03",
+        "group": "关联状态",
+        "answer": "**下一段还没有发车。**\n\n- 当前段（第1段，TASK-0301，石家庄站→北京站）：`ACTIVE`，任务状态为运输中；实际在 2026-10-18 07:10Z 从石家庄站发出，尚未到达北京站。\n- 下一段（第2段，TASK-0302，北京站→天津站）：`PLANNED`（计划关联），任务状态为 **WAITING_PREDECESSOR（等待前段就绪）**；实际发车时间为空，计划发车时间为 2026-10-18 08:00Z，计划到达天津站为 09:00Z。\n\n说明：计划段的前段尚未到达，所以不能视为已发车；该运单的精确延误状态当前未确认（不推算延误分钟数）。运单目的站为天津站，仅到达目的站后才可派送。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "REL-04",
+        "group": "关联状态",
+        "answer": "还没有到达。TASK-0301（线路 SJZ-BJS）当前状态为运输中（IN_TRANSIT），`arrived_at` 为空；该任务已于 2026-10-18 07:10Z 发车，计划到达 07:30Z，动态预测到达 07:40Z。BE 服务器时间 08:00Z 时判定为超时（OVERDUE），延误 30 分钟。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_transport_task",
+            "args": {
+              "task_no": "TASK-0301"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_transport_task",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-01",
+        "group": "更正历史",
+        "answer": "发生过。运单 SHP-0104 共有 25 条目的站更正记录，最新一次在 2026-10-17 07:50 UTC 将目的站由北京站（BJS）改为天津站（TJS），记录原因为“演示更正 51”。记录显示为北京站与天津站之间反复更正。必要时可继续查询其余页码。",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-02",
+        "group": "更正历史",
+        "answer": "运单 SHP-0101 的目的站一共更正了 **26 次**。\n\n最近一次发生在 2026-10-17T07:25:00Z：由北京站（BJS）改为天津站（TJS），原因记录为“演示更正 26”。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          },
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 26,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 26,
+              "pages_fetched": 3,
+              "records_fetched": 26,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-03",
+        "group": "更正历史",
+        "answer": "发生过目的站更正的运单共 **2 个**，涉及更正记录 **51 条**：\n\n| 运单号 | 更正记录数 |\n|---|---|\n| SHP-0101 | 26 条 |\n| SHP-0104 | 25 条 |\n\n覆盖范围：已查询全部更正审计记录，共 51 条，分 1 页返回完整；覆盖范围完整，没有缺失页。\n\n如需查看某一运单的具体更正明细（原目的站、新目的站、原因、记录时间），请告诉我运单号。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "all_pages": true,
+              "page": 1,
+              "page_size": 100
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 100,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 51,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "records_returned": 51,
+              "distinct_shipments_returned": 2,
+              "all_records_complete": true,
+              "by_shipment": [
+                {
+                  "shipment_id": "104",
+                  "shipment_no": "SHP-0104",
+                  "record_count": 25
+                },
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 26
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HIS-04",
+        "group": "更正历史",
+        "answer": "全局目的站更正记录共 51 条，本页（第 2 页、每页 50 条）有 1 条：\n\n- 运单 SHP-0101（ID 101），记录 ID 500：目的站由站点 ID 3 更正为站点 ID 2，原因“演示更正 1”，记录时间 2026-10-17 07:00（UTC）。\n\n说明：当前仅查询了第 2 页，未覆盖全部 51 条记录。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "page": 2,
+              "page_size": 50
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 2,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 1,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": {
+              "records_returned": 1,
+              "distinct_shipments_returned": 1,
+              "all_records_complete": false,
+              "by_shipment": [
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 1
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-01",
+        "group": "分页与限量",
+        "answer": "已查完全部订单，共 12 条：\n\n| 订单号 | 状态 |\n|---|---|\n| ORD-0001 | SHIPPED（已发货） |\n| ORD-0002 | CANCELLED（已取消，取消时间 2026-10-17 08:00Z，原因：演示取消） |\n| ORD-0003 | CREATED（已创建） |\n| ORD-0004 至 ORD-0012 | SHIPPED（已发货） |\n\n分页核对：total 12，已查 12 条，all_records_complete=true。以上均为你本人账号可见范围内的订单。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "all_pages": true,
+              "page": 1,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 12,
+              "pages_fetched": 1,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-02",
+        "group": "分页与限量",
+        "answer": "当前账号可见范围内，运单共 11 个，已全部列出：\n\n- SHP-0101 — 运输中\n- SHP-0102 — 已取消\n- SHP-0104 — 在站点\n- SHP-0105 — 待揽收\n- SHP-0106 — 待揽收\n- SHP-0107 — 待揽收\n- SHP-0108 — 待揽收\n- SHP-0109 — 待揽收\n- SHP-0110 — 待揽收\n- SHP-0111 — 待揽收\n- SHP-0112 — 待揽收\n\n以上仅为当前账号可见范围的全部结果。如需某个运单的轨迹或延误情况，告诉我运单号即可。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "102"
+          ],
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "shipment",
+            "105"
+          ],
+          [
+            "shipment",
+            "106"
+          ],
+          [
+            "shipment",
+            "107"
+          ],
+          [
+            "shipment",
+            "108"
+          ],
+          [
+            "shipment",
+            "109"
+          ],
+          [
+            "shipment",
+            "110"
+          ],
+          [
+            "shipment",
+            "111"
+          ],
+          [
+            "shipment",
+            "112"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_shipments",
+            "args": {
+              "all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_shipments",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 11,
+              "pages_fetched": 2,
+              "records_fetched": 11,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-03",
+        "group": "分页与限量",
+        "answer": "共找到 **9 条运输中（IN_TRANSIT）任务**，已全部返回，覆盖 9/9，无遗漏。BE 服务器时间为 2026-10-18T08:00:00Z。\n\n| 任务编号 | 线路 | 状态 | 计划发车 | 预测到达 | 延误（BE） |\n|---|---|---|---|---|---|\n| TASK-0301 | SJZ-BJS | 运输中 | 07:00Z | 07:40Z | OVERDUE，超时 30 分钟 |\n| TASK-0305 | SJZ-BJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0306 | BJS-TJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0307 | SJZ-BJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0308 | BJS-TJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0309 | SJZ-BJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0310 | BJS-TJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0311 | SJZ-BJS | 运输中 | 07:00Z | 07:40Z | NONE |\n| TASK-0312 | BJS-TJS | 运输中 | 07:00Z | 07:40Z | NONE |\n\n说明：9 条任务均于 07:10Z 实际发车，计划到达 07:30Z，预测到达 07:40Z，均已开启延误监测；仅 TASK-0301 有超时提示，其余暂无延误提示。",
+        "references": [
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "305"
+          ],
+          [
+            "transport_task",
+            "306"
+          ],
+          [
+            "transport_task",
+            "307"
+          ],
+          [
+            "transport_task",
+            "308"
+          ],
+          [
+            "transport_task",
+            "309"
+          ],
+          [
+            "transport_task",
+            "310"
+          ],
+          [
+            "transport_task",
+            "311"
+          ],
+          [
+            "transport_task",
+            "312"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_transport_tasks",
+            "args": {
+              "status": "IN_TRANSIT",
+              "all_pages": true,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_transport_tasks",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 9,
+              "pages_fetched": 1,
+              "records_fetched": 9,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "PAG-04",
+        "group": "分页与限量",
+        "answer": "第 99 页为空，但这**不能**说明全库没有记录。\n\n依据：目的站更正记录共 **51 条**（按每页 50 条共约 2 页），第 99 页超出范围，所以返回 0 条。全库记录并非为空。\n\n需要我按第 1 页查询，或一次性查全部 51 条记录吗？",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "page": 99,
+              "page_size": 50
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "empty",
+            "pagination": {
+              "page": 99,
+              "page_size": 50,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 0,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": {
+              "records_returned": 0,
+              "distinct_shipments_returned": 0,
+              "all_records_complete": false,
+              "by_shipment": []
+            },
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-01",
+        "group": "业务判断",
+        "answer": "**SHP-0101 延误，当前正在执行的运输任务已超时。**\n\n- 运单阶段：IN_TRANSIT（运输中），目的站为天津站；当前所在为最后扫描站石家庄站（非实时位置）\n- 任务 TASK-0301（SJZ-BJS，ACTIVE / IN_TRANSIT）：delay_status=OVERDUE，延误 30 分钟；计划发车 07:00Z、计划到达 07:30Z，实际 07:10Z 发车，尚未到达\n- 任务 TASK-0302（BJS-TJS，PLANNED / WAITING_PREDECESSOR）：delay_status=NOT_APPLICABLE（前段未就绪，延误不适用），并非“没有延误”\n- BE 服务器时间：2026-10-18T08:00:00Z\n\n注：区段到达时间为分段计划/预测时间，不是送达买家的时间。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-02",
+        "group": "业务判断",
+        "answer": "订单 ORD-0002 已取消。\n\n- 取消时间：2026-10-17 08:00:00（UTC）\n- 取消原因：演示取消\n- 关联运单 SHP-0102 状态同为已取消",
+        "references": [
+          [
+            "order",
+            "2"
+          ],
+          [
+            "shipment",
+            "102"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0002"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "BIZ-03",
+        "group": "业务判断",
+        "answer": "运单 SHP-0101 第一段（石家庄站 → 北京站，TASK-0301，状态：运输中，关联状态：ACTIVE）的时间信息如下：\n\n- 计划发车时间：2026-10-18 07:00（UTC）\n- 预测发车时间：2026-10-18 07:05（UTC），预测未过期\n- 实际发车时间：2026-10-18 07:10（UTC）\n\n该段计划到达时间为 07:30（UTC），预测到达时间为 07:40（UTC），实际到达时间尚未记录。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-01",
+        "group": "权限与追问",
+        "answer": "当前账号可见范围内的全部订单共 12 个（不是公司全量）：\n\n| 订单号 | 状态 | 备注 |\n|---|---|---|\n| ORD-0001 | SHIPPED（已发货） | |\n| ORD-0002 | CANCELLED（已取消） | 2026-10-17 08:00:00Z 取消，原因：演示取消 |\n| ORD-0003 | CREATED（已创建） | |\n| ORD-0004 至 ORD-0012 | SHIPPED（已发货） | 共 9 个 |\n\n说明：以上订单均由当前账号创建，订单均从河北石家庄发往北京朝阳，商品为“演示包裹”，每单 1 件。如需查看某单的物流进度，请提供订单号。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "all_pages": true,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 12,
+              "pages_fetched": 1,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-02",
+        "group": "权限与追问",
+        "answer": "当前可用的查询工具中不含运输任务详情接口，因此无法查询任务 TASK-0301 的详细信息，也不支持全局任务查询。\n\n如需要，我可以帮您查询：\n- 运单轨迹、阶段与延误（需运单号或数据库 ID）\n- 运单完整运输计划与计划历史\n- 运单目的站更正历史\n\n请提供对应的运单号或订单号。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [],
+        "tool_results": [],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-03",
+        "group": "权限与追问",
+        "answer": "订单 ORD-1001 对应的运单是 **SHP-0201**，当前处于运输中（IN_TRANSIT）。",
+        "references": [
+          [
+            "order",
+            "21"
+          ],
+          [
+            "shipment",
+            "201"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-1001"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "AUTH-04",
+        "group": "权限与追问",
+        "answer": "**无法确认是否延误。** 订单 ORD-0001 对应运单 SHP-0101，当前阶段为 **IN_TRANSIT**；系统延误评估状态为 **NOT_CONFIRMED**，延误分钟数为空（null），因此不能确认当前是否延误，也不能计算延误分钟数。\n\n已知事实：当前任务 TASK-0301（SJZ-BJS）状态为 **IN_TRANSIT**，实际于 2026-10-18 07:10Z 从石家庄站发车；该区段计划到达 07:30Z、最新预测到达 07:40Z，BE 服务器时间为 08:00Z。后续任务 TASK-0302 为 **PLANNED / WAITING_PREDECESSOR**，前段尚未就绪。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "shipment",
+            "101"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_order",
+            "args": {
+              "order_no": "ORD-0001",
+              "order_id": null
+            }
+          },
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_id": 101,
+              "shipment_no": null,
+              "include_tasks": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_order",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_tracking",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "INC-01",
+        "group": "分页与限量",
+        "answer": "SHP-0101 当前阶段：**IN_TRANSIT（运输中）**。\n\n最后扫描站：站点 ID 为 1，但**站点服务查询失败，站名无法确认**；工具明确提示站点名称未知。\n\n另外，该站名既不是当前实时位置，也不是目的站；该运单当前目的站为 ID 3，其名称同样因站点服务失败无法确认。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-0101"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "partial",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 4
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-01",
+        "group": "留出验收",
+        "answer": "目的站更正共 **51 条记录**，涉及 **2 张运单**（已按运单去重）：\n\n- SHP-0101：26 条\n- SHP-0104：25 条\n\n已核对全部记录（共 1 页，完整）。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "shipment",
+            "104"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "args": {
+              "all_pages": true,
+              "page_size": 100
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "find_shipments_with_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 100,
+              "total": 51,
+              "pages_fetched": 1,
+              "records_fetched": 51,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "records_returned": 51,
+              "distinct_shipments_returned": 2,
+              "all_records_complete": true,
+              "by_shipment": [
+                {
+                  "shipment_id": "104",
+                  "shipment_no": "SHP-0104",
+                  "record_count": 25
+                },
+                {
+                  "shipment_id": "101",
+                  "shipment_no": "SHP-0101",
+                  "record_count": 26
+                }
+              ]
+            },
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-02",
+        "group": "留出验收",
+        "answer": "SHP-0101 计划历史共 2 个版本：\n\n- **v1（初始计划，2026-10-18T06:00:00Z）**：原因“初始计划”。\n- **v2（时间调整，2026-10-18T06:30:00Z）**：原因“时间调整”，首段 SJZ-BJS 计划发车由 06:50 调整为 07:00（UTC），第二段未变。\n\n当前为 v2 版本（CONFIRMED）。",
+        "references": [
+          [
+            "shipment",
+            "101"
+          ],
+          [
+            "transport_task",
+            "301"
+          ],
+          [
+            "transport_task",
+            "302"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0101",
+              "include_history": true,
+              "history_all_pages": true
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 2,
+              "pages_fetched": 1,
+              "records_fetched": 2,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-03",
+        "group": "留出验收",
+        "answer": "结论：在当前账号可见范围内，共 12 个订单，已全部核对；其中 1 个订单尚未创建运单：\n\n- **ORD-0003**（订单 ID 3）：详情中的 shipment=null，即没有关联运单。\n\n其余 11 个订单均已有运单：ORD-0001、0002、0004–0012（SHP-0101、0102、0104–0112）。\n\n依据：订单分页和关联核验均完整（12/12 已核实，无未知、无未读记录），所以清单是完整的；只有详情明确返回 shipment=null 的订单才计为“无运单”。注意，这是关联核验结果，不代表这些订单的运输阶段。",
+        "references": [
+          [
+            "order",
+            "1"
+          ],
+          [
+            "order",
+            "10"
+          ],
+          [
+            "order",
+            "11"
+          ],
+          [
+            "order",
+            "12"
+          ],
+          [
+            "order",
+            "2"
+          ],
+          [
+            "order",
+            "3"
+          ],
+          [
+            "order",
+            "4"
+          ],
+          [
+            "order",
+            "5"
+          ],
+          [
+            "order",
+            "6"
+          ],
+          [
+            "order",
+            "7"
+          ],
+          [
+            "order",
+            "8"
+          ],
+          [
+            "order",
+            "9"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "search_orders",
+            "args": {
+              "include_shipment": true,
+              "all_pages": true,
+              "page_size": 20
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_orders",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 20,
+              "total": 12,
+              "pages_fetched": 1,
+              "records_fetched": 12,
+              "complete": true,
+              "all_records_complete": true
+            },
+            "data_summary": {
+              "orders_total": 12,
+              "orders_fetched": 12,
+              "verified": 12,
+              "with_shipment": 11,
+              "without_shipment": 1,
+              "unknown": 0,
+              "unread": 0,
+              "all_records_complete": true,
+              "basis": "已核实详情中的 shipment=null 才计为无运单；未核实不计入。"
+            },
+            "without_order_ids": [
+              "3"
+            ],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-04",
+        "group": "留出验收",
+        "answer": "SHP-0104 已更正目的站：最近一次在北京时间…按事实：原北京站（BJS）→ 天津站（TJS），原因“演示更正 51”，时间 2026-10-17T07:50:00Z。（记录共 25 条）\n\n更正后计划状态：\n- 计划版本 v2，状态 **NEEDS_RECONFIRMATION（需重新确认）**，原因：目的站更正\n- 唯一区段：北京站 → 天津站（线路 BJS-TJS，任务 TASK-0304）\n  - 关联状态 **RELEASED（已解除/失效）**\n  - 任务状态 **CANCELLED（已取消）**\n- 无 **ACTIVE（当前执行）** 区段，也无 **PLANNED（未来计划）** 区段\n\n也就是说，目前没有正在执行的有效任务段，该段计划已失效，需重新确认后才能形成新的运输安排。",
+        "references": [
+          [
+            "shipment",
+            "104"
+          ],
+          [
+            "transport_task",
+            "304"
+          ]
+        ],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_destination_changes",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          },
+          {
+            "name": "get_shipment_schedule",
+            "args": {
+              "shipment_no": "SHP-0104"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_destination_changes",
+            "status": "ok",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 25,
+              "pages_fetched": 1,
+              "records_fetched": 10,
+              "complete": true,
+              "all_records_complete": false
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          },
+          {
+            "name": "get_shipment_schedule",
+            "status": "ok",
+            "pagination": null,
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 0
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      },
+      {
+        "id": "HOLD-05",
+        "group": "留出验收",
+        "answer": "查询已完成，查询服务本身正常：没有出现超时报错或接口失败。\n\n- 结果：按完整运单号 SHP-9999 未匹配到任何运单（候选 0 条，total=0）。\n- 含义：在您可见范围内未找到该运单，不能据此断定它在系统中不存在或编号输错，建议核对完整编号。\n\n如需确认它是否确属“查无此记录”（即后端明确返回不存在），可提供运单列表中的明确编号或运单数据库 ID，我再精确核对。",
+        "references": [],
+        "assessment": {
+          "runtime_ok": true,
+          "core_answer_ok": true,
+          "evidence_ok": true,
+          "forbidden_claims_ok": true,
+          "additional_claims_review": "reviewed_by_codex_against_synthetic_backend"
+        },
+        "tool_plan": [
+          {
+            "name": "get_shipment_tracking",
+            "args": {
+              "shipment_no": "SHP-9999"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_shipment_tracking",
+            "status": "empty",
+            "pagination": {
+              "page": 1,
+              "page_size": 10,
+              "total": 0
+            },
+            "data_summary": null,
+            "without_order_ids": [],
+            "warning_count": 1
+          }
+        ],
+        "review_scope": "针对预期关键结论、日期/状态、对象归属和工具返回逐题核对；不作为通用模型准确率证明。"
+      }
+    ]
+  }
+]

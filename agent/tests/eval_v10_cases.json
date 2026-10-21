@@ -1,5 +1,5 @@
 {
-  "version": "v10-synthetic-1",
+  "version": "v10-synthetic-2",
   "description": "固定合成物流样本；不包含开发库或生产业务数据。前 24 题用于定位，后 5 题留作验收题。",
   "cases": [
     {
@@ -454,9 +454,18 @@
         ]
       ],
       "must": [
-        "2026-10-17 08:00"
+        "演示取消"
       ],
-      "critical": true
+      "critical": true,
+      "expected_timestamps": [
+        "2026-10-17T08:00:00Z"
+      ],
+      "must_status": [
+        {
+          "subject": "ORD-0002",
+          "status": "CANCELLED"
+        }
+      ]
     },
     {
       "id": "BIZ-03",
@@ -732,7 +741,18 @@
       "forbid": [
         "订单列表没有运单"
       ],
-      "critical": true
+      "critical": true,
+      "presence_facts": {
+        "orders_total": 12,
+        "verified": 12,
+        "with_shipment": 11,
+        "without_shipment": 1,
+        "unknown": 0,
+        "all_records_complete": true,
+        "without_order_ids": [
+          "3"
+        ]
+      }
     },
     {
       "id": "HOLD-04",
@@ -760,10 +780,9 @@
       "identity": "company",
       "question": "查询一个不存在的运单 SHP-9999。请区分查无此记录和查询服务失败。",
       "refs": [],
-      "must": [
-        "查无此记录"
-      ],
-      "critical": true
+      "critical": true,
+      "semantic_check": "not_found_not_failure"
     }
-  ]
+  ],
+  "scoring_version": "v10-3"
 }

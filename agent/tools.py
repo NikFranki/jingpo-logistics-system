@@ -176,7 +176,8 @@ async def _collect_pages(fetch_page, result: dict, page: int, page_size: int, al
         "page": first_page, "page_size": page_size, "total": source_total,
         "pages_fetched": pages_fetched, "records_fetched": len(collected),
         "complete": complete,
-        "all_records_complete": complete or (not all_pages and first_page == 1 and len(collected) >= (source_total or 0)),
+        "all_records_complete": (complete and first_page == 1 and source_total is not None
+                                 and len(collected) >= source_total),
     }
     if all_pages and not complete and source_total is not None:
         result["status"] = "partial"
@@ -251,6 +252,37 @@ def _order_summary(item: dict) -> dict:
     return summary
 
 
+def _shipment_presence_result(items, verified_ids, pagination):
+    """Project verified relationship facts; missing/failed reads stay UNKNOWN."""
+    rows = []
+    counts = {"PRESENT": 0, "ABSENT": 0, "UNKNOWN": 0}
+    for item in items:
+        known = str(item["id"]) in verified_ids
+        shipment = item.get("shipment") if known else None
+        presence = ("PRESENT" if shipment is not None else "ABSENT") if known else "UNKNOWN"
+        counts[presence] += 1
+        row = {"id": item["id"], "order_no": item["order_no"], "shipment_presence": presence}
+        if presence == "PRESENT":
+            row["shipment"] = {key: shipment[key] for key in ("id", "shipment_no")}
+        elif presence == "ABSENT":
+            row["shipment"] = None
+        rows.append(row)
+    total = pagination["total"]
+    return {
+        "items": rows,
+        "without_shipment": [row for row in rows if row["shipment_presence"] == "ABSENT"],
+        "summary": {
+            "orders_total": total, "orders_fetched": len(rows),
+            "verified": counts["PRESENT"] + counts["ABSENT"],
+            "with_shipment": counts["PRESENT"], "without_shipment": counts["ABSENT"],
+            "unknown": counts["UNKNOWN"],
+            "unread": max(0, total - len(rows)) if total is not None else None,
+            "all_records_complete": pagination["all_records_complete"] and counts["UNKNOWN"] == 0,
+            "basis": "已核实详情中的 shipment=null 才计为无运单；未核实不计入。",
+        },
+    }
+
+
 def create_order_search_tool(base_url: str):
     @tool(args_schema=OrderSearchInput)
     async def search_orders(
@@ -270,6 +302,7 @@ def create_order_search_tool(base_url: str):
                 lambda requested_page: list_orders(base_url, context, order_no, shipment_no, stage, requested_page, page_size),
                 result, page, page_size, all_pages,
             )
+            verified_ids = set()
             if include_shipment:
                 associations_complete = True
                 associations_verified = 0
@@ -287,6 +320,7 @@ def create_order_search_tool(base_url: str):
                         break
                     _record_request(result, detail)
                     item["shipment"] = detail["data"].get("shipment")
+                    verified_ids.add(str(item["id"]))
                     associations_verified += 1
                 result["meta"]["order_shipment_associations"] = {
                     "requested": len(items),
@@ -300,7 +334,8 @@ def create_order_search_tool(base_url: str):
             result["meta"]["stop_reason"] = exc.code
             result["warnings"].append("本轮预算已耗尽，订单列表查询未完成。")
             return result
-        result["data"] = {"items": [_order_summary(item) for item in items]}
+        result["data"] = (_shipment_presence_result(items, verified_ids, pagination) if include_shipment
+                          else {"items": [_order_summary(item) for item in items]})
         if not items:
             result["status"] = "empty"
             result["warnings"].append("当前查询无结果；请结合 total 和页码判断。")

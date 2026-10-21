@@ -3,6 +3,7 @@
 Answers are saved under /tmp for manual scoring; no real business records are used.
 """
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -18,6 +19,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval_scoring import score_answer, failed, assessment, SCORING_VERSION
 from config import load_settings
 from graph import build_graph
 from identity import Identity
@@ -92,6 +94,37 @@ def fixture_data():
         shipment_id = "101" if index < 26 else "104"
         changes.append({"id":str(500 + index),"shipment_id":shipment_id,"shipment_no":f"SHP-{shipment_id.zfill(4)}","previous_destination_station_id":"2","destination_station_id":"3","reason":f"演示更正 {index + 1}","occurred_at":f"2026-10-{17 if index < 26 else 16}T07:{index % 60:02d}:00Z"})
     history = [{"version":1,"reason":"初始计划","occurred_at":TS+"06:00:00Z","legs":schedule_legs("PLANNED")},{"version":2,"reason":"时间调整","occurred_at":TS+"06:30:00Z","legs":schedule_legs("ACTIVE")}]
+    # Build all views from one canonical object set, never duplicate state literals.
+    by_shipment = {item["id"]: item for item in shipments}
+    by_shipment["101"]["destination_station_id"] = "3"
+    by_shipment["101"]["schedule"]["destination_station_id"] = "3"
+    for order in orders:
+        if order["shipment"]:
+            shipment = by_shipment[order["shipment"]["id"]]
+            order["shipment"] = {key: shipment[key] for key in ("id", "shipment_no", "stage")}
+    for task in tasks:
+        middle = task["route_code"] == "BJS-TJS"
+        task["origin_station_id"] = "2" if middle else "1"
+        task["destination_station_id"] = "3" if middle else "2"
+        task["shipments"] = [deepcopy(orders[0]["shipment"])] if task["id"] in ("301", "302") else []
+        if task["id"] == "301":
+            task["delay_minutes"] = 30
+    history[1]["legs"] = deepcopy(by_shipment["101"]["schedule"]["legs"])
+    history[0]["legs"] = deepcopy(history[1]["legs"])
+    history[0]["legs"][0]["planned_departure_at"] = TS + "06:50:00Z"
+    for entry in history:
+        for leg in entry["legs"]:
+            leg["actual_departure_at"] = None
+            leg["actual_arrival_at"] = None
+            leg["association_state"] = "PLANNED"
+            leg["task_status"] = "WAITING_PREDECESSOR"
+    for index, change in enumerate(changes):
+        local = index if index < 26 else index - 26
+        start = "3" if change["shipment_id"] == "101" else "2"
+        previous = start if local % 2 == 0 else ("3" if start == "2" else "2")
+        change["previous_destination_station_id"] = previous
+        change["destination_station_id"] = "3" if previous == "2" else "2"
+        change["occurred_at"] = f"2026-10-17T07:{index:02d}:00Z"
     return orders, shipments, tasks, changes, history
 
 
@@ -159,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(pieces) == 4 and pieces[3] == "schedule-history":
                 return self.page(HISTORY if shipment_id == "101" else [], query)
             if len(pieces) == 4 and pieces[3] == "destination-changes":
-                values = [change for change in CHANGES if change["shipment_id"] == shipment_id]
+                values = [change for change in reversed(CHANGES) if change["shipment_id"] == shipment_id]
                 return self.page(values, query)
         if path == "/transport-tasks":
             if own: return self.respond(403, {})
@@ -206,19 +239,17 @@ async def run_case(model, base_url, case):
     refs = sorted([[item["type"],item["id"]] for item in context.references.values()])
     expected = sorted(case.get("refs", []))
     missing = [ref for ref in expected if ref not in refs]
-    required = [text for text in case.get("must", []) if text.lower() not in answer.lower()]
-    required_any = [terms for terms in case.get("must_any", []) if not any(term.lower() in answer.lower() for term in terms)]
-    required_patterns = [pattern for pattern in case.get("answer_fact_patterns", []) if not re.search(pattern, answer, re.I | re.S)]
-    forbidden = [text for text in case.get("forbid", []) if text.lower() in answer.lower()]
     calls, usages, tool_summaries = [], [], []
+    tool_names = {}
     for message in result["messages"]:
         if isinstance(message, AIMessage):
             calls.extend({"name":call["name"],"args":call.get("args",{})} for call in message.tool_calls)
+            tool_names.update({call["id"]: call["name"] for call in message.tool_calls})
             if message.usage_metadata: usages.append(message.usage_metadata)
         elif isinstance(message, ToolMessage):
             try:
                 value = json.loads(message.content)
-                tool_summaries.append({"name":message.name,"status":value.get("status"),"pagination":value.get("meta",{}).get("pagination"),"data_summary":value.get("data",{}).get("summary"),"warning_count":len(value.get("warnings",[]))})
+                tool_summaries.append({"name":tool_names.get(message.tool_call_id, message.name),"status":value.get("status"),"pagination":value.get("meta",{}).get("pagination"),"data_summary":(value.get("data") or {}).get("summary"),"without_order_ids":[item["id"] for item in (value.get("data") or {}).get("without_shipment", [])],"warning_count":len(value.get("warnings",[]))})
             except (ValueError, TypeError):
                 tool_summaries.append({"name":message.name,"status":"unparseable"})
     missing_tool_facts = []
@@ -235,18 +266,52 @@ async def run_case(model, base_url, case):
             missing_tool_facts.append("aggregate_by_shipment")
         if not summary.get("all_records_complete"):
             missing_tool_facts.append("all_records_complete")
+    if case.get("presence_facts"):
+        candidates = [item for item in tool_summaries if item["name"] == "search_orders"]
+        actual = candidates[-1] if candidates else {}
+        summary = actual.get("data_summary") or {}
+        for key, expected_value in case["presence_facts"].items():
+            value = actual.get(key) if key == "without_order_ids" else summary.get(key)
+            if value != expected_value:
+                missing_tool_facts.append("presence:" + key)
     with REQUEST_LOCK:
         requests = list(REQUESTS)
     return {"id":case["id"],"group":case["group"],"question":case["question"],"answer":answer,
             "expected_references":expected,"references":refs,"missing_references":missing,
-            "missing_terms":required,"missing_any_term_groups":required_any,"missing_answer_fact_patterns":required_patterns,"forbidden_terms_found":forbidden,"critical":case.get("critical",False),
+            "critical":case.get("critical",False),
             "expected_tool_facts":expected_tool_facts,"missing_tool_facts":missing_tool_facts,
             "stop_reason":result.get("stop_reason"),"model_calls":result.get("model_calls"),"tool_calls":len(calls),
             "http_calls":context.http_calls,"tool_plan":calls,"tool_results":tool_summaries,"backend_requests":requests,
-            "usage_metadata":usages,"manual_review":"pending"}
+            "usage_metadata":usages,"manual_review":"pending", **score_answer(case, answer)}
+
+
+def validate_fixture(orders, shipments, tasks, changes, history):
+    by_shipment = {item["id"]: item for item in shipments}
+    by_task = {item["id"]: item for item in tasks}
+    for order in orders:
+        if order["shipment"]:
+            linked = order["shipment"]
+            assert all(linked[key] == by_shipment[linked["id"]][key] for key in ("id", "shipment_no", "stage")), "order/shipment mismatch"
+    for shipment in shipments:
+        schedule = shipment.get("schedule")
+        if schedule and schedule["status"] == "CONFIRMED":
+            assert schedule["legs"][-1]["destination_station_id"] == shipment["destination_station_id"], "plan destination mismatch"
+        for leg in (schedule or {}).get("legs", []):
+            task = by_task[leg["task_id"]]
+            assert all(task[key] == leg[key] for key in ("route_code", "origin_station_id", "destination_station_id")), "task route mismatch"
+            assert task["status"] == leg["task_status"], "task status mismatch"
+    for shipment in shipments:
+        logs = [item for item in changes if item["shipment_id"] == shipment["id"]]
+        for before, after in zip(logs, logs[1:]):
+            assert before["destination_station_id"] == after["previous_destination_station_id"], "change chain mismatch"
+        if logs:
+            assert logs[-1]["destination_station_id"] == shipment["destination_station_id"], "latest destination mismatch"
+    current = by_shipment["101"]["schedule"]
+    assert {leg["task_id"] for leg in history[-1]["legs"]} == {leg["task_id"] for leg in current["legs"]}, "current/history topology mismatch"
 
 
 def serve_fixture():
+    validate_fixture(ORDERS, SHIPMENTS, TASKS, CHANGES, HISTORY)
     server = ThreadingHTTPServer(("127.0.0.1",0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -274,7 +339,8 @@ async def preflight_fixture(base_url):
     summary = _destination_change_summary(CHANGES, True)
     assert summary["records_returned"] == 51 and summary["distinct_shipments_returned"] == 2
     assert {item["shipment_id"]:item["record_count"] for item in summary["by_shipment"]} == {"101":26,"104":25}
-    assert len((await list_shipment_destination_changes(base_url, 101, ctx, page_size=50))["data"]["items"]) == 26
+    changes = (await list_shipment_destination_changes(base_url, 101, ctx, page_size=50))["data"]["items"]
+    assert len(changes) == 26 and changes[0]["id"] == "525"
     assert len((await list_transport_tasks(base_url, ctx, status="IN_TRANSIT", page_size=20))["data"]["items"]) == 9
     assert (await get_transport_task(base_url, 301, ctx))["data"]["delay_status"] == "OVERDUE"
     user_ctx = TurnContext(identity=user, identity_client=FakeIdentityGuard())
@@ -310,7 +376,9 @@ async def main_async(round_name, cases):
             try:
                 outputs.append(await run_case(model, base, case))
             except Exception as exc:
-                outputs.append({"id":case["id"],"group":case["group"],"question":case["question"],"error_type":type(exc).__name__,"manual_review":"failed"})
+                outputs.append({"id":case["id"],"group":case["group"],"question":case["question"],"expected_references":case.get("refs", []),"missing_references":case.get("refs", []),"error_type":type(exc).__name__,"manual_review":"failed"})
+        for item in outputs:
+            item["assessment"] = assessment(item)
         total_refs = sum(len(item.get("expected_references",[])) for item in outputs)
         covered_refs = total_refs - sum(len(item.get("missing_references",[])) for item in outputs)
         tracked = sorted([*ROOT.glob("*.py"), *ROOT.glob("tests/*.py"), ROOT / "tests/eval_v10_cases.json"])
@@ -318,11 +386,11 @@ async def main_async(round_name, cases):
         for source in tracked:
             digest.update(source.relative_to(ROOT).as_posix().encode())
             digest.update(source.read_bytes())
-        output = {"round":round_name,"sample_version":CASES["version"],"git_commit":__import__("subprocess").check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),"working_tree_code_sha256":digest.hexdigest(),"provider":settings.provider,"model":settings.model,"started_at":datetime.now(timezone.utc).isoformat(),"case_count":len(cases),"reference_coverage":{"covered":covered_refs,"expected":total_refs},"cases":outputs}
+        output = {"round":round_name,"sample_version":CASES["version"],"scoring_version":SCORING_VERSION,"git_commit":__import__("subprocess").check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),"working_tree_code_sha256":digest.hexdigest(),"provider":settings.provider,"model":settings.model,"started_at":datetime.now(timezone.utc).isoformat(),"case_count":len(cases),"scope":{"included":len(cases),"excluded":[]},"reference_coverage":{"covered":covered_refs,"expected":total_refs},"cases":outputs}
         path = Path("/tmp") / "jingpo-agent-v10" / f"{round_name}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(output,ensure_ascii=False,indent=2))
-        failures = sum(bool(item.get("error_type") or item.get("missing_references") or item.get("missing_terms") or item.get("missing_any_term_groups") or item.get("missing_answer_fact_patterns") or item.get("missing_tool_facts") or item.get("forbidden_terms_found") or item.get("stop_reason")) for item in outputs)
+        failures = sum(failed(item) for item in outputs)
         print(json.dumps({"report":str(path),"cases":len(outputs),"failed_machine_checks":failures,"infra_or_stop_cases":[item["id"] for item in outputs if item.get("stop_reason") or item.get("error_type")],"reference_coverage":output["reference_coverage"],"manual_review":"pending"},ensure_ascii=False))
     finally:
         server.shutdown()
@@ -331,13 +399,35 @@ async def main_async(round_name, cases):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--round", required=True, help="Unique label, for example baseline-1")
+    parser.add_argument("--round", help="Unique label, for example baseline-1")
     parser.add_argument("--holdout-only", action="store_true")
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--case-id", help="只运行指定题目，用于补跑基础设施错误")
+    parser.add_argument("--rescore", type=Path, help="离线重评已有报告，不调用模型")
     args = parser.parse_args()
     import asyncio
-    if args.preflight:
+    if args.rescore:
+        report = json.loads(args.rescore.read_text())
+        if report.get("sample_version") != CASES["version"]:
+            parser.error("样本版本不同，不能把旧数据报告算作当前样本验收")
+        definitions = {case['id']: case for case in CASES['cases']}
+        for item in report['cases']:
+            case = definitions[item['id']]
+            item.update(score_answer(case, item.get('answer', '')))
+            item['assessment'] = assessment(item)
+            item['expected_references'] = case.get('refs', [])
+            item['missing_references'] = [ref for ref in case.get('refs', []) if ref not in item.get('references', [])]
+        report['rescored_from'] = str(args.rescore)
+        report['source_sha256'] = hashlib.sha256(args.rescore.read_bytes()).hexdigest()
+        report['reference_coverage'] = {"expected": sum(len(x["expected_references"]) for x in report["cases"]), "covered": sum(len(x["expected_references"]) - len(x["missing_references"]) for x in report["cases"])}
+        report['scoring_version'] = SCORING_VERSION
+        report['rescored_at'] = datetime.now(timezone.utc).isoformat()
+        report['failed_machine_checks'] = [item['id'] for item in report['cases'] if failed(item)]
+        report['manual_review'] = 'pending'
+        path = args.rescore.with_name(args.rescore.stem + '.rescored.json')
+        path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+        print(json.dumps({'report': str(path), 'failed': report['failed_machine_checks']}, ensure_ascii=False))
+    elif args.preflight:
         server, base = serve_fixture()
         try:
             asyncio.run(preflight_fixture(base))
@@ -345,6 +435,8 @@ if __name__ == "__main__":
             server.shutdown()
             server.server_close()
     else:
+        if not args.round:
+            parser.error("--round is required for model evaluation")
         selected = CASES["cases"][-5:] if args.holdout_only else CASES["cases"]
         if args.case_id:
             selected = [case for case in selected if case["id"] == args.case_id]
