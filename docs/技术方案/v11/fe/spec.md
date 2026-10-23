@@ -1,6 +1,6 @@
 # V11 · FE Agent 写入交互规格
 
-> 2026-10-21 · 根据 [V11 Agent PRD](../../../prd/v11/JINGPO-agent-v11.md)、[Agent spec](../agent/spec.md) 和 [BE spec](../be/spec.md) 编写，待三端 review。本文描述目标交互，不代表前端已实现。
+> 2026-10-21 · 根据 [V11 Agent PRD](../../../prd/v11/JINGPO-agent-v11.md)、[Agent spec](../agent/spec.md) 和 [BE spec](../be/spec.md) 编写。订单确认/取消已用隔离用户、真实 FE/Agent/BE 页面链路验证；读屏和触屏手工验收仍待完成。
 
 ## 1. 用户会看到什么
 
@@ -43,7 +43,7 @@ flowchart TD
 | `FAILED` | 展示 BE 错误分类 | 刷新对象并重新预览 |
 | `UNKNOWN` | 正在核对，保留 proposal ID | 查询同一 proposal 状态，不能新建幂等键盲目重试 |
 
-页面刷新后不恢复可点击的旧确认。通过 BE 的 proposal 状态 API 恢复其最终状态；如果状态仍待执行，按过期/确认策略重新校验，不直接复用页面内缓存。
+页面刷新后不恢复可点击的旧确认。FE 仅在当前登录 tab 的 `sessionStorage` 保存 Agent session ID 与 proposal/candidate correlation，不保存候选 payload、地址或字段值；重载后读取 BE 状态并由 Agent 再核验终态。Agent 服务重启或会话失效时保持 UNKNOWN，不依据 FE 缓存显示成功。
 
 ## 4. FE → BE 与 FE → Agent 契约
 
@@ -61,15 +61,16 @@ FE 不把 Cookie/CSRF 给 Agent，不把 Agent proposal 直接转换为任意 en
 
 ### 4.2 Agent API
 
-- 当前 `/sessions/{id}/messages` SSE 新增解析 `action_proposed`。响应只包含固定 `action_type`、candidate ID、subject type/ID 和 schema 化候选 payload。
+- 当前 `/sessions/{id}/messages` SSE 新增解析 `action_proposed`。响应包含固定 `action_type`、candidate/session/message ID、subject type/ID 和严格校验候选 payload；不含 BE 权威 preview 内容。
 - FE 对未知 action type、字段不匹配、ID 非正整数、超长字段或额外字段拒绝解析，不显示确认按钮。
 - BE 写入完成/取消后，FE 调用 `/agent/api/v1/sessions/{session_id}/actions/{candidate_id}/sync`，只提交 BE `proposal_id`；不传成功文字或客户端自制业务状态。
-- Agent API 校验 session owner/candidate 关联，并用自己的只读凭据 GET BE proposal 状态；返回可信结果供 FE 更新助手时间线。接口路径与响应字段由三端 review 冻结。
+- Agent API 校验 session owner/candidate 关联，并用自己的只读凭据 GET BE proposal 状态；返回可信结果供 FE 更新助手时间线。
 
 ### 4.3 CSRF、身份和请求生命周期
 
 - 沿用 `authRequest`/`identityFetch` 的 Cookie 和 CSRF 行为；请求身份始终是当前已登录用户。账号切换/登出时取消未完成 preview、清除助手本地待审批状态并废弃旧 session。
-- proposal 未获得 BE 预览前不渲染按钮；BE `execution_policy` 是唯一确认/自动执行策略来源，FE 不能从本地状态推断。
+- proposal 未获得 BE 预览前不渲染按钮。自动执行还必须同时满足 BE preview 返回 `AUTO_ALLOWED`、action type 位于 BE `eligible_action_types`、当前用户在 BE `enabled_action_types` 中开启该 action；缺少策略、读取失败或条件不一致时一律要求逐次确认。
+- 自动提交被拒且状态仍为 `PREVIEWED` 时，恢复为人工确认卡片；结果不确定时只核对同一 proposal，不重复发送写请求。
 - 新 proposal 的所有网络请求使用 AbortController。取消确认不代表取消已发送的写请求；进入 `EXECUTING` 后需查询 BE 最终状态。
 - 按后端幂等约定重复点击同 proposal 只返回同一结果，不生成新的 Idempotency-Key。
 
@@ -93,7 +94,7 @@ FE 不把 Cookie/CSRF 给 Agent，不把 Agent proposal 直接转换为任意 en
 
 1. 类型和 API schema 测试覆盖有效/无效 action event、BE preview/execute/policy 错误。
 2. 组件测试覆盖待确认、取消、过期、stale、执行中、成功、失败和未知结果；确认前断言未调用 execute。
-3. 自动模式只在 BE 返回 `AUTO_ALLOWED` 时调用；本地伪造设置或 action event 不能触发执行。
+3. 自动模式只在 BE 返回 `AUTO_ALLOWED`、action eligible 且当前用户已开启时调用；本地伪造设置或 action event 不能触发执行。
 4. 浏览器走查网页 Cookie+CSRF、账号切换、刷新恢复、窄屏、键盘及读屏状态。
 5. 与隔离 BE/Agent 联调，确认日志与结果引用按用户可见范围显示。CI 使用模拟服务，不调用真实模型或开发数据库。
 

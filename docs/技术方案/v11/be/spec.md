@@ -1,6 +1,6 @@
 # V11 · BE 受控 Agent 业务写入规格
 
-> 2026-10-21 · 根据 [V11 Agent PRD](../../../prd/v11/JINGPO-agent-v11.md) 与 [Agent 技术规格](../agent/spec.md) 编写，待 BE/FE/Agent 联合 review。本文是目标契约，不代表接口或迁移已经实现。
+> 2026-10-21 · 根据 [V11 Agent PRD](../../../prd/v11/JINGPO-agent-v11.md) 与 [Agent 技术规格](../agent/spec.md) 编写。网页 Cookie+CSRF 写入口、CLI 只读、自动白名单为空已实现；隔离 BE/Agent HTTP 验收通过，浏览器页面验收见 [FE plan](../fe/plan.md)。
 
 ## 1. 用户会看到什么
 
@@ -102,8 +102,8 @@ sequenceDiagram
 
 | action type | 固定 schema | BE 当前基础 | V11 补齐要求 |
 | --- | --- | --- | --- |
-| `order.update` | Pydantic discriminated variant；仅允许现有 `OrderUpdateRequest` 字段 | `PATCH /orders/{id}` 已有角色/归属校验、状态限制和 `Idempotency-Key` | proposal 保存 `updated_at`；执行时锁定订单并拒绝版本变化；复用 `update_order_service` |
-| `shipment.destination.update` | `expected_destination_station_id`、`destination_station_id`、`reason` | 已有 `PATCH /shipments/{id}/destination`、旧站前提、幂等和更正历史 | proposal 与现有服务一起检查旧站、运单状态及新站；影响解释不声称自动改写运输任务 |
+| `order.update` | 严格 Pydantic schema；仅允许现有 `OrderUpdateRequest` 字段 | `PATCH /orders/{id}` 有角色/归属校验、状态限制和 `Idempotency-Key` | proposal 保存 `updated_at`；preview 和 execute 都检查普通用户本人所有权；执行锁订单并拒绝版本变化；复用 `update_order` |
+| `shipment.destination.update` | `expected_destination_station_id`、`destination_station_id`、`reason` | 已有 `PATCH /shipments/{id}/destination`、旧站前提、幂等和更正历史 | proposal 与现有 service 检查旧站、运单状态及新站；预览同时显示更正原因，不声称自动改写运输任务 |
 
 当前已有端点继续供传统页面使用。Agent 写入统一从 Agent Action Gateway 进入以保存 preview/approval/auto/audit 状态；Gateway 只 dispatch 到明确登记的领域 service，不允许客户端选择任意 path。后续 action type 需新增相应 schema、权限测试、业务预览和迁移评估。
 
@@ -113,20 +113,16 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> PREVIEWED
     PREVIEWED --> REJECTED: 用户取消
-    PREVIEWED --> EXPIRED: 超时/登出/撤销
-    PREVIEWED --> EXECUTING: approved / auto policy valid
-    EXECUTING --> SUCCEEDED: 领域 service 提交
-    EXECUTING --> FAILED: 确定失败
-    EXECUTING --> UNKNOWN: 执行结果暂不可确认
-    UNKNOWN --> SUCCEEDED: 同 proposal 幂等查询命中
-    UNKNOWN --> FAILED: 确认未执行
+    PREVIEWED --> EXPIRED: 提案到期
+    PREVIEWED --> SUCCEEDED: 领域 service 与审计同事务提交
+    PREVIEWED --> FAILED: 确定业务/版本失败
 ```
 
-建议新增 `agent_action_proposals`：proposal UUID、actor user/login session、candidate/session/message correlation、action type、subject type/id、规范 payload 与 hash、数据版本、前后值及影响快照、执行策略版本、状态、审批方式、过期/执行时间、BE request correlation。状态更新和业务服务写入必须处于同一数据库事务；不会因 proposal 表删除业务记录。
+BE 的持久状态为 `PREVIEWED/SUCCEEDED/REJECTED/EXPIRED/FAILED`；网络结果未知是 FE/Agent 的临时对话状态，FE 应查询同一 proposal，不在 BE 另写一个 UNKNOWN 状态。迁移 `a11c0de20210` 新增 `agent_action_proposals`，保存 proposal UUID、actor user/login session、candidate/session/message correlation、action type、subject type/id、规范 payload 与 hash、数据版本、前后值及影响快照、策略版本、审批方式、状态、过期/执行时间和 request correlation。状态更新和业务服务写入处于同一数据库事务；失败时先回滚业务写入，再把 proposal 标为 FAILED。
 
-建议新增 `auth_agent_write_policies`（user_id + action_type 唯一）：enabled、updated_at、updated_by。用户策略默认关闭；eligible actions 由代码端 allowlist 控制。将策略版本与 proposal 一起保存，执行时重新读取当前值。
+同一迁移新增 `auth_agent_write_policies`，每个用户一行，存储 `enabled_action_types` JSON 数组、版本和更新时间。当前代码白名单为空，不能启用任何自动动作；proposal 记录策略版本，execute 时重新检查。策略审计写入 `auth_audit`。
 
-proposal 是短时的执行准备数据，定期清理已终结且过期的 payload；不可在普通日志输出完整 payload。审计记录保留最小必要字段，按现有操作审计访问控制。保留期限由部署/隐私约定在实现前确认。
+proposal 是短时的执行准备数据，执行或拒绝后保留最小结果；超过 5 分钟后最多由 60 秒后台清理任务及请求路径清除 payload 和前后值，不可在普通日志输出完整 payload。审计记录保留最小必要字段，按现有操作审计访问控制。
 
 ### 执行安全要求
 

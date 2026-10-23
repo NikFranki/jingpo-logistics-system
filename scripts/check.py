@@ -35,9 +35,16 @@ def check_backend(environment):
         for arguments in [
             [sys.executable, '-m', 'alembic', 'upgrade', 'head'],
             [sys.executable, '-m', 'alembic', 'check'],
+            [sys.executable, '-m', 'alembic', 'downgrade', '-1'],
+            [sys.executable, '-m', 'alembic', 'upgrade', 'head'],
+            [sys.executable, '-m', 'alembic', 'check'],
             [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
         ]:
             run(arguments, 'be', environment)
+        if os.getenv('RUN_V11_INTEGRATION') == '1':
+            environment['BE_PYTHON'] = sys.executable
+            agent_python = Path(os.getenv('AGENT_PYTHON', ROOT / 'agent' / '.venv' / 'bin' / 'python'))
+            run([str(agent_python), str(ROOT / 'scripts' / 'v11_integration.py')], 'agent', environment)
     finally:
         try:
             if created:

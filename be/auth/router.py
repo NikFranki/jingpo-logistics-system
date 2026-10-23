@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from auth.dependencies import COOKIE, CSRF_COOKIE, business_user, current_user
-from auth.models import AuthAudit, EmailToken, LoginSession, User
+from auth.dependencies import COOKIE, CSRF_COOKIE, business_user, current_user, web_write_user
+from auth.models import AgentWritePolicy, AuthAudit, EmailToken, LoginSession, User
+from agent_actions.schemas import AgentWritePolicyUpdate
 from auth.schemas import ChangePassword, CompleteProfile, EmailRequest, Login, Recheck, Register, ResetPassword, TokenRequest, UserUpdate
 from auth.security import digest, password_hash, password_matches, throttle
 from auth.service import audit, consume_email_token, create_email_token, email_is_configured, fail, issue_session, resolve_session, revoke_all, send_email, user_body
@@ -19,6 +20,23 @@ admin_router = APIRouter(prefix='/api/v1/admin', tags=['users'])
 Current = Annotated[object, Depends(current_user)]
 Business = Annotated[object, Depends(business_user)]
 EMAIL_RESPONSE = {'message': '若账号资料可用，邮箱将收到后续操作说明。'}
+
+
+@router.get('/agent-write-policy')
+def read_agent_write_policy(principal: Business, response: Response):
+    from agent_actions.service import policy_body
+    response.headers['Cache-Control'] = 'no-store'
+    with SessionLocal() as session:
+        user = session.get(User, principal.user_id)
+        return policy_body(session, user)
+
+
+@router.put('/agent-write-policy')
+def write_agent_write_policy(body: AgentWritePolicyUpdate, response: Response, principal=Depends(web_write_user)):
+    from agent_actions.service import update_policy
+    response.headers['Cache-Control'] = 'no-store'
+    with SessionLocal() as session:
+        return update_policy(session, principal, body.enabled_action_types)
 
 
 def limited(request, scope, identifier=''):

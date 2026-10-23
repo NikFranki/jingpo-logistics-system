@@ -1,6 +1,6 @@
 # V11 · Agent 受控业务写入规格
 
-> 2026-10-21 · 根据 [V11 PRD](../../../prd/v11/JINGPO-agent-v11.md) 编写，待技术 review。只定义 Agent 侧行为和跨端契约要求；BE/FE 详细规格及实现计划尚未完成。
+> 2026-10-21 · 根据 [V11 PRD](../../../prd/v11/JINGPO-agent-v11.md) 编写。首期契约按三端实现冻结：网页入口、CLI 只读、单条消息至多一个动作候选、自动执行白名单为空。
 
 ## 1. 怎么解决
 
@@ -33,7 +33,7 @@ sequenceDiagram
     A-->>FE: 完成摘要及对象引用
 ```
 
-BE 的执行策略查询和动作执行接口是 V11 新增的跨端依赖，不代表当前接口已经支持。BE 规格必须定义并验证这些接口后，Agent 才能开放写入。
+BE 的执行策略查询和动作执行接口已按 V11 契约实现，并通过隔离数据库迁移、BE 回归及 Agent/BE HTTP 联调。Agent 仍只生成候选并通过只读凭据核验终态；实际预览和写入由 FE 当前网页登录态与 BE 完成。浏览器订单确认/取消链路已通过确定性假模型验证，实体读屏器和触屏设备走查仍待完成。
 
 ## 2. 当前实现约束
 
@@ -51,27 +51,25 @@ Agent 只允许提出 registry 中定义的 `action_type`，例如：
 | action_type | 目标对象 | 输入字段 | V11 策略 |
 | --- | --- | --- | --- |
 | `order.update` | `order` | 允许修改的订单字段 | 必须用户确认 |
-| `shipment.destination.update` | `shipment` | 旧目的站、新目的站、原因 | 必须用户确认 |
+| `shipment.destination.update` | `shipment` | 用户给出的目标站名称、原因；Agent 从 BE 站点目录解析 ID，候选仍只发送 ID | 必须用户确认 |
 
-首期候选来自现有 BE 接口：订单 `PATCH /api/v1/orders/{order_id}`、运单目的站 `PATCH /api/v1/shipments/{shipment_id}/destination`。Agent 只提交结构化动作，不接收模型生成的路径、HTTP 方法或任意字段。新增其他 `action_type` 前需在 BE/Agent spec 中完成权限、状态、影响、幂等与审计盘点。
+首期候选来自现有 BE 接口：订单 `PATCH /api/v1/orders/{order_id}`、运单目的站 `PATCH /api/v1/shipments/{shipment_id}/destination`。目的站工具按用户输入的站名查询 BE 站点目录，只有唯一、启用且允许派送的站点才会映射为内部 ID；不唯一时请用户按站名/code 澄清，不要求用户提供 ID。Agent 只提交结构化动作，不接收模型生成的路径、HTTP 方法或任意字段。新增其他 `action_type` 前需在 BE/Agent spec 中完成权限、状态、影响、幂等与审计盘点。
 
 V11 首期即使支持自动执行，写入自动白名单也先保持为空；低风险自动动作清单经过单独评审和 BE 实现后才能开放。取消、目的站更正、已确认计划调整、批量操作始终逐次确认。
 
 ### 3.2 提案结构
 
-Agent API 给 FE 的提案采用结构化字段。以下为逻辑结构，最终 JSON schema 在 FE/BE spec 协调后冻结：
+Agent SSE 给 FE 的候选动作采用结构化字段。以下字段属于 `action_proposed`；BE preview 成功后才返回 `proposal_id`、对象展示、变化、影响、执行策略和过期时间：
 
 ```json
 {
-  "proposal_id": "uuid",
+  "candidate_id": "uuid",
+  "agent_session_id": "uuid",
+  "message_id": "uuid",
   "action_type": "shipment.destination.update",
-  "subject": { "type": "shipment", "id": "812", "number": "SHP-0012" },
-  "payload": { "expected_destination_station_id": 21, "destination_station_id": 34, "reason": "用户确认的原因" },
-  "changes": [
-    { "field": "destination_station_id", "label": "目的站", "before": "广州南站（21）", "after": "深圳北站（34）" }
-  ],
-  "impact": ["需重新核对运输计划；不会自动改写已有任务"],
-  "expires_at": "2026-10-21T10:05:00Z"
+  "subject_type": "shipment",
+  "subject_id": "812",
+  "payload": { "expected_destination_station_id": 21, "destination_station_id": 34, "reason": "用户明确提出的更正原因" }
 }
 ```
 
@@ -80,6 +78,8 @@ Agent API 给 FE 的提案采用结构化字段。以下为逻辑结构，最终
 - `payload` 通过对应严格 schema 校验，禁止额外字段、空修改和类型模糊；业务编号先解析到唯一授权对象 ID。
 - FE 调 BE 生成权威预览后，前后值、影响和数据版本以 BE 响应为准。Agent 不生成可信的影响描述。
 - BE 提案保存 `actor owner`、candidate/session/message correlation、action type、对象、规范化 payload、payload hash、读取到的对象版本和短时过期时间。提案不包含 Bearer/Cookie/CSRF。
+
+FE 通过 BE preview 换取权威 `proposal_id`、subject、changes、impact、execution_policy 与 expires_at。SSE 不携带这些服务端事实。
 
 ### 3.3 状态流转
 
@@ -107,12 +107,12 @@ stateDiagram-v2
 
 ### 4.1 Agent API
 
-现有 `POST /agent/api/v1/sessions/{id}/messages` 保持用户消息、SSE 进度和最终回答能力；新增事件及动作同步是 V11 契约候选：
+现有 `POST /agent/api/v1/sessions/{id}/messages` 保持用户消息、SSE 进度和最终回答能力；实现新增 `action_proposed` 事件和动作状态同步接口：
 
 | SSE 事件 | 用途 | 内容要求 |
 | --- | --- | --- |
 | `progress` | 查询或生成提案进度 | 不包含原始工具响应或模型推理 |
-| `action_proposed` | 提醒 FE 向 BE 申请权威预览 | `candidate_id`、固定 `action_type`、对象 type/id 和严格校验后的候选 payload；不含批准或执行状态 |
+| `action_proposed` | 提醒 FE 向 BE 申请权威预览 | `candidate_id`、`agent_session_id`、`message_id`、固定 `action_type`、`subject_type`、`subject_id` 和严格校验后的候选 payload；不含批准或执行状态 |
 | `result` | 只读回答或已核验写入结果 | 现有 answer/references/warnings，加动作结果摘要 |
 | `error` | 请求、身份、业务核验或服务失败 | 稳定错误码和安全提示 |
 
@@ -123,15 +123,15 @@ FE 在动作成功、拒绝或取消后调用 `POST /agent/api/v1/sessions/{sess
 ### 4.2 FE
 
 - 收到 `action_proposed` 后先用网页身份向 BE 请求权威预览；预览成功后才渲染受控动作卡片。文本里的 Markdown、模型生成的按钮或链接不能触发写入。
-- 用户确认、取消和自动执行状态清楚显示。确认操作提交固定 proposal ID 和 payload hash；新参数必须重新预览。
+- 用户确认、取消和自动执行状态清楚显示。确认操作只提交 BE 生成的固定 proposal ID 与执行模式；payload 和 hash 由 BE 服务端保存，FE 不重发；新参数必须重新预览。
 - FE 用当前登录 Cookie + CSRF 调用 BE 的 preview/execute/policy 接口；FE 不把 Cookie/CSRF 放进 Agent API 请求。
 - 执行使用 BE 预览返回的 proposal ID，BE 从服务端保存的规范化 payload 执行；FE 不重发或拼装已确认 payload。proposal ID 派生稳定业务幂等键。
-- 自动执行需由 BE preview 响应明确返回 `AUTO_ALLOWED`。仅该状态可按已登记策略提交；不能由 Agent SSE 或 FE 本地偏好直接触发自动写入。
+- 自动执行由 FE 执行，且必须同时满足 BE preview 返回 `AUTO_ALLOWED`、action type 在 BE eligible 白名单中、当前用户已在 BE 策略中启用该 action；Agent SSE 和 FE 本地偏好不能单独触发自动写入。
 - BE 返回权限拒绝、业务冲突、版本冲突、请求超时或结果未知时，FE 展示对应状态，不乐观显示成功。
 
 ### 4.3 BE
 
-BE 专项规格定义以下 API 契约；这些都是 V11 新增接口，当前尚未实现：
+BE 专项规格定义以下 API 契约；这些 V11 接口已实现，临时数据库迁移、BE 回归、订单与目的站隔离 HTTP 流程通过。Chrome 已验证真实 FE→Agent→BE 订单确认和取消；目前仍待实体读屏器与触屏设备走查：
 
 | BE 能力 | 要求 |
 | --- | --- |
@@ -143,7 +143,7 @@ BE 专项规格定义以下 API 契约；这些都是 V11 新增接口，当前�
 | 幂等与追踪 | proposal 只能成功消费一次；用 proposal ID 派生业务幂等键；审计 actor、source=`agent`、proposal/candidate/message/session correlation、approval mode、变更和结果 |
 | 响应 | 返回可信的 action/proposal correlation、业务对象类型/ID/编号、实际状态和可展示影响；不回传凭据 |
 
-preview 和 execute 使用 server-side proposal 记录；execute 复用订单/运单领域 service，而不允许客户端提交任意 endpoint。当前订单 PATCH 尚未暴露通用对象版本前提，需要 BE 以 proposal version 做比较并发更新。运单目的站接口已有 `expected_destination_station_id`，BE 仍需验证 proposal 读取版本和当前业务状态。
+preview 和 execute 使用 server-side proposal 记录；execute 复用订单/运单领域 service，而不允许客户端提交任意 endpoint。订单和运单均以 preview 的 `updated_at` 做并发版本比较，运单同时核对预期旧目的站与业务状态。
 
 ## 5. 模型、权限与失败处理
 
@@ -173,12 +173,12 @@ preview 和 execute 使用 server-side proposal 记录；execute 复用订单/�
 
 真实模型评测作为单独的验收步骤，覆盖写入意图识别、对象选择、字段解析和不应写入场景；不能用自动规则通过代替业务权限验收。具体数据集和成本由 plan 确定。
 
-## 7. 跨端待冻结项
+## 7. 跨端决策与后续边界
 
-1. 首期是否只支持 FE 网页助手（本 Agent spec 按网页入口设计，CLI 仍只读）。
-2. 具体写入 action 清单及各 action 的确认/自动策略；当前自动执行白名单建议为空。
-3. BE 动作策略接口、执行接口、版本前提和审计关联字段。
-4. Agent SSE proposal schema、动作状态同步接口及 FE/BE 代理路径。
-5. 自动授权配置由用户自行设置还是由 admin 管理，以及适用的数据范围。
+1. 首期入口已定为 FE 网页助手，CLI 保持只读。
+2. 首期动作已定为 `order.update` 和 `shipment.destination.update`，均要求逐次确认；自动执行白名单为空。
+3. BE 策略、preview/execute/reject/status、版本前提和审计关联字段已实现并完成隔离联调。
+4. Agent SSE candidate、动作状态同步及 FE/BE 调用路径已按三端 spec 落地。
+5. 自动授权由用户管理自己的偏好；适用动作仍须由 BE 系统白名单决定，首期没有 eligible action。
 
-以上待冻结项完成后，应补齐 BE、FE spec/plan 和 V11 Agent plan；三份实现规格一致后再编码。
+后续扩充 action 或开放自动白名单前，需另行更新三端规格并完成风险评审。真实读屏器和触屏设备走查仍属于交付验收项。

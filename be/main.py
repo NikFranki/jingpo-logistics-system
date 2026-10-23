@@ -1,4 +1,5 @@
 # 引入依赖
+import asyncio
 import logging
 from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -22,6 +23,7 @@ from regions.router import router as regions_router
 from lines.router import router as lines_router
 from auth.router import router as auth_router, admin_router
 from auth.external import router as external_auth_router
+from agent_actions.router import router as agent_actions_router
 from auth.dependencies import authorize_business
 from auth.access import protect_response
 from auth.logging import AuthAccessLogFilter
@@ -35,6 +37,30 @@ app = FastAPI()
 logger = logging.getLogger(__name__)
 logging.getLogger('uvicorn.access').addFilter(AuthAccessLogFilter())
 
+_proposal_cleanup_task = None
+
+
+@app.on_event('startup')
+async def start_agent_proposal_cleanup():
+    async def cleanup_loop():
+        while True:
+            await asyncio.sleep(60)
+            try:
+                from agent_actions.service import cleanup_expired_proposals
+                await asyncio.to_thread(cleanup_expired_proposals)
+            except Exception:
+                logger.exception('Agent proposal cleanup failed')
+
+    global _proposal_cleanup_task
+    _proposal_cleanup_task = asyncio.create_task(cleanup_loop())
+
+
+@app.on_event('shutdown')
+async def stop_agent_proposal_cleanup():
+    if _proposal_cleanup_task is not None:
+        _proposal_cleanup_task.cancel()
+        await asyncio.gather(_proposal_cleanup_task, return_exceptions=True)
+
 @app.middleware("http")
 async def add_request_id(
     request: Request,
@@ -45,7 +71,7 @@ async def add_request_id(
 
     response = await call_next(request)
     response = await protect_response(request, response)
-    if request.url.path.startswith(('/api/v1/auth', '/api/v1/admin')):
+    if request.url.path.startswith(('/api/v1/auth', '/api/v1/admin', '/api/v1/agent-actions')):
         response.headers['Cache-Control'] = 'no-store'
     response.headers["X-Request-ID"] = request_id
 
@@ -143,6 +169,7 @@ async def handle_unexpected_error(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(external_auth_router)
+app.include_router(agent_actions_router)
 for business_router in (orders_router, network_router, shipments_router, transport_router,
                         scheduling_router, regions_router, lines_router):
     app.include_router(business_router, dependencies=[Depends(authorize_business)])

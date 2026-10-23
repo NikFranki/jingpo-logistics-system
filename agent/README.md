@@ -4,6 +4,12 @@
 
 提供本地 CLI 和独立 Agent API 服务，使用 LangGraph、LangChain 组件和模型服务，通过 BE 的只读接口查询订单、运单、V7 运输计划、运输任务和延误。支持当前会话内追问，不执行发货、排程确认、发车、签收或其他写操作。
 
+## V11 网页助手受控修改（自动化与浏览器闭环已验收）
+
+网页助手可提出 `order.update` 与 `shipment.destination.update` 两种固定候选。Agent/CLI Bearer 仍只有只读权限，Agent 不调用 mutation API；FE 用当前网页 Cookie+CSRF 获取 BE 预览，用户确认后由 BE 复核权限、状态和对象版本，再调用现有领域 service。自动执行白名单为空。BE/Agent 隔离 HTTP、FE 组件回归和 Chrome 订单确认/取消流程已通过；真实模型写入、实体读屏器和触屏设备手工走查仍待完成。运行隔离联调：`make check-v11-integration`。契约与证据见 [V11 Agent 规格/计划](../docs/技术方案/v11/agent/spec.md) 和 [V11 BE/FE 计划](../docs/技术方案/v11/be/plan.md)、[FE 计划](../docs/技术方案/v11/fe/plan.md)。
+
+V11 真实模型提案专项评测使用合成只读后端：`agent/.venv/bin/python agent/tests/eval_v11.py --preflight` 仅做免费预检；`agent/.venv/bin/python agent/tests/eval_v11.py --run --round v11-baseline-1` 才会调用 `.env` 配置的模型 API，并在 `/tmp/jingpo-agent-v11/` 生成报告。该评测只测试提案识别，不会执行 BE 写入。
+
 Agent V1 已完成并通过用户最终 review。业务主流程、响应校验、日志和会话清理已实现；受控测试及真实接口核验记录见 [plan.md](../docs/技术方案/v1/agent/plan.md) 第 12 节。真实模型的自然语言表现沿用用户此前分步验证，未新增专项验证。
 
 ## V2 适配（历史）
@@ -82,6 +88,7 @@ Agent API 使用 .env 中的模型配置；CLI 只需要 BE_BASE_URL、AGENT_BAS
 | BE_BASE_URL | 默认 http://127.0.0.1:8000 |
 | AGENT_BASE_URL | CLI 使用，默认 http://127.0.0.1:8001；远程部署使用 HTTPS |
 | AGENT_DEBUG | 默认 false；true/1 开启脱敏诊断日志，false/0 关闭 |
+| AGENT_ALLOW_ACTIONS | 默认 false；仅网页 API 使用。需要显式设为 true/1 才注册首期只提案工具；CLI 始终只读，BE 仍要求网页登录确认。Render 如要启用提案功能，也需显式设置 |
 
 配置优先级：**进程已有环境变量 > agent/.env > 代码默认值**。即使已有环境变量为空，也不会被 .env 覆盖；必填项随后会报错。程序只加载 agent 目录下的 .env，不自动选择 .env.production 等文件。
 

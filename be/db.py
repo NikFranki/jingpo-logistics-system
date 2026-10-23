@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import nullcontext
 # sqlalchemy 数据库 orm 工具
 # sqlalchemy 描述表长什么样；Alembic 记录数据库结构如何变化；
 from sqlalchemy import create_engine
@@ -18,6 +19,11 @@ engine = create_engine(DATABASE_URL, connect_args={"options": "-c timezone=UTC"}
 
 # 一次请求操作数据库的工作区
 SessionLocal = sessionmaker(bind=engine)
+
+
+def transaction_scope(session: Session):
+    """Join an action gateway transaction, or own one for the legacy direct API."""
+    return nullcontext() if session.in_transaction() else session.begin()
 
 # 为请求提供 Session，请求结束后自动关闭（创建数据库 Session -> yield 给接口使用 -> 接口执行完成 -> 退出 with，自动关闭 Session）
 def get_db(request: Request) -> Generator[Session, None, None]:

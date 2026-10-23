@@ -107,6 +107,17 @@ class IdentityClient:
         except (ValueError, TypeError, AttributeError):
             raise IdentityError(503, "AUTH_SERVICE_UNAVAILABLE", "身份响应异常，请稍后重试。") from None
 
+    async def read_action_proposal(self, identity, proposal_id):
+        response = await self.request('GET', f'/api/v1/agent-actions/{proposal_id}', identity.token)
+        try:
+            data = response.json()
+            if (data.get('proposal_id') != proposal_id or
+                    data.get('status') not in {'PREVIEWED', 'SUCCEEDED', 'REJECTED', 'EXPIRED', 'FAILED'}):
+                raise ValueError()
+            return data
+        except (ValueError, TypeError, AttributeError):
+            raise IdentityError(503, 'ACTION_STATUS_INVALID', '业务操作状态暂时无法核对。') from None
+
 
 COMPANY_TOOLS = {"search_transport_tasks", "get_transport_task", "find_shipments_with_destination_changes"}
 

@@ -13,6 +13,7 @@ class Settings:
     base_url: str
     be_base_url: str
     debug: bool = False
+    allow_actions: bool = False
 
 
 def load_settings() -> Settings:
@@ -54,6 +55,10 @@ def load_settings() -> Settings:
     if debug not in {"true", "false", "1", "0"}:
         raise ValueError("AGENT_DEBUG 必须为 true/false 或 1/0")
 
+    allow_actions = os.getenv("AGENT_ALLOW_ACTIONS", "false").strip().lower()
+    if allow_actions not in {"true", "false", "1", "0"}:
+        raise ValueError("AGENT_ALLOW_ACTIONS 必须为 true/false 或 1/0")
+
     return Settings(
         provider=provider,
         model=model,
@@ -61,4 +66,5 @@ def load_settings() -> Settings:
         base_url=base_url,
         be_base_url=be_base_url,
         debug=debug in {"true", "1"},
+        allow_actions=allow_actions in {"true", "1"},
     )

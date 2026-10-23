@@ -20,6 +20,10 @@ cp .env.example .env
 
 发布前停服务、备份、升级，随后运行 `python -m auth.admin init --username <用户名> --email <邮箱>` 交互设置唯一管理员；恢复使用 `restore`，撤销旧登录。开发库已于 2026-10-15 备份并升级到 `f81a3d6c2907`，原 19 张业务表对账一致，后端已重启且就绪；管理员尚未初始化。生产发信配置见 `.env.example` 与 V8 BE spec。测试依赖安装 `pip install -r requirements-dev.txt`；隔离库验证命令见 V8 plan。
 
+## V11 Agent 动作网关（实现与自动化验收完成）
+
+`/api/v1/agent-actions` 只接受网页 Cookie+CSRF，提供固定订单修改和运单目的站更正的 preview/execute/reject/status；Agent/CLI Bearer 只能读取本人提案状态，不能写入。执行时复查身份、订单归属、业务状态和 `updated_at`，复用现有领域 service 与幂等操作日志。proposal 5 分钟过期；BE 每分钟运行一次有界清理，到期后清除个人 payload/前后值，请求路径也会补做清理。自动执行白名单为空。迁移 `a11c0de20210`；`make check-v11-integration` 在临时 PostgreSQL 验证迁移、schema、BE 全量回归及订单/目的站 Agent HTTP 流程；当前 95 项中 86 项通过、9 项为 opt-in 跳过。FE 组件、typecheck/lint/build 及 Chrome 订单确认/取消页面闭环通过；实体读屏器和触屏设备手工验收待完成。详见 [V11 BE spec](../docs/技术方案/v11/be/spec.md) 与 [实施计划](../docs/技术方案/v11/be/plan.md)。
+
 ## 统一运输线路
 
 `lines` 模块提供 `/api/v1/transport-lines` 统一管理：站点顺序、各段参考耗时和中转覆盖值。线路存放在 `transport_lines` / `transport_line_legs`；班次规则和车次快照存放在 `line_services`、`line_service_stops`、`scheduled_trips`。`GET /api/v1/shipments/{id}/line-options` 按起终站返回候选及推荐。V6 旧路径方案表已迁移移除；运单线路安排统一作为班次运输计划管理。

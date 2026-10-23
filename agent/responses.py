@@ -150,6 +150,9 @@ class Station(Response):
     id: Identifier
     code: Text
     name: Text
+    enabled: bool = False
+    allows_first_arrival: bool = False
+    allows_delivery: bool = False
 
 
 class OrderingOptions(Response):

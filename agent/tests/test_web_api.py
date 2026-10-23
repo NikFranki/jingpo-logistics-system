@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import redirect_stderr
+from io import StringIO
 import json
 import unittest
 from uuid import uuid4
@@ -100,7 +102,7 @@ class AsyncSessionTests(unittest.IsolatedAsyncioTestCase):
     async def test_busy_limits_expiry_and_checkpoint_prune(self):
         graph = build_graph(FakeModel([]), [noop])
         service = AgentService(graph, ttl=30, max_sessions=2, max_active=1)
-        identity = actor()
+        identity = actor(role='user')
         first = await service.create_session(identity)
         second = await service.create_session(identity)
         with self.assertRaises(ServiceError) as limit:
@@ -158,6 +160,172 @@ class AsyncSessionTests(unittest.IsolatedAsyncioTestCase):
                     break
                 await asyncio.sleep(0.01)
             self.assertFalse(session.busy)
+
+
+class ActionSyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_graph_excludes_proposal_tools_for_developer_and_destination_for_user(self):
+        from registry import build_tools
+
+        class RecordingModel(FakeModel):
+            def __init__(self):
+                super().__init__([])
+                self.bound_tool_sets = []
+
+            def bind_tools(self, tools):
+                self.bound_tool_sets.append({tool.name for tool in tools})
+                return self
+
+        model = RecordingModel()
+        build_graph(model, build_tools('http://be.invalid', allow_actions=True))
+        all_tools, own_tools, developer_tools = model.bound_tool_sets
+        self.assertIn('propose_order_update', all_tools)
+        self.assertIn('propose_shipment_destination_update', all_tools)
+        self.assertIn('propose_order_update', own_tools)
+        self.assertNotIn('propose_shipment_destination_update', own_tools)
+        self.assertFalse({'propose_order_update', 'propose_shipment_destination_update'} & developer_tools)
+
+    async def test_session_action_correlations_are_bounded_without_evicting_pending_proposals(self):
+        from collections import OrderedDict
+        from web_service import AgentService, MAX_SESSION_ACTIONS, Session
+
+        session = Session(actions=OrderedDict((str(index), {'terminal': True})
+                                             for index in range(MAX_SESSION_ACTIONS - 1)))
+        session.actions['pending'] = {'terminal': False}
+        self.assertTrue(AgentService.action_capacity(session))
+        self.assertEqual(len(session.actions), MAX_SESSION_ACTIONS - 1)
+        self.assertIn('pending', session.actions)
+
+        pending = Session(actions=OrderedDict((str(index), {'terminal': False})
+                                               for index in range(MAX_SESSION_ACTIONS)))
+        self.assertFalse(AgentService.action_capacity(pending))
+        self.assertEqual(len(pending.actions), MAX_SESSION_ACTIONS)
+
+    async def test_action_correlation_capacity_remains_bounded_under_churn(self):
+        from web_service import AgentService, MAX_SESSION_ACTIONS, Session
+
+        session = Session()
+        for index in range(10_000):
+            self.assertTrue(AgentService.action_capacity(session))
+            session.actions[str(index)] = {'terminal': True}
+            self.assertLessEqual(len(session.actions), MAX_SESSION_ACTIONS)
+
+        self.assertEqual(list(session.actions), [str(index) for index in range(
+            10_000 - MAX_SESSION_ACTIONS, 10_000)])
+        pending_ids = list(session.actions)
+        for candidate_id in pending_ids:
+            session.actions[candidate_id]['terminal'] = False
+        for _ in range(1_000):
+            self.assertFalse(AgentService.action_capacity(session))
+            self.assertEqual(list(session.actions), pending_ids)
+
+        # A terminal correlation may be reclaimed, but the adjacent pending proposal stays.
+        session.actions[pending_ids[0]]['terminal'] = True
+        self.assertTrue(AgentService.action_capacity(session))
+        session.actions['new-pending'] = {'terminal': False}
+        self.assertNotIn(pending_ids[0], session.actions)
+        self.assertIn(pending_ids[1], session.actions)
+        self.assertEqual(len(session.actions), MAX_SESSION_ACTIONS)
+
+    async def test_action_candidate_is_replayed_before_result(self):
+        from unittest.mock import AsyncMock, patch
+        from langchain_core.messages import AIMessage, ToolMessage
+
+        class ActionAuth(Auth):
+            async def read_action_proposal(self, identity, proposal_id):
+                raise AssertionError('proposal sync is not part of message generation')
+
+        class CandidateModel(FakeModel):
+            async def ainvoke(self, messages):
+                self.inputs.append(messages)
+                if any('把订单 42' in str(getattr(message, 'content', '')) for message in messages):
+                    return AIMessage(content='', tool_calls=[{
+                        'name': 'propose_order_update', 'args': {
+                            'order_id': 42, 'changes': {'sender_address': 'PRIVATE-NEW-ADDRESS'}},
+                        'id': 'candidate-call', 'type': 'tool_call'}])
+                return AIMessage(content='准备了修改预览。')
+
+        from actions import build_action_tools
+        tools = build_action_tools('http://be.invalid')
+        model = CandidateModel([])
+        graph = build_graph(model, tools)
+        app = real_create_app(graph, debug=True, identity_client=ActionAuth(), allow_actions=True)
+        identity = actor(role='user')
+        app.state  # Lifespan sets service dependencies on startup.
+        output = StringIO()
+        with patch('actions.get_order', new=AsyncMock(return_value={'data': {
+            'status': 'PENDING_SHIPMENT', 'order_no': 'PRIVATE-ORDER-NO',
+            'sender_address': 'PRIVATE-OLD-ADDRESS'}})):
+            with redirect_stderr(output), TestClient(app) as client:
+                app.state.identity_client.identity = identity
+                session_id = client.post('/agent/api/v1/sessions').json()['session_id']
+                message_id = str(uuid4())
+                # Correlation is assigned by the server context before tools run.
+                response = client.post(f'/agent/api/v1/sessions/{session_id}/messages',
+                                       json={'message_id': message_id, 'message': '把订单 42 的寄件地址改成 PRIVATE-NEW-ADDRESS'})
+                frame = f'event: action_proposed\ndata: '
+                self.assertIn(frame, response.text)
+                event_payload = json.loads(response.text.split(frame, 1)[1].split('\n', 1)[0])
+                self.assertEqual(event_payload['agent_session_id'], session_id)
+                self.assertEqual(event_payload['message_id'], message_id)
+                self.assertEqual(event_payload['action_type'], 'order.update')
+                self.assertEqual(event_payload['payload']['sender_address'], 'PRIVATE-NEW-ADDRESS')
+                self.assertEqual(final_event(response)['action_candidate'], event_payload)
+                tool_messages = [message for batch in model.inputs for message in batch
+                                 if isinstance(message, ToolMessage)]
+                self.assertTrue(tool_messages)
+                self.assertNotIn(event_payload['candidate_id'], tool_messages[0].content)
+                self.assertNotIn('candidate_id', tool_messages[0].content)
+        logs = output.getvalue()
+        for private in ['PRIVATE-ORDER-NO', 'PRIVATE-OLD-ADDRESS', 'PRIVATE-NEW-ADDRESS', identity.token]:
+            self.assertNotIn(private, logs)
+
+    async def test_sync_requires_bound_candidate_and_verified_terminal_state(self):
+        from web_service import AgentService, ServiceError
+
+        class StatusClient:
+            async def read_action_proposal(self, identity, proposal_id):
+                return {
+                    'proposal_id': proposal_id, 'candidate_id': status.get('candidate_id', candidate_id),
+                    'agent_session_id': session.id, 'message_id': status.get('message_id', message_id),
+                    'action_type': 'order.update', 'status': status['value'],
+                    'subject': {'type': 'order', 'id': '42', 'number': 'ORD-42'},
+                    'result': status.get('result'),
+                }
+
+        identity = actor()
+        service = AgentService(build_graph(FakeModel([]), [noop]), identity_client=StatusClient())
+        session = await service.create_session(identity)
+        candidate_id, message_id, proposal_id = str(uuid4()), str(uuid4()), str(uuid4())
+        status = {'value': 'PREVIEWED'}
+        session.actions[candidate_id] = {
+            'candidate': {'candidate_id': candidate_id, 'agent_session_id': session.id,
+                          'message_id': message_id, 'action_type': 'order.update'},
+            'message_id': message_id, 'proposal_id': None,
+        }
+        with self.assertRaises(ServiceError) as pending:
+            await service.sync_action(session, identity, candidate_id, proposal_id)
+        self.assertEqual(pending.exception.code, 'ACTION_PENDING')
+        status.update(value='SUCCEEDED', result={'subject': {'type': 'order', 'id': '42', 'number': 'ORD-42'}})
+        result = await service.sync_action(session, identity, candidate_id, proposal_id)
+        self.assertEqual(result['status'], 'SUCCEEDED')
+        self.assertEqual(result['subject']['number'], 'ORD-42')
+        self.assertEqual((await service.sync_action(session, identity, candidate_id, proposal_id)), result)
+        for terminal_status in ('REJECTED', 'EXPIRED', 'FAILED'):
+            next_candidate, next_message, next_proposal = str(uuid4()), str(uuid4()), str(uuid4())
+            status.update(value=terminal_status, result=None,
+                          candidate_id=next_candidate, message_id=next_message)
+            session.actions[next_candidate] = {
+                'candidate': {'candidate_id': next_candidate, 'agent_session_id': session.id,
+                              'message_id': next_message, 'action_type': 'order.update'},
+                'message_id': next_message, 'proposal_id': None,
+            }
+            terminal = await service.sync_action(session, identity, next_candidate, next_proposal)
+            self.assertEqual(terminal['status'], terminal_status)
+            self.assertEqual(terminal['subject']['number'], 'ORD-42')
+            self.assertIsNone(terminal['result_summary'])
+            self.assertEqual((await service.sync_action(session, identity, next_candidate, next_proposal)), terminal)
+        with self.assertRaises(ServiceError):
+            await service.sync_action(session, identity, str(uuid4()), proposal_id)
             snapshot = await graph.aget_state({"configurable": {"thread_id": session.id}})
             self.assertFalse(snapshot.next)
             self.assertFalse(snapshot.values.get("messages"))
