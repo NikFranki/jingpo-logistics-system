@@ -107,14 +107,15 @@ class LifecycleTests(HarnessHelpers, unittest.IsolatedAsyncioTestCase):
         from dotenv import load_dotenv as real_load
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / '.env'
-            path.write_text('LLM_MODEL=file-model\nLLM_API_KEY=file-secret\nAGENT_DEBUG=true\n')
+            path.write_text('LLM_MODEL=file-model\nLLM_API_KEY=file-secret\nAGENT_DEBUG=true\nAGENT_ALLOW_ACTIONS=true\n')
             with patch.dict('os.environ', {'LLM_MODEL': 'process-model'}, clear=True), \
                  patch.object(settings_module, 'load_dotenv', side_effect=lambda *a, **k: real_load(path, override=False)):
                 settings = load_settings()
                 self.assertEqual(settings.model, 'process-model')
                 self.assertTrue(settings.debug)
+                self.assertTrue(settings.allow_actions)
                 self.assertNotIn('file-secret', repr(settings))
-            for env in [{'LLM_PROVIDER': 'unknown'}, {'LLM_MODEL': ''}, {'LLM_API_KEY': ''}, {'AGENT_DEBUG': 'bad'}]:
+            for env in [{'LLM_PROVIDER': 'unknown'}, {'LLM_MODEL': ''}, {'LLM_API_KEY': ''}, {'AGENT_DEBUG': 'bad'}, {'AGENT_ALLOW_ACTIONS': 'bad'}]:
                 base = {'LLM_MODEL': 'test', 'LLM_API_KEY': 'secret', **env}
                 with patch.dict('os.environ', base, clear=True), patch.object(settings_module, 'load_dotenv'):
                     with self.assertRaises(ValueError):

@@ -6,6 +6,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from db import transaction_scope
 from logistics_types import ShipmentStage, TrackingEventType, TaskStatus
 
 from errors import (
@@ -811,9 +812,10 @@ def update_shipment_destination(
     shipment_id: int,
     request: ShipmentDestinationUpdateRequest,
     idempotency_key: UUID,
+    expected_updated_at: datetime | None = None,
 ) -> dict:
     request_hash = build_update_destination_request_hash(shipment_id, request)
-    with session.begin():
+    with transaction_scope(session):
         # All network, shipment and transport writes take this lock first.
         clock = business_time.begin_business_write(session)
         existing = session.scalar(select(OperationLog).where(
@@ -826,6 +828,8 @@ def update_shipment_destination(
             Shipment.id == shipment_id).with_for_update())
         if shipment is None:
             raise ShipmentNotFoundError
+        if expected_updated_at is not None and shipment.updated_at != expected_updated_at:
+            raise NetworkError("PROPOSAL_STALE", "运单已变化，请重新预览", 409)
         active_pair = session.execute(select(TaskShipment, TransportTask).join(
             TransportTask, TaskShipment.task_id == TransportTask.id).where(
                 TaskShipment.shipment_id == shipment_id,

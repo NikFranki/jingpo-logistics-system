@@ -4,7 +4,7 @@
 
 ## 项目一眼看懂
 
-物流演示系统：前端操作业务，后端维护物流事实与运输安排，所有动作时间由服务器生成，查询 Agent 用自然语言读取后端数据。
+物流演示系统：前端操作业务，后端维护物流事实与运输安排，所有动作时间由服务器生成。Agent 读取后端数据；网页助手可提出固定修改，由 BE 校验并在用户确认后执行；CLI 和 Agent 凭据保持只读。
 
 ```mermaid
 flowchart LR
@@ -12,14 +12,17 @@ flowchart LR
     U --> CLI[查询 Agent agent\n自然语言问答]
     CLI -->|HTTPS / 个人只读 Bearer| API[Render Agent API\n身份与会话隔离、查询进度]
     FE -->|/api 与 /agent| PROXY[Cloudflare Pages Functions\n业务代理与 SSE 流转发]
-    PROXY -->|/agent| API
-    PROXY -->|/api| BE[Render 后端 be\n物流事实、运输安排与操作历史]
+    PROXY -->|/agent 查询与状态核验| API
+    PROXY -->|/api Cookie+CSRF\n业务请求与 Agent 动作确认| BE[Render 后端 be\n物流事实、运输安排与操作历史]
     API -->|introspect / recheck| AUTH
     API --> CORE[Agent 查询核心\n可信身份上下文、角色工具与查询预算]
     CORE <--> LLM[模型服务\n选择查询工具并组织回答]
     FE -->|Cookie 登录与 CSRF 业务请求| PROXY
     BE --> AUTH[auth 模块\n账号、可撤销会话与数据权限]
     AUTH --> DB
+    BE --> AG[Agent Action Gateway\n固定动作、预览、版本复核、幂等与审计]
+    AG -->|固定订单/运单更新 service| DOMAIN[orders / shipments 领域 service]
+    DOMAIN --> DB
     CORE -->|携带个人 Bearer 的只读 HTTP 查询| BE
     BE --> DB[(Neon PostgreSQL\n业务数据、轨迹与操作日志)]
     BE --> L[lines 模块\n统一运输线路管理与候选]
@@ -46,4 +49,4 @@ flowchart LR
     V --> S[计划预览与同车次任务共享]
 ```
 
-模型不直接访问数据库。前端负责展示，业务状态、可执行操作和延误结果以 BE 为准。
+模型不直接访问数据库，也没有写凭据。Agent 只生成候选；网页 FE 用当前用户 Cookie+CSRF 向 BE 换取权威预览并提交确认，BE Action Gateway 再调用现有领域 service。CLI 与 Agent Bearer 仍只读。业务状态、可执行操作和延误结果以 BE 为准。

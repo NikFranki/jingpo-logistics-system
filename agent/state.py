@@ -35,6 +35,11 @@ class TurnContext:
     references: dict = field(default_factory=dict, repr=False)
     references_truncated: bool = False
     warnings: list[str] = field(default_factory=list, repr=False)
+    action_candidates: list[dict] = field(default_factory=list, repr=False)
+    action_candidate_claimed: bool = False
+    allow_actions: bool = False
+    agent_session_id: str = ''
+    message_id: str = ''
 
     identity: object | None = field(default=None, repr=False)
     identity_client: object | None = field(default=None, repr=False)

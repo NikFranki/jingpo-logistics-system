@@ -31,9 +31,9 @@ CASES = json.loads((ROOT / "tests/eval_v10_cases.json").read_text())
 SERVER_TIME = "2026-10-18T08:00:00Z"
 TS = "2026-10-18T"
 STATIONS = [
-    {"id":"1","code":"SJZ","name":"石家庄站"},
-    {"id":"2","code":"BJS","name":"北京站"},
-    {"id":"3","code":"TJS","name":"天津站"},
+    {"id":"1","code":"SJZ","name":"石家庄站","enabled":True,"allows_first_arrival":True,"allows_delivery":True},
+    {"id":"2","code":"BJS","name":"北京站","enabled":True,"allows_first_arrival":True,"allows_delivery":True},
+    {"id":"3","code":"TJS","name":"天津站","enabled":True,"allows_first_arrival":True,"allows_delivery":True},
 ]
 
 

@@ -51,6 +51,18 @@ def business_user(request: Request, credentials=Depends(bearer_scheme)):
     return authenticate(request, business=True)
 
 
+def web_write_user(request: Request):
+    """Require the browser session channel for mutation endpoints; Bearer is never write authority."""
+    if not request.cookies.get(COOKIE):
+        if request.headers.get('Authorization', '').startswith('Bearer '):
+            fail('READ_ONLY_CREDENTIAL', 'Agent 与 CLI 凭据只允许查询', 403)
+        fail('AUTH_REQUIRED', '请先登录', 401)
+    principal = authenticate(request, business=True)
+    if principal.read_only:
+        fail('READ_ONLY_CREDENTIAL', 'Agent 与 CLI 凭据只允许查询', 403)
+    return principal
+
+
 def scoped_key(request: Request, idempotency_key: UUID = Header(alias='Idempotency-Key')):
     principal = request.state.principal
     return uuid5(NAMESPACE_URL, f'jingpo:user:{principal.user_id}:{idempotency_key}')

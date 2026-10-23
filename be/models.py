@@ -32,6 +32,7 @@ class OperationLog(Base):
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey('auth_users.id'))
     __tablename__ = "operation_logs"
     __table_args__ = (
+        Index('ix_operation_logs_agent_proposal', 'agent_action_proposal_id'),
         CheckConstraint(
             "request_hash ~ '^[0-9a-f]{64}$'",
             name="ck_logs_hash",
@@ -56,6 +57,10 @@ class OperationLog(Base):
     )
 
     parent_operation_id: Mapped[int | None] = mapped_column(ForeignKey("operation_logs.id"))
+    agent_action_proposal_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    agent_candidate_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    agent_session_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    agent_message_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(),
@@ -693,4 +698,5 @@ class StationServiceArea(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-from auth.models import User, LoginSession, EmailToken, GoogleIdentity, OAuthAttempt, DeviceGrant, AuthAudit, RateBucket
+from auth.models import (User, LoginSession, EmailToken, GoogleIdentity, OAuthAttempt, DeviceGrant,
+                         AuthAudit, RateBucket, AgentWritePolicy, AgentActionProposal)

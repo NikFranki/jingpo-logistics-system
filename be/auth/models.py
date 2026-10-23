@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, String, func, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -92,3 +92,44 @@ class RateBucket(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     count: Mapped[int] = mapped_column(Integer)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class AgentWritePolicy(Base):
+    __tablename__ = 'auth_agent_write_policies'
+    user_id: Mapped[int] = mapped_column(ForeignKey('auth_users.id', ondelete='CASCADE'), primary_key=True)
+    enabled_action_types: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AgentActionProposal(Base):
+    __tablename__ = 'agent_action_proposals'
+    __table_args__ = (
+        UniqueConstraint('candidate_id', name='uq_agent_action_proposals_candidate'),
+        CheckConstraint("action_type IN ('order.update','shipment.destination.update')", name='ck_agent_action_proposals_action'),
+        CheckConstraint("status IN ('PREVIEWED','SUCCEEDED','REJECTED','EXPIRED','FAILED')", name='ck_agent_action_proposals_status'),
+        Index('ix_agent_action_proposals_owner_status', 'actor_user_id', 'status'),
+        Index('ix_agent_action_proposals_expires_at', 'expires_at'),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey('auth_users.id'), nullable=False)
+    actor_auth_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')
+    actor_session_id: Mapped[UUID] = mapped_column(ForeignKey('auth_sessions.public_id'), nullable=False)
+    candidate_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    agent_session_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    message_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    action_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot_version: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    preview: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default='PREVIEWED')
+    approval_mode: Mapped[str | None] = mapped_column(String(16))
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    operation_log_id: Mapped[int | None] = mapped_column(ForeignKey('operation_logs.id'))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

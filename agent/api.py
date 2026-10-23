@@ -30,25 +30,33 @@ class MessageInput(BaseModel):
         return value.strip()
 
 
+class ActionSyncInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    proposal_id: UUID
+
+
 def event(name, data):
     return f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def create_app(graph=None, debug=False, identity_client=None):
+def create_app(graph=None, debug=False, identity_client=None, allow_actions=False):
     @asynccontextmanager
     async def lifespan(app):
         selected_graph, selected_debug, auth = graph, debug, identity_client
+        selected_allow_actions = allow_actions
         if selected_graph is None:
             settings = load_settings()
-            selected_graph = build_graph(create_chat_model(settings), build_tools(settings.be_base_url))
+            selected_graph = build_graph(create_chat_model(settings), build_tools(settings.be_base_url, allow_actions=settings.allow_actions))
             selected_debug = settings.debug
             auth = auth or IdentityClient(settings.be_base_url)
+            selected_allow_actions = settings.allow_actions
         if auth is None:
             # Injected graphs still use real authentication unless an explicit test client is supplied.
             import os
             auth = IdentityClient(os.getenv("BE_BASE_URL", "http://127.0.0.1:8000"))
         app.state.identity_client = auth
-        app.state.service = AgentService(selected_graph, selected_debug, identity_client=auth)
+        app.state.service = AgentService(selected_graph, selected_debug, identity_client=auth,
+                                         allow_actions=selected_allow_actions)
         yield
         for session in list(app.state.service.sessions.values()):
             await app.state.service.invalidate(session)
@@ -84,6 +92,14 @@ def create_app(graph=None, debug=False, identity_client=None):
         identity = await authenticate(request)
         await request.app.state.service.remove_session(str(session_id), identity)
 
+    @app.post('/agent/api/v1/sessions/{session_id}/actions/{candidate_id}/sync')
+    async def sync_action(session_id: UUID, candidate_id: UUID, body: ActionSyncInput, request: Request):
+        identity = await authenticate(request)
+        service = request.app.state.service
+        session = await service.get_session(str(session_id), identity)
+        result = await service.sync_action(session, identity, str(candidate_id), str(body.proposal_id))
+        return JSONResponse(content=result, headers={'Cache-Control': 'no-store'})
+
     @app.post("/agent/api/v1/sessions/{session_id}/messages")
     async def message(session_id: UUID, body: MessageInput, request: Request):
         identity = await authenticate(request)
@@ -100,6 +116,8 @@ def create_app(graph=None, debug=False, identity_client=None):
                 if session.invalid:
                     raise IdentityError(409, "AUTH_CHANGED", "账号权限已变化，请开始新对话。")
                 if cached is not None:
+                    if cached.get('action_candidate'):
+                        yield event('action_proposed', cached['action_candidate'])
                     yield event("result", cached)
                     return
                 queue = asyncio.Queue(maxsize=32)
@@ -117,6 +135,8 @@ def create_app(graph=None, debug=False, identity_client=None):
                         result = task.result()
                         if session.invalid:
                             raise IdentityError(409, "AUTH_CHANGED", "账号权限已变化，请开始新对话。")
+                        if result.get('action_candidate'):
+                            yield event('action_proposed', result['action_candidate'])
                         yield event("result", result)
                         break
                     if pending_progress in done:

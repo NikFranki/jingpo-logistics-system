@@ -116,7 +116,7 @@ def prepare_turn(state: AgentState) -> dict:
     }
 
 
-def create_model_node(model_with_tools, own_model=None):
+def create_model_node(model_with_tools, own_model=None, developer_model=None):
     async def model_node(
         state: AgentState,
         runtime: Runtime[TurnContext],
@@ -146,7 +146,8 @@ def create_model_node(model_with_tools, own_model=None):
         try:
             async with asyncio.timeout(timeout):
                 identity = runtime.context.identity
-                selected_model = own_model if identity and identity.own_only else model_with_tools
+                selected_model = (developer_model if identity and identity.role == 'developer'
+                                  else own_model if identity and identity.own_only else model_with_tools)
                 style = ("当前可信身份的回答风格为 technical。可说明业务 ID、关联关系、版本与执行状态。"
                          if identity and identity.answer_style == "technical" else "优先用业务语言解释进度，避免无关技术细节。")
                 scope = "仅能查询自己的订单和运单；不能查询全局任务或全局更正日志。若用户要求公司/全体数据，只能报告当前账号可见范围，明确说明无法代替公司全量结果，禁止把个人查询 total 说成公司总数。未找到对象时只能说当前账号可见范围内未找到，不猜测对象不存在或尚未创建。用户问延误时只能报告运单安全计划事实；若 delay_assessment.status=NOT_CONFIRMED，必须明确说精确延误状态和分钟数无法确认，禁止用服务器时间减计划到达时间计算延误分钟数。仅使用本次实际注册的工具；通用规则中未注册的工具不适用于当前身份。" if identity and identity.own_only else ""
@@ -331,8 +332,11 @@ def stop_node(state: AgentState) -> dict:
 def build_graph(model, tools):
     tools_by_name = {tool.name: tool for tool in tools}
     model_with_tools = model.bind_tools(tools)
-    own_tools = [tool for tool in tools if tool.name not in {"search_transport_tasks", "get_transport_task", "find_shipments_with_destination_changes"}]
+    action_names = {'propose_order_update', 'propose_shipment_destination_update'}
+    own_tools = [tool for tool in tools if tool.name not in {"search_transport_tasks", "get_transport_task", "find_shipments_with_destination_changes", 'propose_shipment_destination_update'}]
     own_model = model.bind_tools(own_tools) if own_tools else model
+    developer_tools = [tool for tool in tools if tool.name not in action_names]
+    developer_model = model.bind_tools(developer_tools) if developer_tools else model
 
     builder = StateGraph(
         AgentState,
@@ -340,7 +344,7 @@ def build_graph(model, tools):
     )
 
     builder.add_node("prepare_turn", prepare_turn)
-    builder.add_node("model", create_model_node(model_with_tools, own_model))
+    builder.add_node("model", create_model_node(model_with_tools, own_model, developer_model))
     builder.add_node("tools", create_tools_node(tools_by_name))
     builder.add_node("stop", stop_node)
 

@@ -2,6 +2,39 @@ import { authRequest, currentIdentityVersion, identityFetch, notifyIdentityChang
 
 export type ObjectType = 'order' | 'shipment' | 'transport_task'
 export type ObjectReference = { type: ObjectType; id: string; number: string | null }
+export type ActionType = 'order.update' | 'shipment.destination.update'
+export type ActionCandidate = {
+  candidate_id: string
+  agent_session_id: string
+  message_id: string
+  action_type: ActionType
+  subject_type: 'order' | 'shipment'
+  subject_id: string
+  payload: Record<string, unknown>
+}
+export type ActionPreview = {
+  proposal_id: string
+  candidate_id: string
+  action_type: ActionType
+  subject: { type: 'order' | 'shipment'; id: string; number: string }
+  changes: { field: string; label: string; before: unknown; after: unknown }[]
+  impact: string[]
+  execution_policy: 'CONFIRM_REQUIRED' | 'AUTO_ALLOWED'
+  expires_at: string
+}
+export type ActionSyncResult = {
+  candidate_id: string
+  proposal_id: string
+  status: 'SUCCEEDED' | 'REJECTED' | 'EXPIRED' | 'FAILED'
+  action_type: ActionType
+  subject?: { type: 'order' | 'shipment'; id: string; number: string }
+  result_summary?: { summary?: Record<string, unknown>; be_request_id?: string } | null
+}
+export type AssistantWritePolicy = {
+  enabled_action_types: ActionType[]
+  eligible_action_types: ActionType[]
+  version: number
+}
 export type AssistantAnswer = {
   message_id: string
   answer: string
@@ -11,6 +44,7 @@ export type AssistantAnswer = {
   stop_reason: string | null
   usage: { model_calls: number; tool_calls: number; http_calls: number }
   trace_id: string
+  action_candidate?: ActionCandidate
 }
 
 export class AssistantError extends Error {
@@ -74,6 +108,43 @@ function parseAnswer(data: AssistantAnswer, messageId: string): AssistantAnswer 
   return data
 }
 
+function parseActionCandidate(value: unknown, messageId: string): ActionCandidate | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const candidate = value as Record<string, unknown>
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (Object.keys(candidate).sort().join(',') !== 'action_type,agent_session_id,candidate_id,message_id,payload,subject_id,subject_type') return undefined
+  if (typeof candidate.candidate_id !== 'string' || !uuid.test(candidate.candidate_id) ||
+      typeof candidate.agent_session_id !== 'string' || !uuid.test(candidate.agent_session_id) ||
+      candidate.message_id !== messageId || typeof candidate.subject_id !== 'string' ||
+      !/^[1-9][0-9]{0,18}$/.test(candidate.subject_id) || !candidate.payload || typeof candidate.payload !== 'object') return undefined
+  if (candidate.action_type === 'order.update' && candidate.subject_type === 'order') {
+    const allowed = new Set(['product_name', 'quantity', 'sender_name', 'sender_address', 'recipient_name', 'recipient_address', 'earliest_handover_at', 'latest_delivery_at', 'sender_province_id', 'sender_city_id', 'sender_district_id', 'recipient_province_id', 'recipient_city_id', 'recipient_district_id'])
+    const keys = Object.keys(candidate.payload)
+    if (!keys.length || keys.some(key => !allowed.has(key))) return undefined
+    const payload = candidate.payload as Record<string, unknown>
+    for (const [key, field] of Object.entries(payload)) {
+      if (['quantity', 'sender_province_id', 'sender_city_id', 'sender_district_id', 'recipient_province_id', 'recipient_city_id', 'recipient_district_id'].includes(key)) {
+        if (field === null && key === 'quantity') return undefined
+        if (field !== null && (!Number.isSafeInteger(field) || Number(field) <= 0)) return undefined
+      } else if (['earliest_handover_at', 'latest_delivery_at'].includes(key)) {
+        if (field !== null && (typeof field !== 'string' || !/^\d{4}-\d\d-\d\dT.+(?:Z|[+-]\d\d:\d\d)$/.test(field) || !Number.isFinite(Date.parse(field)))) return undefined
+      } else if (typeof field !== 'string' || !field.trim() || field.length > (key.endsWith('_address') ? 500 : 100)) return undefined
+    }
+    for (const side of ['sender', 'recipient']) {
+      const regionFields = [`${side}_province_id`, `${side}_city_id`, `${side}_district_id`]
+      if (regionFields.some(field => Object.hasOwn(payload, field)) && !regionFields.every(field => Object.hasOwn(payload, field))) return undefined
+    }
+    if (typeof payload.earliest_handover_at === 'string' && typeof payload.latest_delivery_at === 'string' &&
+        Date.parse(payload.earliest_handover_at) > Date.parse(payload.latest_delivery_at)) return undefined
+  } else if (candidate.action_type === 'shipment.destination.update' && candidate.subject_type === 'shipment') {
+    const payload = candidate.payload as Record<string, unknown>
+    if (Object.keys(payload).sort().join(',') !== 'destination_station_id,expected_destination_station_id,reason' ||
+        !Number.isSafeInteger(payload.expected_destination_station_id) || !Number.isSafeInteger(payload.destination_station_id) ||
+        typeof payload.reason !== 'string' || !payload.reason.trim()) return undefined
+  } else return undefined
+  return candidate as unknown as ActionCandidate
+}
+
 export async function queryAssistant(
   sessionId: string, messageId: string, message: string, signal: AbortSignal,
   onProgress: (message: string) => void,
@@ -89,6 +160,7 @@ export async function queryAssistant(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let actionCandidate: ActionCandidate | undefined
   try {
     while (true) {
       const { value, done } = await reader.read()
@@ -103,11 +175,15 @@ export async function queryAssistant(
         if (!raw) continue
         const data = JSON.parse(raw)
         if (name === 'progress' && typeof data.message === 'string') onProgress(data.message)
+        if (name === 'action_proposed') actionCandidate = parseActionCandidate(data, messageId)
         if (name === 'error') {
           if (['AUTH_CHANGED', 'AUTH_REQUIRED', 'ACCOUNT_DISABLED'].includes(data.code)) notifyIdentityChange(data.code)
           throw new AssistantError(data.message ?? '查询失败，请重试。', data.code)
         }
-        if (name === 'result') return parseAnswer(data, messageId)
+        if (name === 'result') {
+          const resultCandidate = parseActionCandidate(data.action_candidate, messageId)
+          return parseAnswer({ ...data, action_candidate: actionCandidate ?? resultCandidate }, messageId)
+        }
       }
       if (done) break
     }
@@ -116,6 +192,109 @@ export async function queryAssistant(
     reader.releaseLock()
   }
   throw new AssistantError('连接中断，尚未收到完整回答。可以重试当前问题。')
+}
+
+export async function previewAssistantAction(candidate: ActionCandidate, signal: AbortSignal): Promise<ActionPreview> {
+  const data = await authRequest<unknown>('/agent-actions/preview', {
+    method: 'POST', signal,
+    body: JSON.stringify({
+      candidate_id: candidate.candidate_id, agent_session_id: candidate.agent_session_id,
+      message_id: candidate.message_id, action_type: candidate.action_type,
+      subject_id: candidate.subject_id, payload: candidate.payload,
+    }),
+  })
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  const keysAre = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).sort().join(',') === [...keys].sort().join(',')
+  if (!data || typeof data !== 'object') throw new AssistantError('助手预览响应异常，请重试。', 'INVALID_RESPONSE')
+  const preview = data as Record<string, unknown>
+  if (!keysAre(preview, ['proposal_id', 'candidate_id', 'action_type', 'subject', 'changes', 'impact', 'execution_policy', 'expires_at']) ||
+      typeof preview.proposal_id !== 'string' || !uuid.test(preview.proposal_id) ||
+      preview.candidate_id !== candidate.candidate_id || preview.action_type !== candidate.action_type ||
+      (preview.execution_policy !== 'CONFIRM_REQUIRED' && preview.execution_policy !== 'AUTO_ALLOWED') ||
+      typeof preview.expires_at !== 'string' || !/^\d{4}-\d\d-\d\dT.+(?:Z|[+-]\d\d:\d\d)$/.test(preview.expires_at) || !Number.isFinite(Date.parse(preview.expires_at)) ||
+      !preview.subject || typeof preview.subject !== 'object' || !Array.isArray(preview.changes) || !preview.changes.length ||
+      !Array.isArray(preview.impact) || preview.impact.some(item => typeof item !== 'string' || !item.trim())) {
+    throw new AssistantError('助手预览响应异常，请重试。', 'INVALID_RESPONSE')
+  }
+  const subject = preview.subject as Record<string, unknown>
+  const expectedNumber = candidate.subject_type === 'order' ? `ORD-${candidate.subject_id.padStart(6, '0')}` : `SHP-${candidate.subject_id.padStart(6, '0')}`
+  if (!keysAre(subject, ['type', 'id', 'number']) || subject.type !== candidate.subject_type || subject.id !== candidate.subject_id ||
+      (subject.number !== null && subject.number !== expectedNumber)) {
+    throw new AssistantError('助手预览对象与请求不匹配。', 'INVALID_RESPONSE')
+  }
+  for (const change of preview.changes) {
+    if (!change || typeof change !== 'object' || !keysAre(change as Record<string, unknown>, ['field', 'label', 'before', 'after']) ||
+        typeof change.field !== 'string' || !change.field.trim() || typeof change.label !== 'string' || !change.label.trim() ||
+        !['string', 'number', 'boolean'].includes(typeof change.before) && change.before !== null ||
+        !['string', 'number', 'boolean'].includes(typeof change.after) && change.after !== null) {
+      throw new AssistantError('助手预览变更内容异常，请重试。', 'INVALID_RESPONSE')
+    }
+  }
+  return preview as unknown as ActionPreview
+}
+
+export async function executeAssistantAction(proposalId: string, mode: 'approved' | 'automatic', signal?: AbortSignal) {
+  return authRequest<Record<string, unknown>>(`/agent-actions/${proposalId}/execute`, {
+    method: 'POST', signal: signal ?? AbortSignal.timeout(60_000), body: JSON.stringify({ mode }),
+  })
+}
+
+export async function rejectAssistantAction(proposalId: string, signal?: AbortSignal) {
+  return authRequest<Record<string, unknown>>(`/agent-actions/${proposalId}/reject`, {
+    method: 'POST', signal: signal ?? AbortSignal.timeout(30_000),
+    body: JSON.stringify({ reason_code: 'USER_CANCELLED' }),
+  })
+}
+
+export async function readAssistantAction(proposalId: string, signal?: AbortSignal) {
+  return authRequest<Record<string, unknown>>(`/agent-actions/${proposalId}`, {
+    method: 'GET', signal: signal ?? AbortSignal.timeout(30_000),
+  })
+}
+
+export async function syncAssistantAction(sessionId: string, candidateId: string, proposalId: string, signal?: AbortSignal): Promise<ActionSyncResult> {
+  const response = await agentFetch(`/agent/api/v1/sessions/${sessionId}/actions/${candidateId}/sync`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proposal_id: proposalId }), signal: signal ?? AbortSignal.timeout(30_000),
+  })
+  await check(response)
+  const data = await response.json()
+  if (data.candidate_id !== candidateId || data.proposal_id !== proposalId ||
+      !['SUCCEEDED', 'REJECTED', 'EXPIRED', 'FAILED'].includes(data.status)) {
+    throw new AssistantError('业务操作结果暂时无法核对。', 'ACTION_STATUS_INVALID')
+  }
+  return data as ActionSyncResult
+}
+
+const actionTypes: ActionType[] = ['order.update', 'shipment.destination.update']
+function parseAssistantWritePolicy(value: unknown): AssistantWritePolicy {
+  if (!value || typeof value !== 'object') throw new AssistantError('自动执行设置响应异常，当前仍需逐次确认。', 'INVALID_RESPONSE')
+  const policy = value as Record<string, unknown>
+  const validTypes = (items: unknown): items is ActionType[] => Array.isArray(items) &&
+    items.every(item => typeof item === 'string' && actionTypes.includes(item as ActionType))
+  if (!validTypes(policy.enabled_action_types) || !validTypes(policy.eligible_action_types) ||
+      typeof policy.version !== 'number' || !Number.isSafeInteger(policy.version) || policy.version < 0) {
+    throw new AssistantError('自动执行设置响应异常，当前仍需逐次确认。', 'INVALID_RESPONSE')
+  }
+  const enabled = policy.enabled_action_types
+  const eligible = policy.eligible_action_types
+  if (enabled.some(item => !eligible.includes(item))) {
+    throw new AssistantError('自动执行设置响应异常，当前仍需逐次确认。', 'INVALID_RESPONSE')
+  }
+  return { enabled_action_types: enabled, eligible_action_types: eligible, version: policy.version }
+}
+
+export async function readAssistantWritePolicy(signal?: AbortSignal): Promise<AssistantWritePolicy> {
+  return parseAssistantWritePolicy(await authRequest<unknown>('/auth/agent-write-policy', {
+    method: 'GET', signal: signal ?? AbortSignal.timeout(15_000),
+  }))
+}
+
+export async function updateAssistantWritePolicy(enabledActionTypes: ActionType[], signal?: AbortSignal): Promise<AssistantWritePolicy> {
+  return parseAssistantWritePolicy(await authRequest<unknown>('/auth/agent-write-policy', {
+    method: 'PUT', signal: signal ?? AbortSignal.timeout(15_000),
+    body: JSON.stringify({ enabled_action_types: enabledActionTypes }),
+  }))
 }
 
 export const referenceLabels: Record<ObjectType, string> = { order: '订单', shipment: '运单', transport_task: '运输任务' }

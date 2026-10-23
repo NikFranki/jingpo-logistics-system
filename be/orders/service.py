@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from db import transaction_scope
 
 from models import (
     OperationLog, Order, Shipment,
@@ -252,13 +253,14 @@ def update_order(
     order_id: int,
     request: OrderUpdateRequest,
     idempotency_key: UUID,
+    expected_updated_at: datetime | None = None,
 ) -> dict:
     request_hash = build_update_order_request_hash(
         order_id=order_id,
         request=request,
     )
 
-    with session.begin():
+    with transaction_scope(session):
         clock = business_time.begin_business_write(session)
 
         existing_log = session.scalar(
@@ -281,6 +283,9 @@ def update_order(
 
         if order is None:
             raise OrderNotFoundError
+
+        if expected_updated_at is not None and order.updated_at != expected_updated_at:
+            raise NetworkError("PROPOSAL_STALE", "订单已变化，请重新预览", 409)
 
         if order.status != "PENDING_SHIPMENT":
             raise OrderNotEditableError

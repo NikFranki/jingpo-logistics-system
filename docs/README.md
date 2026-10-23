@@ -23,6 +23,7 @@ Session 交接模板与生成命令见 [handoffs](handoffs/README.md)。
 
 | 要了解什么 | 文档 |
 | --- | --- |
+| V11 Agent 受控业务写入（BE/Agent 隔离 HTTP、FE 自动化与 Chrome 订单确认/取消闭环通过；实体读屏器/触屏手工验收待完成；自动白名单为空） | [PRD](prd/v11/JINGPO-agent-v11.md)；[Agent spec/plan](技术方案/v11/agent/spec.md)、[技术计划](技术方案/v11/agent/plan.md)；[BE spec/plan](技术方案/v11/be/spec.md)、[技术计划](技术方案/v11/be/plan.md)；[FE spec/plan](技术方案/v11/fe/spec.md)、[技术计划](技术方案/v11/fe/plan.md) |
 | V10 Agent 查询质量优化（当前规格范围已实现并验收；生产数据表现待实际运营观察） | [准确性、完整性与回答依据规格](技术方案/v10/agent/spec.md)、[实施与验证计划](技术方案/v10/agent/plan.md) |
 | V9 Agent Render 部署、Pages SSE 代理和本地兼容 | [部署规格与操作步骤](技术方案/v9/agent/spec.md) |
 | 运输线路统一契约及旧字段弃用策略 | [统一运输线路](技术方案/v7/be/unified-transport-lines.md) |

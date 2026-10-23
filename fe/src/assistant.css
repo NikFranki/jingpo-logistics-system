@@ -8,6 +8,7 @@
 .jp-assistant-actions { display: flex; flex-shrink: 0; gap: 2px; }
 .jp-assistant-scope { display: flex; align-items: center; gap: 10px; padding: 8px 20px; background: #eaf2fc; color: #174a82; font-size: 12px; }
 .jp-assistant-scope span { color: #174a82; padding-left: 10px; border-left: 1px solid #b8cce7; }
+.jp-assistant-policy-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e7edf4; }
 .jp-assistant-log { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #bbc9da transparent; padding: 20px; }
 .jp-assistant-empty { padding: 8px 0 20px; }
 .jp-assistant-empty h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #172b45; }
@@ -39,6 +40,15 @@
 .jp-assistant-warnings { margin-top: 12px; font-size: 12px; color: #755000; }
 .jp-assistant-warnings summary { cursor: pointer; }
 .jp-assistant-warnings ul { padding-left: 18px; }
+.jp-assistant-action { margin-top: 14px; padding: 14px; border: 1px solid #c4d7ef; border-radius: 8px; background: #f7faff; }
+.jp-assistant-action h3 { margin: 0 0 8px; font-size: 15px; }
+.jp-assistant-action p { margin: 6px 0; overflow-wrap: anywhere; }
+.jp-assistant-action dl { margin: 10px 0; }
+.jp-assistant-action dl > div { display: grid; grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid #e0e9f4; }
+.jp-assistant-action dt { color: #4d617b; font-weight: 600; }
+.jp-assistant-action dd { display: flex; flex-direction: column; gap: 4px; margin: 0; overflow-wrap: anywhere; }
+.jp-assistant-action ul { padding-left: 20px; margin: 8px 0; color: #4d617b; }
+.jp-assistant-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .jp-assistant-progress { display: flex; align-items: center; gap: 10px; margin-top: 24px; color: #174a82; }
 .jp-assistant-composer { flex-shrink: 0; padding: 12px 20px 16px; border-top: 1px solid #e6ebf1; background: #fff; }
 .jp-assistant-composer textarea { display: block; box-sizing: border-box; width: 100%; resize: none; min-height: 64px; padding: 10px 12px; border: 1px solid #d8e0ea; border-radius: 8px; color: #172b45; caret-color: #1557a8; background: #fff; font: inherit; line-height: 1.6; }
@@ -54,4 +64,4 @@
 .jp-assistant :focus-visible { outline: 2px solid #1557a8; outline-offset: 2px; }
 .jp-assistant ::selection { background: #c5d8f0; color: #172b45; }
 .jp-assistant-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media (max-width: 640px) { .jp-assistant-launcher { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); } .jp-assistant-log { padding: 16px; } .jp-assistant-composer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); } .jp-assistant-move { cursor: default; touch-action: auto; } .jp-assistant-actions .ant-btn { min-width: 40px; min-height: 40px; } .jp-assistant-references a { grid-template-columns: auto minmax(0, 1fr); } .jp-assistant-references a small { grid-column: 2; } }
+@media (max-width: 640px) { .jp-assistant-launcher { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); } .jp-assistant-log { padding: 16px; } .jp-assistant-composer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); } .jp-assistant-move { cursor: default; touch-action: auto; } .jp-assistant-actions .ant-btn { min-width: 40px; min-height: 40px; } .jp-assistant-references a { grid-template-columns: auto minmax(0, 1fr); } .jp-assistant-references a small { grid-column: 2; } .jp-assistant-action dl > div { grid-template-columns: 1fr; gap: 2px; } }

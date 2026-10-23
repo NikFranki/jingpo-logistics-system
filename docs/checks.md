@@ -5,9 +5,10 @@
 | 命令 | 检查范围 |
 | --- | --- |
 | `make check` | 顺序执行全部检查，失败立即停止；也可分别运行各项 |
-| `make check-be` | Python 依赖、临时数据库全量迁移、模型差异、后端回归测试 |
-| `make check-fe` | TypeScript、ESLint、生产构建 |
+| `make check-be` | Python 依赖、临时数据库全量迁移、最近迁移降级/重升、模型差异、后端回归测试 |
+| `make check-fe` | TypeScript、ESLint、FE 组件测试、生产构建 |
 | `make check-agent` | Python 依赖、模拟模型与 HTTP 的受控测试 |
+| `make check-v11-integration` | 临时 PostgreSQL 上运行 BE 全量检查，并用真实 BE/Agent HTTP 服务验证 V11 订单和目的站确认流程 |
 | `make handoff SESSION_ID=<id> INPUT=<session-export.md>` | 通过只读 `codex exec` 生成独立 session 交接记录 |
 
 ## Codex 本地 Hooks
@@ -30,6 +31,14 @@ Make 默认使用各目录虚拟环境；可用 `BE_PYTHON=python`、`AGENT_PYTH
 ```bash
 TEST_DATABASE_URL='postgresql+psycopg://tester:password@127.0.0.1:5432/postgres' make check-be
 ```
+
+V11 隔离联调还需已安装依赖的 BE 与 Agent Python 环境。该目标会创建临时 PostgreSQL 数据库、启动本机 BE HTTP 服务、使用模拟模型走完 Agent 提案和网页 Cookie+CSRF 确认，结束后删除临时库；不调用真实模型，也不访问开发或生产业务库：
+
+```bash
+make check-v11-integration
+```
+
+V11 Agent 真实模型提案评测用合成只读后端，不执行写操作。先运行 `agent/.venv/bin/python agent/tests/eval_v11.py --preflight` 验证样本与工具目录；只有明确运行 `--run --round <名称>` 才会调用当前 `.env` 配置的模型 API 并产生费用。报告写入 `/tmp/jingpo-agent-v11/`，需人工复核。
 
 脚本只接受管理库 `postgres` 或名称以 `_test` 结尾的连接配置，使用其连接信息创建随机命名的 `jingpo_checks_*_test` 数据库；迁移和测试只操作新库，结束或普通失败后删除自己创建的库。不读取应用 `.env`，不采用 `DATABASE_URL`。强制杀进程可能留下临时库，核对名称和进程后再清理。
 
@@ -59,4 +68,4 @@ flowchart LR
 - 工作流通过 `actionlint` 校验，文档与补丁通过 `git diff --check`。
 - GitHub 托管运行尚未执行；需提交并推送后在 Actions 中确认三个任务结果。
 
-历史 V2/V8 升级演练及真实 SMTP 测试保留原 opt-in 入口，常规检查不启用，会在 unittest 输出中明确标记 skipped；当前迁移检查覆盖空库升级到 head 和 `alembic check`。升级历史数据、真实 BE/Agent 联调、浏览器流程与真实模型评测仍按各项目说明单独验收。CI 通过不等于这些验收通过。
+历史 V2/V8 升级演练及真实 SMTP 测试保留原 opt-in 入口，常规检查不启用，会在 unittest 输出中明确标记 skipped；当前迁移检查覆盖空库升级到 head、最近一次迁移降一级后重升，以及 `alembic check`。升级历史数据、真实 BE/Agent 联调、浏览器流程与真实模型评测仍按各项目说明单独验收。CI 通过不等于这些验收通过。
