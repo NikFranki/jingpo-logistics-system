@@ -54,22 +54,16 @@ jobs:
           cp .github/codex/deepseek-models.json "$CODEX_HOME_DIR/models.json"
           printf '%s\n' \
             'model = "deepseek-flash"' \
-            'model_provider = "deepseek"' \
             'model_reasoning_effort = "high"' \
             'web_search = "disabled"' \
             "model_catalog_json = \"$CODEX_HOME_DIR/models.json\"" \
-            '[model_providers.deepseek]' \
-            'name = "DeepSeek"' \
-            'base_url = "https://api.deepseek.com/"' \
-            'wire_api = "responses"' \
-            'env_key = "DEEPSEEK_API_KEY"' \
             > "$CODEX_HOME_DIR/config.toml"
 
       - name: Run Codex
         uses: openai/codex-action@v1
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         with:
+          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          responses-api-endpoint: https://api.deepseek.com/responses
           prompt-file: .github/codex/issue-fix-prompt.md
           codex-home: ${{ runner.temp }}/codex-home
           model: deepseek-flash
