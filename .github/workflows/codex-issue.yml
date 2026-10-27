@@ -19,10 +19,25 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Create unprivileged Codex user
+        run: |
+          sudo adduser --system --home /home/guest --shell /bin/bash --group guest
+          sudo usermod -a -G guest runner
+          sudo usermod -a -G runner guest
+          sudo mkdir -p /home/guest/.codex
+          sudo chown -R runner:runner /home/guest/.codex
+          sudo chmod -R 2775 /home/guest/.codex
+
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+
+      - name: Share checkout with Codex user
+        run: |
+          sudo chown -R runner:guest "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod g+s {} +
 
       - name: Prepare issue context
         env:
@@ -48,7 +63,7 @@ jobs:
 
       - name: Prepare DeepSeek model configuration
         env:
-          CODEX_HOME_DIR: ${{ runner.temp }}/codex-home
+          CODEX_HOME_DIR: /home/guest/.codex
         run: |
           mkdir -p "$CODEX_HOME_DIR"
           cp .github/codex/deepseek-models.json "$CODEX_HOME_DIR/models.json"
@@ -65,10 +80,16 @@ jobs:
           openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           responses-api-endpoint: https://api.deepseek.com/responses
           prompt-file: .github/codex/issue-fix-prompt.md
-          codex-home: ${{ runner.temp }}/codex-home
+          codex-home: /home/guest/.codex
           model: deepseek-flash
           permission-profile: ":workspace"
-          safety-strategy: drop-sudo
+          safety-strategy: unprivileged-user
+          codex-user: guest
+
+      - name: Restore checkout ownership
+        if: always()
+        run: sudo chown -R runner:runner "$GITHUB_WORKSPACE"
+
       - name: Export patch
         run: |
           git add -N --all
