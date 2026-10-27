@@ -46,7 +46,7 @@ V11 Agent 真实模型提案评测用合成只读后端，不执行写操作。�
 
 `.github/workflows/checks.yml` 在 push、PR 和手动触发时并行运行 `Hook policy checks`、`BE checks`、`FE checks`、`Agent checks`，最后由稳定的 `Required checks` 汇总任务确认全部成功。分支保护只需要求 `Required checks` 通过；新增 CI job 时把它加入汇总任务，不用再改 GitHub 规则。后端使用独立 PostgreSQL service container，不需要生产密钥；分支保护仍需仓库管理员另行配置。
 
-`.github/workflows/codex-issue.yml` 在有权限的协作者给 Issue 加上 `codex-fix` 标签后运行 Codex。它从默认分支生成补丁，另一个没有模型密钥的 job 应用补丁并运行 `make check`，全部通过后才创建 `codex/issue-<编号>` 草稿 PR。Codex Action 使用其 Responses API 代理连接 DeepSeek 的 `deepseek-flash` 模型；启用前需在仓库 Actions secrets 中配置 `DEEPSEEK_API_KEY`，并允许 Actions 创建 pull request；需要标签的人也必须有仓库写权限。Issue 正文会作为不可信的缺陷说明传给 Codex，HTML 注释会先移除；Codex job 只有读取权限、不持有 GitHub 写入 token，发布 job 不运行 Codex 或测试代码。
+`.github/workflows/codex-issue.yml` 在有权限的协作者给 Issue 加上 `codex-fix` 标签后运行 Codex。它从默认分支生成补丁，另一个没有模型密钥的 job 应用补丁并运行 `make check`，全部通过后才创建 `codex/issue-<编号>` 草稿 PR。Codex Action 使用其 Responses API 代理连接 DeepSeek 的 `deepseek-flash` 模型；启用前需在仓库 Actions secrets 中配置 `DEEPSEEK_API_KEY`，并允许 Actions 创建 pull request；需要标签的人也必须有仓库写权限。Codex 在独立的 `guest` 低权限用户下运行，Issue 正文会作为不可信的缺陷说明传给 Codex，HTML 注释会先移除；Codex job 只有读取权限、不持有 GitHub 写入 token，发布 job 不运行 Codex 或测试代码。
 
 ```mermaid
 flowchart LR
