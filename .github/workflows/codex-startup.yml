@@ -1,0 +1,37 @@
+name: Codex startup check
+
+on:
+  pull_request:
+    paths:
+      - '.github/codex/**'
+      - '.github/workflows/codex-issue.yml'
+      - '.github/workflows/codex-startup.yml'
+  push:
+    paths:
+      - '.github/codex/**'
+      - '.github/workflows/codex-issue.yml'
+      - '.github/workflows/codex-startup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install the issue workflow's Codex version
+        run: npm install -g @openai/codex@0.164.0
+      - name: Enable the same Linux sandbox used by Codex Action
+        run: |
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Check model startup and patch tool without API costs
+        run: python3 .github/codex/check-startup.py

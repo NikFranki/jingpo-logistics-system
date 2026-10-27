@@ -75,12 +75,13 @@ jobs:
             > "$CODEX_HOME_DIR/config.toml"
 
       - name: Run Codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1
         with:
           openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           responses-api-endpoint: https://api.deepseek.com/responses
           prompt-file: .github/codex/issue-fix-prompt.md
           codex-home: /home/guest/.codex
+          codex-version: '0.164.0'
           model: deepseek-flash
           permission-profile: ":workspace"
           safety-strategy: unprivileged-user
