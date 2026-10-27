@@ -1,0 +1,184 @@
+name: Codex issue fix
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.event.label.name == 'codex-fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Prepare issue context
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          title = os.environ.get("ISSUE_TITLE", "")
+          body = os.environ.get("ISSUE_BODY", "")
+          # HTML comments are invisible in GitHub's rendered issue view and may
+          # carry prompt injection instructions.
+          body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+          Path("/tmp/codex-issue.md").write_text(
+              f"Issue #{os.environ['ISSUE_NUMBER']}: {title}\n\n{body[:20000]}\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Prepare DeepSeek model configuration
+        env:
+          CODEX_HOME_DIR: ${{ runner.temp }}/codex-home
+        run: |
+          mkdir -p "$CODEX_HOME_DIR"
+          cp .github/codex/deepseek-models.json "$CODEX_HOME_DIR/models.json"
+          printf '%s\n' \
+            'model = "deepseek-flash"' \
+            'model_provider = "deepseek"' \
+            'model_reasoning_effort = "high"' \
+            'web_search = "disabled"' \
+            "model_catalog_json = \"$CODEX_HOME_DIR/models.json\"" \
+            '[model_providers.deepseek]' \
+            'name = "DeepSeek"' \
+            'base_url = "https://api.deepseek.com/"' \
+            'wire_api = "responses"' \
+            'env_key = "DEEPSEEK_API_KEY"' \
+            > "$CODEX_HOME_DIR/config.toml"
+
+      - name: Run Codex
+        uses: openai/codex-action@v1
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        with:
+          prompt-file: .github/codex/issue-fix-prompt.md
+          codex-home: ${{ runner.temp }}/codex-home
+          model: deepseek-flash
+          permission-profile: ":workspace"
+          safety-strategy: drop-sudo
+      - name: Export patch
+        run: |
+          git add -N --all
+          git diff --binary HEAD -- . > /tmp/codex.patch
+          test -s /tmp/codex.patch || {
+            echo "Codex did not produce any tracked changes."
+            exit 1
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codex-issue-${{ github.event.issue.number }}
+          path: /tmp/codex.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  validate:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: checks-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:checks-only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: codex-issue-${{ github.event.issue.number }}
+          path: /tmp/codex-issue
+
+      - name: Apply proposed patch
+        run: git apply --check /tmp/codex-issue/codex.patch && git apply /tmp/codex-issue/codex.patch
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            be/requirements*.txt
+            agent/requirements.txt
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: fe/package-lock.json
+      - name: Install BE and Agent dependencies
+        run: |
+          python -m venv /tmp/be-venv
+          python -m venv /tmp/agent-venv
+          /tmp/be-venv/bin/python -m pip install -r be/requirements-dev.txt
+          /tmp/agent-venv/bin/python -m pip install -r agent/requirements.txt
+      - run: npm ci --prefix fe
+      - run: make check BE_PYTHON=/tmp/be-venv/bin/python AGENT_PYTHON=/tmp/agent-venv/bin/python
+
+  publish:
+    needs: [generate, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: codex-issue-${{ github.event.issue.number }}
+          path: /tmp/codex-issue
+
+      - name: Apply validated patch
+        run: git apply --check /tmp/codex-issue/codex.patch && git apply /tmp/codex-issue/codex.patch
+
+      - name: Create draft pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: codex/issue-${{ github.event.issue.number }}
+          delete-branch: true
+          draft: true
+          title: "fix: address issue #${{ github.event.issue.number }}"
+          body: |
+            This draft contains an automated fix proposal generated for this issue. Please review the diff before merging.
+
+            Closes #${{ github.event.issue.number }}
+
+            ## Validation
+            - `make check` passed in the Codex issue workflow.

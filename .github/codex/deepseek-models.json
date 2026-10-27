@@ -1,0 +1,29 @@
+{
+  "models": [
+    {
+      "slug": "deepseek-flash",
+      "display_name": "DeepSeek-Flash",
+      "description": "DeepSeek model for coding tasks.",
+      "context_window": 1048576,
+      "max_context_window": 1048576,
+      "effective_context_window_percent": 95,
+      "input_modalities": ["text", "image"],
+      "supports_parallel_tool_calls": true,
+      "apply_patch_tool_type": "freeform",
+      "web_search_tool_type": "text",
+      "default_reasoning_level": "high",
+      "supported_reasoning_levels": [
+        { "effort": "low", "description": "Fast responses with lighter reasoning" },
+        { "effort": "high", "description": "Deeper reasoning for coding tasks" },
+        { "effort": "max", "description": "Maximum reasoning depth" }
+      ],
+      "default_reasoning_summary": "none",
+      "reasoning_summary_format": "experimental",
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "minimal_client_version": "0.144.0",
+      "supported_in_api": true,
+      "priority": 1
+    }
+  ]
+}
