@@ -25,8 +25,11 @@ jobs:
           sudo usermod -a -G guest runner
           sudo usermod -a -G runner guest
           sudo mkdir -p /home/guest/.codex
-          sudo chown -R runner:runner /home/guest/.codex
-          sudo chmod -R 2775 /home/guest/.codex
+          # Codex itself must own CODEX_HOME so it can create its app-server
+          # state and PATH aliases. Keep the runner group writable because the
+          # action and the model setup step also update files there.
+          sudo chown -R guest:runner /home/guest/.codex
+          sudo chmod 2775 /home/guest/.codex
 
       - uses: actions/checkout@v6
         with:
