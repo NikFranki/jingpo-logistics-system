@@ -46,7 +46,7 @@ V11 Agent 真实模型提案评测用合成只读后端，不执行写操作。�
 
 `.github/workflows/checks.yml` 在 push、PR 和手动触发时并行运行 `Hook policy checks`、`BE checks`、`FE checks`、`Agent checks`，最后由稳定的 `Required checks` 汇总任务确认全部成功。分支保护只需要求 `Required checks` 通过；新增 CI job 时把它加入汇总任务，不用再改 GitHub 规则。后端使用独立 PostgreSQL service container，不需要生产密钥；分支保护仍需仓库管理员另行配置。
 
-`.github/workflows/codex-issue.yml` 在有权限的协作者给 Issue 加上 `codex-fix` 标签后运行 Codex。它从默认分支生成补丁，另一个没有模型密钥的 job 应用补丁并运行 `make check`，全部通过后才创建 `codex/issue-<编号>` 草稿 PR。Codex Action 使用其 Responses API 代理连接 DeepSeek 的 `deepseek-flash` 模型；启用前需在仓库 Actions secrets 中配置 `DEEPSEEK_API_KEY`，并允许 Actions 创建 pull request；需要标签的人也必须有仓库写权限。Codex 在独立的 `guest` 低权限用户下运行，Issue 正文会作为不可信的缺陷说明传给 Codex，HTML 注释会先移除；Codex job 只有读取权限、不持有 GitHub 写入 token，发布 job 不运行 Codex 或测试代码。
+`.github/workflows/codex-issue.yml` 在有权限的协作者给 Issue 加上 `codex-fix` 标签后运行 Codex。它从默认分支生成补丁，另一个没有模型密钥的 job 应用补丁并运行 `make check`，全部通过后才创建 `codex/issue-<编号>` 草稿 PR。PR 描述会列出模型生成的原因和改动摘要、补丁涉及的文件、权威 `make check` 结果，以及 Codex 会话记录中的 token 用量。工作流不根据 token 数估算费用；账单金额以 DeepSeek 控制台为准。生成阶段只上传最终摘要和提取后的 token 数，不上传完整会话日志；短期补丁 artifact 保留 1 天。Codex Action 使用其 Responses API 代理连接 DeepSeek 的 `deepseek-flash` 模型；启用前需在仓库 Actions secrets 中配置 `DEEPSEEK_API_KEY`，并允许 Actions 创建 pull request；需要标签的人也必须有仓库写权限。Codex 在独立的 `guest` 低权限用户下运行，Issue 正文会作为不可信的缺陷说明传给 Codex，HTML 注释会先移除；Codex job 只有读取权限、不持有 GitHub 写入 token，发布 job 不运行 Codex 或测试代码。
 
 `.github/workflows/codex-startup.yml` 在修改 Codex 配置或工作流时运行独立启动检查。它使用与 Issue 工作流相同的固定 CLI 版本，通过本地模拟 Responses API 验证模型目录、`high` 推理设置、`apply_patch` 写文件和最终回复；不读取 API key、不消耗模型 token。该检查通过不代表真实 DeepSeek 服务或完整 Issue 修复流程已经通过。
 
