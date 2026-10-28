@@ -77,18 +77,63 @@ jobs:
             "model_catalog_json = \"$CODEX_HOME_DIR/models.json\"" \
             > "$CODEX_HOME_DIR/config.toml"
 
+      - name: Preserve trusted usage collector
+        run: |
+          sudo install -o root -g root -m 0444 .github/codex/issue_workflow_metadata.py /tmp/codex-usage-collector.py
+          sudo install -o root -g root -m 0600 /dev/null /tmp/codex-usage.json
+
       - name: Run Codex
+        id: codex
         uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1
         with:
           openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           responses-api-endpoint: https://api.deepseek.com/responses
           prompt-file: .github/codex/issue-fix-prompt.md
+          output-file: /tmp/codex-final-message.md
           codex-home: /home/guest/.codex
           codex-version: '0.164.0'
           model: deepseek-flash
           permission-profile: ":workspace"
           safety-strategy: unprivileged-user
           codex-user: guest
+
+      - name: Collect Codex token usage
+        if: always()
+        run: |
+          sudo python3 /tmp/codex-usage-collector.py collect \
+            --codex-home /home/guest/.codex \
+            --output /tmp/codex-usage.json
+          sudo chmod 644 /tmp/codex-usage.json
+
+      - name: Add usage to run summary
+        if: always()
+        env:
+          USAGE_FILE: /tmp/codex-usage.json
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          usage_file = Path(os.environ["USAGE_FILE"])
+          data = json.loads(usage_file.read_text()) if usage_file.exists() else {"available": False}
+          lines = ["## Codex model usage", ""]
+          if data.get("available"):
+              usage = data["usage"]
+              labels = {
+                  "input_tokens": "Input tokens",
+                  "cached_input_tokens": "Cached input tokens",
+                  "output_tokens": "Output tokens",
+                  "reasoning_output_tokens": "Reasoning tokens (included in output)",
+                  "total_tokens": "Total tokens",
+              }
+              lines.extend(f"- {labels[key]}: {value:,}" for key, value in usage.items() if key in labels)
+              lines.append("- Billed cost: check DeepSeek account usage; no price estimate is calculated here.")
+          else:
+              lines.append("- Token usage unavailable in the Codex session record for this run.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\n".join(lines) + "\n")
+          PY
 
       - name: Restore checkout ownership
         if: always()
@@ -106,7 +151,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: codex-issue-${{ github.event.issue.number }}
-          path: /tmp/codex.patch
+          path: |
+            /tmp/codex.patch
+            /tmp/codex-final-message.md
+            /tmp/codex-usage.json
           if-no-files-found: error
           retention-days: 1
 
@@ -184,8 +232,27 @@ jobs:
           name: codex-issue-${{ github.event.issue.number }}
           path: /tmp/codex-issue
 
+      - name: Preserve trusted PR description helper
+        run: cp .github/codex/issue_workflow_metadata.py "$RUNNER_TEMP/issue_workflow_metadata.py"
+
       - name: Apply validated patch
         run: git apply --check /tmp/codex-issue/codex.patch && git apply /tmp/codex-issue/codex.patch
+
+      - name: Prepare pull request description
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          python3 "$RUNNER_TEMP/issue_workflow_metadata.py" build \
+            --summary /tmp/codex-issue/codex-final-message.md \
+            --usage /tmp/codex-issue/codex-usage.json \
+            --output /tmp/codex-issue/pr-body.md \
+            --repository "$REPOSITORY" \
+            --issue-number "$ISSUE_NUMBER" \
+            --run-id "$RUN_ID" \
+            --server-url "$SERVER_URL"
 
       - name: Create draft pull request
         uses: peter-evans/create-pull-request@v7
@@ -194,10 +261,4 @@ jobs:
           delete-branch: true
           draft: true
           title: "fix: address issue #${{ github.event.issue.number }}"
-          body: |
-            This draft contains an automated fix proposal generated for this issue. Please review the diff before merging.
-
-            Closes #${{ github.event.issue.number }}
-
-            ## Validation
-            - `make check` passed in the Codex issue workflow.
+          body-path: /tmp/codex-issue/pr-body.md
