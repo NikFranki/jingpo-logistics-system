@@ -112,7 +112,7 @@ export default function TransportLinesPage({ revision, busy: mutationBusy, mutat
     {error && <Alert type="error" showIcon message="运输线路或班次操作失败" description={error} action={<Button size="small" onClick={() => { setError(undefined); void refresh() }}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => { setPage(1); setStationSearch(stationQuery.trim()) }} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>
-        <Form.Item label="站点名称" style={{ margin: 0 }}><Input value={stationQuery} onChange={event => setStationQuery(event.target.value)} onPressEnter={() => { setPage(1); setStationSearch(stationQuery.trim()) }} allowClear placeholder="请输入站点名称" style={{ width: 320, maxWidth: '60vw' }} /></Form.Item>
+        <Form.Item label="站点名称" colon={false} style={{ margin: 0 }}><Input value={stationQuery} onChange={event => setStationQuery(event.target.value)} onPressEnter={() => { setPage(1); setStationSearch(stationQuery.trim()) }} allowClear placeholder="请输入站点名称" style={{ width: 320, maxWidth: '60vw' }} /></Form.Item>
         <Space style={{ marginLeft: 'auto' }}><Button onClick={() => { setStationQuery(''); setStationSearch(''); setPage(1) }}>重置</Button><Button type="primary" htmlType="submit">查询</Button></Space>
       </Form>
     </Card>
