@@ -78,7 +78,7 @@ export default function NetworkPage({ revision, busy: mutationBusy, mutate }: Pr
     {error && <Alert type="error" showIcon message="站点配置读取失败" description={error} action={<Button size="small" onClick={() => void refresh()}>重试</Button>} style={{ marginBottom: 16 }} />}
     <Card style={{ marginBottom: 16 }}>
       <Form layout="inline" onFinish={() => setStationFilter(search.trim())} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px' }}>
-        <Form.Item label="站点名称" style={{ margin: 0 }}><Input value={search} onChange={event => setSearch(event.target.value)} onPressEnter={() => setStationFilter(search.trim())} allowClear placeholder="请输入站点名称" style={{ width: 320, maxWidth: '60vw' }} /></Form.Item>
+        <Form.Item label="站点名称" colon={false} style={{ margin: 0 }}><Input value={search} onChange={event => setSearch(event.target.value)} onPressEnter={() => setStationFilter(search.trim())} allowClear placeholder="请输入站点名称" style={{ width: 320, maxWidth: '60vw' }} /></Form.Item>
         <Space style={{ marginLeft: 'auto' }}><Button onClick={() => { setSearch(''); setStationFilter('') }}>重置</Button><Button type="primary" htmlType="submit">查询</Button></Space>
       </Form>
     </Card>

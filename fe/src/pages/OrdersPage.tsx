@@ -87,7 +87,7 @@ function OrdersPage({ revision, mutate }: Pick<Shared, 'revision' | 'mutate'>) {
   ]
   return <PageContainer title="订单" subTitle={user?.role === 'user' ? '创建和管理自己的订单，查看关联运单进度。' : '查看公司订单和对应运单。'} extra={hasPermission(user, 'orders:create') && <Button type="primary" icon={<PlusOutlined />} onClick={() => setFormOpen(true)}>创建订单</Button>}>
     {loadError && <Alert type="error" showIcon message="订单列表加载失败" description={loadError} action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} style={{ marginBottom: 16 }} />}
-    <ProTable<Order> actionRef={actionRef} rowKey="id" columns={columns} scroll={{ x: 980 }} search={{ labelWidth: 'auto' }} options={{ reload: true, density: true, setting: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} request={async params => {
+    <ProTable<Order> actionRef={actionRef} rowKey="id" columns={columns} scroll={{ x: 980 }} search={{ labelWidth: 'auto' }} form={{ colon: false }} options={{ reload: true, density: true, setting: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} request={async params => {
       try {
         const result = await api.orders({ page: params.current ?? 1, page_size: params.pageSize ?? 20, order_no: params.order_no as string, shipment_no: params.shipment_no as string, stage: params.stage as string })
         setLoadError(undefined)
